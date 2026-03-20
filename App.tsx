@@ -256,8 +256,8 @@ const containsBadWord = (text: string): boolean => {
 };
 
 const SKIN_TONE_COLORS: Record<string, string> = {
-  A1: '#FDDCC4', A2: '#F2C4A0', A3: '#D9A87C', A4: '#C68E5B', A5: '#A0714A', A6: '#7A5539', A7: '#4A3228',
-  B1: '#FDDCC4', B2: '#F2C4A0', B3: '#D9A87C', B4: '#C68E5B', B5: '#A0714A', B6: '#7A5539', B7: '#4A3228',
+  A1: '#FDDCC4', A2: '#F2C4A0', A3: '#D9A87C', A4: '#C68E5B', A5: '#A0714A', A5_5: '#9B6B45', A6: '#7A5539', A7: '#4A3228',
+  B1: '#FDDCC4', B2: '#F2C4A0', B3: '#D9A87C', B4: '#C68E5B', B5: '#A0714A', B5_5: '#9B6B45', B6: '#7A5539', B7: '#4A3228',
 };
 
 const DEFAULT_HAIR_POSITIONS: Record<string, { width: string; left: string; top: string }> = {
@@ -341,6 +341,7 @@ const AVATAR_ITEMS: AvatarItem[] = [
   { id: 'A3', label: 'Tone 3', path: `${BASE}assets/avatar/body/female/A3.png`, category: 'body', gender: 'female', cost: 0 },
   { id: 'A4', label: 'Tone 4', path: `${BASE}assets/avatar/body/female/A4.png`, category: 'body', gender: 'female', cost: 0 },
   { id: 'A5', label: 'Tone 5', path: `${BASE}assets/avatar/body/female/A5.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A5_5', label: 'Tone 5.5', path: `${BASE}assets/avatar/body/female/A5.5.png`, category: 'body', gender: 'female', cost: 0 },
   { id: 'A6', label: 'Tone 6', path: `${BASE}assets/avatar/body/female/A6.png`, category: 'body', gender: 'female', cost: 0 },
   { id: 'A7', label: 'Tone 7', path: `${BASE}assets/avatar/body/female/A7.png`, category: 'body', gender: 'female', cost: 0 },
   { id: 'B1', label: 'Tone 1', path: `${BASE}assets/avatar/body/male/B1.png`, category: 'body', gender: 'male', cost: 0 },
@@ -348,6 +349,7 @@ const AVATAR_ITEMS: AvatarItem[] = [
   { id: 'B3', label: 'Tone 3', path: `${BASE}assets/avatar/body/male/B3.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B4', label: 'Tone 4', path: `${BASE}assets/avatar/body/male/B4.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B5', label: 'Tone 5', path: `${BASE}assets/avatar/body/male/B5.png`, category: 'body', gender: 'male', cost: 0 },
+  { id: 'B5_5', label: 'Tone 5.5', path: `${BASE}assets/avatar/body/male/B5.5.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B6', label: 'Tone 6', path: `${BASE}assets/avatar/body/male/B6.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B7', label: 'Tone 7', path: `${BASE}assets/avatar/body/male/B7.png`, category: 'body', gender: 'male', cost: 0 },
   // No face option
@@ -392,11 +394,14 @@ const AVATAR_ITEMS: AvatarItem[] = [
   { id: 'D3', label: 'Outfit 3', path: `${BASE}assets/avatar/outfit/female/D3.png`, category: 'outfit', gender: 'female', cost: 0 },
   { id: 'D4', label: 'Outfit 4', path: `${BASE}assets/avatar/outfit/female/D4.png`, category: 'outfit', gender: 'female', cost: 0 },
   { id: 'D5', label: 'Outfit 5', path: `${BASE}assets/avatar/outfit/female/D5.png`, category: 'outfit', gender: 'female', cost: 0 },
+  { id: 'D6', label: 'Outfit 6', path: `${BASE}assets/avatar/outfit/female/D6.png`, category: 'outfit', gender: 'female', cost: 0 },
   // Male outfits
   { id: 'E1', label: 'Outfit 1', path: `${BASE}assets/avatar/outfit/male/E1.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E2', label: 'Outfit 2', path: `${BASE}assets/avatar/outfit/male/E2.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E3', label: 'Outfit 3', path: `${BASE}assets/avatar/outfit/male/E3.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E4', label: 'Outfit 4', path: `${BASE}assets/avatar/outfit/male/E4.png`, category: 'outfit', gender: 'male', cost: 0 },
+  { id: 'E5', label: 'Outfit 5', path: `${BASE}assets/avatar/outfit/male/E5.png`, category: 'outfit', gender: 'male', cost: 0 },
+  { id: 'E6', label: 'Outfit 6', path: `${BASE}assets/avatar/outfit/male/E6.png`, category: 'outfit', gender: 'male', cost: 0 },
 ];
 
 const getAvatarItemPath = (category: AvatarCategory, id: string): string => {
