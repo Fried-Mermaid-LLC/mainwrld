@@ -21,6 +21,7 @@ import {
   where,
   orderBy,
   addDoc,
+  runTransaction,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
@@ -229,6 +230,92 @@ export const subscribeToBooksChanges = (
   return onSnapshot(collection(db, 'books'), (snapshot: QuerySnapshot) => {
     const books = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     callback(books);
+  });
+};
+
+// ==================== GLOBAL SPOTLIGHT ====================
+
+type SpotlightDoc = {
+  spotlightBookId?: string;
+  weekEpoch?: number;
+  chosenIds?: string[];
+};
+
+const SPOTLIGHT_MS = 7 * 24 * 60 * 60 * 1000;
+
+const getWeekEpoch = () => Math.floor(Date.now() / SPOTLIGHT_MS);
+
+const sortSpotlightCandidates = (books: any[]) => {
+  return [...books].sort((a, b) => {
+    const favDiff = (b.favoritesLastWeek || 0) - (a.favoritesLastWeek || 0);
+    if (favDiff !== 0) return favDiff;
+    return new Date(b.publishedDate || 0).getTime() - new Date(a.publishedDate || 0).getTime();
+  });
+};
+
+export const subscribeToGlobalSpotlight = (
+  callback: (spotlight: SpotlightDoc | null) => void
+): Unsubscribe => {
+  return onSnapshot(
+    doc(db, 'appConfig', 'spotlight'),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        callback(null);
+        return;
+      }
+      callback(snapshot.data() as SpotlightDoc);
+    },
+    () => {
+      // Permission errors should not break app rendering.
+      callback(null);
+    }
+  );
+};
+
+export const ensureGlobalSpotlight = async (books: any[]) => {
+  const candidates = sortSpotlightCandidates(books.filter((b: any) => b?.id && !b.isDraft));
+  if (candidates.length === 0) return null;
+
+  const spotlightRef = doc(db, 'appConfig', 'spotlight');
+  const candidateIds = new Set(candidates.map((b: any) => b.id));
+  const currentWeekEpoch = getWeekEpoch();
+
+  return runTransaction(db, async (tx) => {
+    const snapshot = await tx.get(spotlightRef);
+    const data = snapshot.exists() ? (snapshot.data() as SpotlightDoc) : {};
+
+    const chosenIds = Array.isArray(data.chosenIds)
+      ? data.chosenIds.filter((id: string) => candidateIds.has(id))
+      : [];
+    const storedWeekEpoch = typeof data.weekEpoch === 'number' ? data.weekEpoch : -1;
+    const storedSpotlightBookId = typeof data.spotlightBookId === 'string' ? data.spotlightBookId : '';
+    const storedStillValid = !!storedSpotlightBookId && candidateIds.has(storedSpotlightBookId);
+
+    if (storedWeekEpoch === currentWeekEpoch && storedStillValid) {
+      return {
+        spotlightBookId: storedSpotlightBookId,
+        weekEpoch: storedWeekEpoch,
+        chosenIds,
+      };
+    }
+
+    let nextChosenIds = [...chosenIds];
+    let unchosen = candidates.filter((b: any) => !nextChosenIds.includes(b.id));
+    if (unchosen.length === 0) {
+      nextChosenIds = [];
+      unchosen = [...candidates];
+    }
+
+    const chosen = unchosen[0] || candidates[0];
+    const nextState = {
+      spotlightBookId: chosen.id,
+      weekEpoch: currentWeekEpoch,
+      chosenIds: [...nextChosenIds, chosen.id],
+      updatedAt: serverTimestamp(),
+    };
+
+    tx.set(spotlightRef, nextState, { merge: true });
+    return nextState;
   });
 };
 

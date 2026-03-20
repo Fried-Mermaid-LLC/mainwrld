@@ -744,6 +744,7 @@ const App: React.FC = () => {
   const [firebaseUid, setFirebaseUid] = useState<string | null>(null);
   const [userDataLoaded, setUserDataLoaded] = useState(false); // Guard for persist effects
   const [books, setBooks] = useState<Book[]>([]);
+  const [globalSpotlightBookId, setGlobalSpotlightBookId] = useState<string | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [readingChapterIndex, setReadingChapterIndex] = useState(0);
   const [selectedProfileUser, setSelectedProfileUser] = useState<User | null>(null);
@@ -1176,6 +1177,20 @@ const App: React.FC = () => {
     });
     return () => unsubscribe();
   }, [favoriteBookIds]);
+
+  useEffect(() => {
+    const unsubscribe = fbService.subscribeToGlobalSpotlight((spotlight: any) => {
+      setGlobalSpotlightBookId(spotlight?.spotlightBookId || null);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (books.length === 0) return;
+    fbService.ensureGlobalSpotlight(books).catch((err: any) => {
+      console.warn('[MainWRLD] Global spotlight fallback active:', err?.message || err);
+    });
+  }, [books]);
 
   useEffect(() => {
     setBooks(prev => prev.map(book => {
@@ -3068,6 +3083,8 @@ const handleSpinWheel = () => {
       case 'explore':
         return <ExploreView
           books={books.filter((b: Book) => !blockedUsers.has(b.author.username) && !b.isDraft && !(userIsUnder16 && b.isExplicit))}
+          spotlightSourceBooks={books.filter((b: Book) => !b.isDraft)}
+          spotlightBookId={globalSpotlightBookId}
           onSelect={(b: Book) => { setSelectedBook(b); setView('book-detail'); }}
           users={[...registeredUsers.filter((u: any) => u.username !== user.username), ...MUTUALS.filter(m => !registeredUsers.some((u: any) => u.username === m.username) && m.username !== user.username)]}
           onUserSelect={(u: User) => { setSelectedProfileUser(u); setView('profile'); }}
@@ -3641,7 +3658,7 @@ const handleSpinWheel = () => {
 
 // --- Subviews Components ---
 
-const ExploreView = ({ books, onSelect, onAuthorSelect, onOwnSelect, users = [], onUserSelect, avatarConfigs = {}, blockedUsers = new Set(), readingActivity = {}, currentUsername = '', userFavoriteGenres = [] }: any) => {
+const ExploreView = ({ books, spotlightSourceBooks = [], spotlightBookId = null, onSelect, onAuthorSelect, onOwnSelect, users = [], onUserSelect, avatarConfigs = {}, blockedUsers = new Set(), readingActivity = {}, currentUsername = '', userFavoriteGenres = [] }: any) => {
   const [showFilter, setShowFilter] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -3694,7 +3711,8 @@ const ExploreView = ({ books, onSelect, onAuthorSelect, onOwnSelect, users = [],
   }, [users, cleanQuery, isHashtagSearch, blockedUsers]);
 
    const spotlightBook = useMemo(() => {
-    const publicBooks = books.filter((b: Book) => !b.isDraft);
+    const sourceBooks: Book[] = (spotlightSourceBooks as Book[]).length > 0 ? (spotlightSourceBooks as Book[]) : books;
+    const publicBooks = sourceBooks.filter((b: Book) => !b.isDraft);
     if (publicBooks.length === 0) return null;
 
     const sortedByFaves = [...publicBooks].sort((a, b) => {
@@ -3703,67 +3721,16 @@ const ExploreView = ({ books, onSelect, onAuthorSelect, onOwnSelect, users = [],
       return new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime();
     });
 
-    if (typeof window === 'undefined') return sortedByFaves[0];
-
-    const currentWeekEpoch = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
-    const storageKey = 'mainwrld_spotlight_cycle_v1';
-    const availableBookIds = new Set(publicBooks.map((b: Book) => b.id));
-
-    type SpotlightCycleState = { lastWeek: number; chosenIds: string[] };
-    let cycleState: SpotlightCycleState = { lastWeek: -1, chosenIds: [] };
-
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as SpotlightCycleState;
-        if (typeof parsed?.lastWeek === 'number' && Array.isArray(parsed?.chosenIds)) {
-          cycleState = parsed;
-        }
-      }
-    } catch {
-      // Ignore bad cache and continue with defaults.
+    if (spotlightBookId) {
+      const persisted = publicBooks.find((b: Book) => b.id === spotlightBookId);
+      if (persisted) return persisted;
     }
 
-    cycleState.chosenIds = cycleState.chosenIds.filter((id: string) => availableBookIds.has(id));
-
-    const persistState = (nextState: SpotlightCycleState) => {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(nextState));
-      } catch {
-        // Ignore storage errors; fallback is still deterministic for this render.
-      }
-    };
-
-    if (cycleState.lastWeek !== currentWeekEpoch) {
-      let nextChosenIds = [...cycleState.chosenIds];
-      let unchosenBooks = sortedByFaves.filter((b: Book) => !nextChosenIds.includes(b.id));
-
-      if (unchosenBooks.length === 0) {
-        nextChosenIds = [];
-        unchosenBooks = [...sortedByFaves];
-      }
-
-      const nextSpotlight = unchosenBooks[0] || sortedByFaves[0];
-      const nextState: SpotlightCycleState = {
-        lastWeek: currentWeekEpoch,
-        chosenIds: [...nextChosenIds, nextSpotlight.id],
-      };
-      persistState(nextState);
-      return nextSpotlight;
-    }
-
-    const currentSpotlightId = cycleState.chosenIds[cycleState.chosenIds.length - 1];
-    const currentSpotlight = publicBooks.find((b: Book) => b.id === currentSpotlightId);
-    if (currentSpotlight) return currentSpotlight;
-
-    const fallbackSpotlight = sortedByFaves.find((b: Book) => !cycleState.chosenIds.includes(b.id)) || sortedByFaves[0];
-    const fallbackState: SpotlightCycleState = {
-      lastWeek: currentWeekEpoch,
-      chosenIds: [...cycleState.chosenIds, fallbackSpotlight.id],
-    };
-    persistState(fallbackState);
-    return fallbackSpotlight;
-  }, [books]);
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const weekEpoch = Math.floor(Date.now() / WEEK_MS);
+    const spotlightIndex = ((weekEpoch % sortedByFaves.length) + sortedByFaves.length) % sortedByFaves.length;
+    return sortedByFaves[spotlightIndex];
+  }, [books, spotlightSourceBooks, spotlightBookId]);
 
   const topAuthors = useMemo(() => {
     const authorMap: Record<string, { user: User; totalLikes: number }> = {};
