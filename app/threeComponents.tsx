@@ -3,10 +3,27 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Html, useGLTF } from '@react-three/drei';
 import { BASE } from './config';
-import { ACCENT_COLOR, WORLD_RADIUS } from './constants';
-import { AvatarConfig, AvatarItem, AvatarCategory, AvatarGender, User } from './types';
+import { ACCENT_COLOR, WORLD_RADIUS, SKIN_TONE_COLORS } from './constants';
+import { AvatarConfig, User } from './types';
 
-// JEVON - PASSING AVATAR CONFIG TO AVATAR MODEL TO RENDER CUSTOMIZATION OPTIONS
+// -----------------------------
+// Helpers
+// -----------------------------
+
+const cloneGLTF = (gltf: any) => gltf?.scene?.clone(true);
+
+const applySkinTone = (scene: THREE.Object3D, color: string) => {
+    scene.traverse((child: any) => {
+        if (child.isMesh) {
+            child.material = child.material.clone();
+            child.material.color = new THREE.Color(color);
+        }
+    });
+};
+
+// -----------------------------
+// Avatar Model
+// -----------------------------
 
 export const AvatarModel: React.FC<{
     name: string;
@@ -15,31 +32,66 @@ export const AvatarModel: React.FC<{
     online: boolean;
     isPlayer?: boolean;
     skinColor?: string;
-    avatarConfig?: AvatarConfig | null; // 👈 ADD THIS
+    avatarConfig?: AvatarConfig;
 }> = ({ name, activity, onClick, online, isPlayer, skinColor, avatarConfig }) => {
 
-    const { scene } = useGLTF(`${BASE}avatar.glb`);
-    const targetColor = isPlayer ? (skinColor || ACCENT_COLOR) : '#334155';
+    // -----------------------------
+    // Load modular assets
+    // -----------------------------
+    const bodyGLTF = useGLTF(
+        avatarConfig ? '../MochaMattel3Dassets/GLB/bodyId/' + avatarConfig.bodyId + '.glb' : `${BASE}avatar.glb`
+    );
 
-    const clonedScene = useMemo(() => {
+    const hairGLTF = useGLTF(
+        avatarConfig ? '../MochaMattel3Dassets/GLB/hairId/' + avatarConfig.hairId + '.glb' : `${BASE}avatar.glb`
+    );
+
+    const faceGLTF = useGLTF(
+        avatarConfig ? '../MochaMattel3Dassets/GLB/faceId/' + avatarConfig.faceId + '.glb' : `${BASE}avatar.glb`
+    );
+
+    const outfitGLTF = useGLTF(
+        avatarConfig ? '../MochaMattel3Dassets/GLB/outfitId/' + avatarConfig.outfitId + '.glb' : `${BASE}avatar.glb`
+    );
+
+    // -----------------------------
+    // Skin tone logic
+    // -----------------------------
+    const targetColor = avatarConfig
+        ? SKIN_TONE_COLORS[avatarConfig.bodyId] || ACCENT_COLOR
+        : isPlayer
+            ? (skinColor || ACCENT_COLOR)
+            : '#334155';
+
+    // -----------------------------
+    // Build Avatar
+    // -----------------------------
+    const avatarGroup = useMemo(() => {
         const group = new THREE.Group();
-        scene.traverse((child: any) => {
-            if (child.isMesh) {
-                const newGeometry = child.geometry.clone();
-                const newMaterial = new THREE.MeshStandardMaterial({
-                    color: targetColor,
-                    roughness: 0.6,
-                    metalness: 0.1,
-                });
-                const newMesh = new THREE.Mesh(newGeometry, newMaterial);
-                newMesh.position.copy(child.position);
-                newMesh.rotation.copy(child.rotation);
-                newMesh.scale.copy(child.scale);
-                group.add(newMesh);
-            }
-        });
+
+        // Fallback (no config)
+        if (!avatarConfig) {
+            const fallback = cloneGLTF(bodyGLTF);
+            if (fallback) group.add(fallback);
+            return group;
+        }
+
+        const body = cloneGLTF(bodyGLTF);
+        const hair = cloneGLTF(hairGLTF);
+        const face = cloneGLTF(faceGLTF);
+        const outfit = cloneGLTF(outfitGLTF);
+
+        if (body) {
+            applySkinTone(body, targetColor);
+            group.add(body);
+        }
+
+        if (outfit) group.add(outfit);
+        if (face) group.add(face);
+        if (hair) group.add(hair);
+
         return group;
-    }, [scene, targetColor]);
+    }, [bodyGLTF, hairGLTF, faceGLTF, outfitGLTF, avatarConfig, targetColor]);
 
     useEffect(() => {
         console.log("AvatarConfig:", avatarConfig);
@@ -47,19 +99,30 @@ export const AvatarModel: React.FC<{
 
     return (
         <group onClick={(e) => { e.stopPropagation(); onClick?.(); }}>
-            <primitive object={clonedScene} scale={1} position={[0, 0, 0]} />
+            <primitive object={avatarGroup} scale={1} position={[0, 0, 0]} />
+
             <Html position={[0, 2.4, 0]} center distanceFactor={10}>
                 <div className="flex flex-col items-center pointer-events-none select-none">
                     <div className="flex items-center gap-1.5 px-3 py-1 bg-white/95 dark:bg-black/90 backdrop-blur-md rounded-full shadow-lg border border-gray-100 dark:border-gray-800">
                         <div className={`w-2 h-2 rounded-full ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
-                        <span className="text-[10px] font-bold text-black dark:text-white whitespace-nowrap">{name}</span>
+                        <span className="text-[10px] font-bold text-black dark:text-white whitespace-nowrap">
+                            {name}
+                        </span>
                     </div>
-                    <div className="mt-1 px-2 py-0.5 bg-accent/10 rounded-md border border-accent/20"><span className="text-[8px] font-bold uppercase tracking-widest text-accent">{activity}</span></div>
+                    <div className="mt-1 px-2 py-0.5 bg-accent/10 rounded-md border border-accent/20">
+                        <span className="text-[8px] font-bold uppercase tracking-widest text-accent">
+                            {activity}
+                        </span>
+                    </div>
                 </div>
             </Html>
         </group>
     );
 };
+
+// -----------------------------
+// Moving Avatar (NPCs)
+// -----------------------------
 
 export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({ user, onClick }) => {
     const groupRef = useRef<THREE.Group>(null);
@@ -74,6 +137,7 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({ u
 
     useFrame((state, delta) => {
         if (!groupRef.current) return;
+
         if (waitTimer.current > 0) {
             waitTimer.current -= delta;
             return;
@@ -88,8 +152,13 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({ u
         } else {
             const moveDir = targetPos.current.clone().sub(currentPos).normalize();
             currentPos.add(moveDir.clone().multiplyScalar(1.5 * delta));
+
             const targetRotation = Math.atan2(moveDir.x, moveDir.z);
-            groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotation, 0.05);
+            groupRef.current.rotation.y = THREE.MathUtils.lerp(
+                groupRef.current.rotation.y,
+                targetRotation,
+                0.05
+            );
         }
     });
 
@@ -100,20 +169,32 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({ u
                 activity={user.activity}
                 online={user.isOnline}
                 onClick={onClick}
+                avatarConfig={user.avatarConfig} // IMPORTANT: pass config
             />
         </group>
     );
 };
 
-export const Player: React.FC<{ moveDir: THREE.Vector3; skinColor?: string }> = ({ moveDir, skinColor }) => {
+// -----------------------------
+// Player Controller
+// -----------------------------
+
+export const Player: React.FC<{
+    moveDir: THREE.Vector3;
+    skinColor?: string;
+    avatarConfig?: AvatarConfig;
+}> = ({ moveDir, skinColor, avatarConfig }) => {
+
     const meshRef = useRef<THREE.Group>(null);
     const keys = useRef<Record<string, boolean>>({});
 
     useEffect(() => {
         const handleDown = (e: KeyboardEvent) => { keys.current[e.code] = true; };
         const handleUp = (e: KeyboardEvent) => { keys.current[e.code] = false; };
+
         window.addEventListener('keydown', handleDown);
         window.addEventListener('keyup', handleUp);
+
         return () => {
             window.removeEventListener('keydown', handleDown);
             window.removeEventListener('keyup', handleUp);
@@ -122,6 +203,7 @@ export const Player: React.FC<{ moveDir: THREE.Vector3; skinColor?: string }> = 
 
     useFrame((state, delta) => {
         if (!meshRef.current) return;
+
         const { camera } = state;
         const speed = 6 * delta;
         const direction = new THREE.Vector3();
@@ -130,6 +212,7 @@ export const Player: React.FC<{ moveDir: THREE.Vector3; skinColor?: string }> = 
         if (keys.current['KeyS'] || keys.current['ArrowDown']) direction.z += 1;
         if (keys.current['KeyA'] || keys.current['ArrowLeft']) direction.x -= 1;
         if (keys.current['KeyD'] || keys.current['ArrowRight']) direction.x += 1;
+
         if (moveDir.length() > 0) direction.add(moveDir);
 
         if (direction.length() > 0) {
@@ -140,10 +223,25 @@ export const Player: React.FC<{ moveDir: THREE.Vector3; skinColor?: string }> = 
 
         const idealOffset = new THREE.Vector3(0, 5, 8).add(meshRef.current.position);
         camera.position.lerp(idealOffset, 0.1);
-        camera.lookAt(meshRef.current.position.x, meshRef.current.position.y + 1, meshRef.current.position.z);
+        camera.lookAt(
+            meshRef.current.position.x,
+            meshRef.current.position.y + 1,
+            meshRef.current.position.z
+        );
     });
 
-    return <group ref={meshRef}><AvatarModel name="You" activity="Exploring" online={true} isPlayer={true} skinColor={skinColor} /></group>;
+    return (
+        <group ref={meshRef}>
+            <AvatarModel
+                name="You"
+                activity="Exploring"
+                online={true}
+                isPlayer={true}
+                skinColor={skinColor}
+                avatarConfig={avatarConfig}
+            />
+        </group>
+    );
 };
 
 export default {

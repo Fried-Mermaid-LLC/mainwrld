@@ -2058,7 +2058,7 @@ const handleSpinWheel = () => {
                 <pointLight position={[10, 10, 10]} intensity={1.5} />
                 <mesh scale={[WORLD_RADIUS, WORLD_RADIUS, WORLD_RADIUS]}><sphereGeometry args={[1, 64, 64]} /><meshStandardMaterial color="#ffffff" transparent opacity={0.15} side={THREE.BackSide} /></mesh>
                 <gridHelper args={[100, 50, 0xeeeeee, 0xf5f5f5]} position={[0, -0.01, 0]} />
-                <Player moveDir={moveDir} skinColor={avatarConfig ? SKIN_TONE_COLORS[avatarConfig.bodyId] : undefined} />
+                <Player moveDir={moveDir} avatarConfig={avatarConfig} />
                 {(() => {
                   // Get usernames of actual mutuals (both directions exist)
                   const myAdmiring = relationships.filter(r => r.admirer === user.username).map(r => r.target);
