@@ -6,725 +6,71 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
 import * as fbService from './firebaseService';
 import { on } from 'events';
+import {
+  BASE,
+  STRIPE_PUBLISHABLE_KEY,
+  getStripe,
+  STRIPE_PRICE_IDS,
+  STRIPE_PAYMENT_LINKS,
+  STRIPE_PREMIUM_PAYMENT_LINK,
+  STRIPE_PREMIUM_PRICE_ID,
+  STRIPE_BOOK_PRICE_ID,
+  EMAILJS_SERVICE_ID,
+  EMAILJS_TEMPLATE_ID,
+  EMAILJS_PUBLIC_KEY,
+  sendWelcomeEmail,
+} from './app/config';
+import {
+  ACCENT_COLOR,
+  WORLD_RADIUS,
+  MAX_LIBRARY_SIZE,
+  MIN_WORD_COUNT,
+  MAX_DAILY_EARNED_POINTS,
+  COMMENT_LIKES_THRESHOLD,
+  CHAPTER_LIKES_THRESHOLD,
+  MAX_DAILY_CHAPTERS,
+  MAX_WORD_COUNT,
+  GENRE_LIST,
+  ADMIN_USERNAMES,
+  containsBadWord,
+  SKIN_TONE_COLORS,
+} from './app/constants';
+import {
+  getHairPosition,
+  getFacePosition,
+  getAvatarItemPath,
+  AvatarLayers,
+  AVATAR_ITEMS,
+  HAIR_POSITIONS,
+  FACE_POSITIONS,
+} from './app/avatar';
+import { Button, Input, CoverImg } from './app/sharedComponents';
+import { LOREM_CONTENT, CURRENT_USER_MOCK, MOCK_USERS, INITIAL_BOOKS } from './app/mockData';
+import { AvatarModel, MovingAvatar, Player } from './app/threeComponents';
+import {
+  View,
+  User,
+  UserRecord,
+  NotificationItem,
+  ChatMessage,
+  Relationship,
+  Comment,
+  Coupon,
+  Report,
+  AvatarGender,
+  AvatarCategory,
+  AvatarConfig,
+  AvatarItem,
+  Chapter,
+  Book,
+  BookProgress,
+} from './app/types';
 
 /**
  * MainWRLD- Full Integrated Creator & Reader Platform
  */
 
-// Base path for assets - uses Vite's base URL config for GitHub Pages
-const BASE = import.meta.env.BASE_URL;
-
-// --- Stripe Configuration ---
-// Replace with your Stripe publishable key (use pk_test_ for testing, pk_live_ for production)
-const STRIPE_PUBLISHABLE_KEY = 'pk_test_51SxGPW2Urthc1FwfeRDmVhtNVchR7iiZATzRQJcyRjzNLA3ME99cQXQbbgP0ngtnVxAQCckZYcFKAi2vld0w4YR900P0pvdCEO';
-declare const Stripe: any;
-const getStripe = () => {
-  if (typeof Stripe !== 'undefined') {
-    return Stripe(STRIPE_PUBLISHABLE_KEY);
-  }
-  return null;
-};
-
-// Stripe Price IDs - Create these products in Stripe Dashboard > Products
-// Then paste the price IDs here
-const STRIPE_PRICE_IDS: Record<string, string> = {
-  // Points packages
-  'points_100': 'price_1SxGd02Urthc1FwfJ02cf6Sk',  // $1 for 100 points
-  'points_300': 'price_1SxGdI2Urthc1Fwfk1qYWoUs',  // $3 for 300 points
-  'points_500': 'price_1SxGdb2Urthc1Fwf7Bi8D5Pd',  // $5 for 500 points
-  'points_1000': 'price_1SxGdq2Urthc1FwfPCXOdLMJ', // $10 for 1000 points
-};
-
-// Stripe Payment Links - used for client-side checkout (no backend needed)
-const STRIPE_PAYMENT_LINKS: Record<string, string> = {
-  'points_100': 'https://buy.stripe.com/test_eVq14g1gU4qR2oQ6REdwc03',
-  'points_300': 'https://buy.stripe.com/test_9B6aEQe3G8H7gfGb7Udwc02',
-  'points_500': 'https://buy.stripe.com/test_28E9AM7Fie1r6F61xkdwc01',
-  'points_1000': 'https://buy.stripe.com/test_3cI9AMcZC9Lb1kM8ZMdwc00',
-};
-
-// Stripe subscription for Premium membership
-const STRIPE_PREMIUM_PAYMENT_LINK = 'https://buy.stripe.com/test_premium'; // Replace with real Stripe Payment Link
-const STRIPE_PREMIUM_PRICE_ID = ''; // Replace with Stripe recurring price ID
-
-// For book purchases, Mocha should create a product in Stripe for each book
-// OR use a single "Book Purchase" product with variable pricing
-const STRIPE_BOOK_PRICE_ID = ''; // Single book product price ID
-
-// --- EmailJS Configuration (for welcome emails) ---
-// Sign up at https://www.emailjs.com and create a service + template
-// Template should have variables: {{to_email}}, {{to_name}}, {{username}}
-const EMAILJS_SERVICE_ID = 'service_kbm17fr';
-const EMAILJS_TEMPLATE_ID = 'template_nb60w6i';
-const EMAILJS_PUBLIC_KEY = 'drZ-kExBHYqajT2vm';
-declare const emailjs: any;
-
-const sendWelcomeEmail = async (email: string, displayName: string, username: string) => {
-  try {
-    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
-      console.log('[MainWRLD] Welcome email skipped — EmailJS not configured.');
-      console.log(`[MainWRLD] Would send welcome email to: ${email} for user ${displayName} (@${username})`);
-      return;
-    }
-    if (typeof emailjs === 'undefined') {
-      console.log('[MainWRLD] EmailJS SDK not loaded.');
-      return;
-    }
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: email,
-      to_name: displayName,
-      username: username,
-      app_name: 'MainWRLD',
-    }, EMAILJS_PUBLIC_KEY);
-    console.log('[MainWRLD] Welcome email sent to', email);
-  } catch (err) {
-    console.error('[MainWRLD] Failed to send welcome email:', err);
-  }
-};
-
-// --- Types & Interfaces ---
-
-type View = 
-  | 'splash' | 'login' | 'signup' | 'forgot-password'
-  | 'home' | 'explore' | 'library' | 'write' | 'publishing' 
-  | 'monetization-request' | 'self-profile' | 'customization' 
-  | 'profile' | 'book-detail' | 'reading' | 'notifications' 
-  | 'notification-settings' | 'settings' | 'comments' | 'blocked-users' | 'admin-dashboard' | 'daily-rewards' | 'cart'
-  | 'chat' | 'chat-conversation';
-
-interface User {
-  username: string;
-  displayName: string;
-  isOnline: boolean;
-  activity: 'Reading' | 'Writing' | 'Idle';
-  position: [number, number, number];
-  isMutual: boolean;
-  points: number;
-  admirersCount: number;
-  admirersCount_unlocked?: boolean;
-  mutualsCount: number;
-  strikes: number;
-  admiringCount?: number;
-  avatar?: AvatarConfig;
-  isPremium?: boolean;
-  premiumSince?: string;
-  dailyEarnedPoints?: number;
-  lastPointsReset?: number;
-  membershipStartDate?: number;
-  lastMembershipRewardDate?: number;
-  dailyChaptersPublished: number;
-  lastChapterPublishReset: number;
-}
-
-interface UserRecord extends User {
-  password: string;
-  email?: string;
-  birthDate?: string;
-}
-
-interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  icon: string;
-  timestamp: Date;
-  recipient: string;
-  sender?: string;
-  read?: boolean;
-  targetId?: string; // e.g., username for profile, bookId for book
-  targetChapterIndex?: number; // For comments on specific chapters
-  commentId?: string; // For linking directly to a specific comment
-}
-
-interface ChatMessage {
-  id: string;
-  from: string;
-  to: string;
-  text: string;
-  timestamp: string;
-  read: boolean;
-}
-
-interface Relationship {
-  admirer: string;
-  target: string;
-  timestamp: string;
-}
-
-interface Comment {
-  id: string;
-  bookId: string;
-  chapterIndex?: number; // For per-chapter comments. undefined = book-level comment
-  author: string;
-  text: string;
-  likes: number;
-  likedBy?: string[]; // Track who liked the comment to prevent double-liking
-  timestamp: string;
-}
-
-interface Coupon {
-  id: string;
-  value: number;
-  used: boolean;
-}
-
-interface Report {
-  id: string;
-  type: 'Book' | 'Comment' | 'User';
-  targetId: string;
-  reportedBy: string;
-  timestamp: string;
-  status: 'pending' | 'resolved' | 'dismissed';
-}
-
-type AvatarGender = 'female' | 'male';
-type AvatarCategory = 'body' | 'face' | 'hair' | 'outfit';
-
-interface AvatarConfig {
-  gender: AvatarGender;
-  bodyId: string;
-  faceId: string;
-  hairId: string;
-  outfitId: string;
-}
-
-interface AvatarItem {
-  id: string;
-  label: string;
-  path: string;
-  category: AvatarCategory;
-  gender: AvatarGender | 'any';
-  cost: number;
-}
-
-interface Chapter {
-  title: string;
-  content: string;
-}
-
-interface Book {
-  id: string;
-  title: string;
-  author: User;
-  coverColor: string;
-  coverImage?: string;
-  tagline: string;
-  genres: string[];
-  hashtags: string[];
-  likes: number[]; // per-chapter likes array
-  commentsCount: number;
-  publishedDate: string; // ISO format or YYYY-MM-DD
-  isCompleted: boolean;
-  wasCompleted?: boolean; // true after ever being marked completed — locks editing
-  isExplicit: boolean;
-  chaptersCount: number;
-  category?: 'Trending' | 'Recently Read' | 'Recommended' | 'Library';
-  progress?: number;
-  isFavorite?: boolean;
-  isDraft?: boolean;
-  price?: number; // USD Price for Shopping Cart
-  isOwned?: boolean;
-  minLikesPerChapter?: number;
-  content?: string; // Standardized content storage
-  chapters?: Chapter[]; // Added for multiple chapters support
-  favoritesLastWeek?: number; // Added for spotlight logic
-  monetizationAttempts?: number;
-  isMonetized?: boolean;
-  wasMonetizedBefore?: boolean;
-  commentsEnabled?: boolean;
-  isFree?: boolean;
-}
-
 // --- Constants ---
-const ACCENT_COLOR = '#eb6871';
-const WORLD_RADIUS = 50;
-const MAX_LIBRARY_SIZE = 35;
-const MIN_WORD_COUNT = 150;
-const MAX_DAILY_EARNED_POINTS = 25;
-const COMMENT_LIKES_THRESHOLD = 50;
-const CHAPTER_LIKES_THRESHOLD = 10;
-const MAX_DAILY_CHAPTERS = 7;
-const MAX_WORD_COUNT = 11000
-const GENRE_LIST = ['Mystery', 'Sci-Fi', 'Romance', 'Horror', 'Dystopian', 'Fantasy', 'Action', 'Drama', 'Western', 'Fiction', 'Non-Fiction', 'Thriller', 'FanFic', 'Poetry', 'Religious', 'Erotica', 'LGBTQ+', 'Self-Help', 'Sports'];
-const ADMIN_USERNAMES = ['admin', 'mochamattel'];
-
-// Bad words filter for usernames and display names
-const BAD_WORDS = ['fuck','dick','cock','bastard','slut','cunt','nigger','nigga', 'n1gger','nigg3r','fag','faggot','retard','rape','penis','vagina','anal','porn','hentai','cum','jizz','sex','xxx','tits','kys','kms','stfu'];
-const containsBadWord = (text: string): boolean => {
-  const lower = text.toLowerCase().replace(/[^a-z]/g, '');
-  return BAD_WORDS.some(word => lower.includes(word));
-};
-
-const SKIN_TONE_COLORS: Record<string, string> = {
-  A1: '#FDDCC4', A2: '#F2C4A0', A3: '#D9A87C', A4: '#C68E5B', A5: '#A0714A', A5_5: '#9B6B45', A6: '#7A5539', A7: '#4A3228',
-  B1: '#FDDCC4', B2: '#F2C4A0', B3: '#D9A87C', B4: '#C68E5B', B5: '#A0714A', B5_5: '#9B6B45', B6: '#7A5539', B7: '#4A3228',
-};
-
-const DEFAULT_HAIR_POSITIONS: Record<string, { width: string; left: string; top: string }> = {
-  W_Hair_1:    { width: '33%', left: '33.5%', top: '-2.5%' },
-  W_Hair_2:    { width: '35.5%', left: '32.5%', top: '-1.5%' },
-  W_Hair_2_v1: { width: '35.5%', left: '32.5%', top: '-1.5%' },
-  W_Hair_3:    { width: '35%', left: '32%', top: '-2.5%' },
-  W_Hair_4:    { width: '43.5%', left: '28.5%', top: '-4.5%' },
-  W_Hair_4_v1: { width: '43.5%', left: '28.5%', top: '-4.5%' },
-  W_Hair_5:    { width: '42%', left: '29%', top: '-1.5%' },
-  W_Hair_5_v1: { width: '42%', left: '29%', top: '-1.5%' },
-  M_Hair_1:    { width: '31%', left: '34%', top: '-4.5%' },
-  M_Hair_2:    { width: '36%', left: '32%', top: '-2.5%' },
-  M_Hair_3:    { width: '34%', left: '33.5%', top: '-4%' },
-  M_Hair_4:    { width: '29%', left: '35.5%', top: '-3%' },
-  M_Hair_4_v1: { width: '29%', left: '35.5%', top: '-3%' },
-  M_Hair_5:    { width: '37.5%', left: '31.5%', top: '-4%' },
-  M_Hair_5_v1: { width: '37.5%', left: '31.5%', top: '-4%' },
-};
-
-const DEFAULT_FACE_POSITIONS: Record<string, { width: string; left: string; top: string }> = {
-  W_Eye_1:     { width: '23%', left: '38.5%', top: '8%' },
-  W_Eye_2:     { width: '23%', left: '38.5%', top: '7.5%' },
-  W_Eye_3:     { width: '21%', left: '39.5%', top: '8%' },
-  W_Eye_1_v1:  { width: '28%', left: '36%', top: '4.5%' },
-  W_Eye_2_v1:  { width: '28%', left: '36%', top: '4.5%' },
-  W_Eye_3_v1:  { width: '21%', left: '39.5%', top: '8%' },
-  M_Eye_1:     { width: '28%', left: '36%', top: '7%' },
-  M_Eye_2:     { width: '22%', left: '39%', top: '7%' },
-  M_Eye_3:     { width: '22%', left: '39%', top: '7%' },
-  M_Eye_1_v1:  { width: '28%', left: '36%', top: '7%' },
-  M_Eye_1_v2:  { width: '28%', left: '36%', top: '7%' },
-  M_Eye_2_v1:  { width: '23%', left: '38.5%', top: '7%' },
-  M_Eye_2_v2:  { width: '24%', left: '38%', top: '6.5%' },
-  M_Eye_3_v1:  { width: '21%', left: '39.5%', top: '7.5%' },
-  M_Eye_3_v2:  { width: '21%', left: '39.5%', top: '7.5%' },
-};
-
-// Load saved positions from localStorage, fall back to defaults
-const loadPositions = (key: string, defaults: Record<string, { width: string; left: string; top: string }>) => {
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved) return { ...defaults, ...JSON.parse(saved) };
-  } catch {}
-  return { ...defaults };
-};
-
-// Clear old hair positions so updated defaults take effect (v4 = Mocha's adjusted positions)
-if (!localStorage.getItem('mainwrld_hair_pos_v4')) {
-  localStorage.removeItem('mainwrld_hair_positions');
-  localStorage.setItem('mainwrld_hair_pos_v4', '1');
-}
-
-const HAIR_POSITIONS: Record<string, { width: string; left: string; top: string }> = loadPositions('mainwrld_hair_positions', DEFAULT_HAIR_POSITIONS);
-const FACE_POSITIONS: Record<string, { width: string; left: string; top: string }> = loadPositions('mainwrld_face_positions', DEFAULT_FACE_POSITIONS);
-
-const getHairPosition = (hairId: string, shrink = 1, shift = 0) => {
-  const pos = HAIR_POSITIONS[hairId] || { width: '30%', left: '34%', top: '2%' };
-  if (shrink === 1 && shift === 0) return pos;
-  const origW = parseFloat(pos.width);
-  const origL = parseFloat(pos.left);
-  const newW = +(origW * shrink).toFixed(3);
-  // center after shrink, then apply explicit horizontal shift (percentage points)
-  const newL = +(origL + (origW - newW) / 2 + shift).toFixed(3);
-  return { width: `${newW}%`, left: `${newL}%`, top: pos.top };
-};
-const getFacePosition = (faceId: string, shrink = 1) => {
-  const pos = FACE_POSITIONS[faceId] || { width: '28%', left: '36%', top: '4.5%' };
-  if (shrink === 1) return pos;
-  const origW = parseFloat(pos.width);
-  const origL = parseFloat(pos.left);
-  const newW = +(origW * shrink).toFixed(3);
-  const newL = +(origL + (origW - newW) / 2).toFixed(3);
-  return { width: `${newW}%`, left: `${newL}%`, top: pos.top };
-};
-
-const AVATAR_ITEMS: AvatarItem[] = [
-  // Bodies - all free
-  { id: 'A1', label: 'Tone 1', path: `${BASE}assets/avatar/body/female/A1.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A2', label: 'Tone 2', path: `${BASE}assets/avatar/body/female/A2.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A3', label: 'Tone 3', path: `${BASE}assets/avatar/body/female/A3.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A4', label: 'Tone 4', path: `${BASE}assets/avatar/body/female/A4.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A5', label: 'Tone 5', path: `${BASE}assets/avatar/body/female/A5.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A5_5', label: 'Tone 5.5', path: `${BASE}assets/avatar/body/female/A5.5.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A6', label: 'Tone 6', path: `${BASE}assets/avatar/body/female/A6.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A7', label: 'Tone 7', path: `${BASE}assets/avatar/body/female/A7.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'B1', label: 'Tone 1', path: `${BASE}assets/avatar/body/male/B1.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'B2', label: 'Tone 2', path: `${BASE}assets/avatar/body/male/B2.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'B3', label: 'Tone 3', path: `${BASE}assets/avatar/body/male/B3.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'B4', label: 'Tone 4', path: `${BASE}assets/avatar/body/male/B4.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'B5', label: 'Tone 5', path: `${BASE}assets/avatar/body/male/B5.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'B5_5', label: 'Tone 5.5', path: `${BASE}assets/avatar/body/male/B5.5.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'B6', label: 'Tone 6', path: `${BASE}assets/avatar/body/male/B6.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'B7', label: 'Tone 7', path: `${BASE}assets/avatar/body/male/B7.png`, category: 'body', gender: 'male', cost: 0 },
-  // No face option
-  { id: 'no_face', label: 'No Face', path: '', category: 'face', gender: 'any', cost: 0 },
-  // Female faces
-  { id: 'W_Eye_1', label: 'Face 1', path: `${BASE}assets/avatar/face/W_Eye_1.png`, category: 'face', gender: 'female', cost: 0 },
-  { id: 'W_Eye_2', label: 'Face 2', path: `${BASE}assets/avatar/face/W_Eye_2.png`, category: 'face', gender: 'female', cost: 0 },
-  { id: 'W_Eye_3', label: 'Face 3', path: `${BASE}assets/avatar/face/W_Eye_3.png`, category: 'face', gender: 'female', cost: 0 },
-  { id: 'W_Eye_3_v1', label: 'Face 3 Alt', path: `${BASE}assets/avatar/face/W_Eye_3_v1.png`, category: 'face', gender: 'female', cost: 0 },
-  // Male faces
-  { id: 'M_Eye_1', label: 'Face 1', path: `${BASE}assets/avatar/face/M_Eye_1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_1_v1', label: 'Face 1 Alt', path: `${BASE}assets/avatar/face/M_Eye_1_v1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_1_v2', label: 'Face 1 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_1_v2.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_2', label: 'Face 2', path: `${BASE}assets/avatar/face/M_Eye_2.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_2_v1', label: 'Face 2 Alt', path: `${BASE}assets/avatar/face/M_Eye_2_v1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_2_v2', label: 'Face 2 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_2_v2.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_3', label: 'Face 3', path: `${BASE}assets/avatar/face/M_Eye_3.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_3_v1', label: 'Face 3 Alt', path: `${BASE}assets/avatar/face/M_Eye_3_v1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_3_v2', label: 'Face 3 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_3_v2.png`, category: 'face', gender: 'male', cost: 0 },
-  // No hair option
-  { id: 'none', label: 'No Hair', path: '', category: 'hair', gender: 'any', cost: 0 },
-  // Female hair
-  { id: 'W_Hair_1', label: 'Hair 1', path: `${BASE}assets/avatar/hair/female/W_Hair_1.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_2', label: 'Hair 2', path: `${BASE}assets/avatar/hair/female/W_Hair_2.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_2_v1', label: 'Hair 2 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_2_v1.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_3', label: 'Hair 3', path: `${BASE}assets/avatar/hair/female/W_Hair_3.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_4', label: 'Hair 4', path: `${BASE}assets/avatar/hair/female/W_Hair_4.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_4_v1', label: 'Hair 4 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_4_v1.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_5', label: 'Hair 5', path: `${BASE}assets/avatar/hair/female/W_Hair_5.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_5_v1', label: 'Hair 5 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_5_v1.png`, category: 'hair', gender: 'female', cost: 0 },
-  // Male hair
-  { id: 'M_Hair_1', label: 'Hair 1', path: `${BASE}assets/avatar/hair/male/M_Hair_1.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_2', label: 'Hair 2', path: `${BASE}assets/avatar/hair/male/M_Hair_2.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_3', label: 'Hair 3', path: `${BASE}assets/avatar/hair/male/M_Hair_3.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_4', label: 'Hair 4', path: `${BASE}assets/avatar/hair/male/M_Hair_4.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_4_v1', label: 'Hair 4 Alt', path: `${BASE}assets/avatar/hair/male/M_Hair_4_v1.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_5', label: 'Hair 5', path: `${BASE}assets/avatar/hair/male/M_Hair_5.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_5_v1', label: 'Hair 5 Alt', path: `${BASE}assets/avatar/hair/male/M_Hair_5_v1.png`, category: 'hair', gender: 'male', cost: 0 },
-  // Female outfits
-  { id: 'D1', label: 'Outfit 1', path: `${BASE}assets/avatar/outfit/female/D1.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D2', label: 'Outfit 2', path: `${BASE}assets/avatar/outfit/female/D2.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D3', label: 'Outfit 3', path: `${BASE}assets/avatar/outfit/female/D3.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D4', label: 'Outfit 4', path: `${BASE}assets/avatar/outfit/female/D4.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D5', label: 'Outfit 5', path: `${BASE}assets/avatar/outfit/female/D5.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D6', label: 'Outfit 6', path: `${BASE}assets/avatar/outfit/female/D6.png`, category: 'outfit', gender: 'female', cost: 0 },
-  // Male outfits
-  { id: 'E1', label: 'Outfit 1', path: `${BASE}assets/avatar/outfit/male/E1.png`, category: 'outfit', gender: 'male', cost: 0 },
-  { id: 'E2', label: 'Outfit 2', path: `${BASE}assets/avatar/outfit/male/E2.png`, category: 'outfit', gender: 'male', cost: 0 },
-  { id: 'E3', label: 'Outfit 3', path: `${BASE}assets/avatar/outfit/male/E3.png`, category: 'outfit', gender: 'male', cost: 0 },
-  { id: 'E4', label: 'Outfit 4', path: `${BASE}assets/avatar/outfit/male/E4.png`, category: 'outfit', gender: 'male', cost: 0 },
-  { id: 'E5', label: 'Outfit 5', path: `${BASE}assets/avatar/outfit/male/E5.png`, category: 'outfit', gender: 'male', cost: 0 },
-  { id: 'E6', label: 'Outfit 6', path: `${BASE}assets/avatar/outfit/male/E6.png`, category: 'outfit', gender: 'male', cost: 0 },
-];
-
-const getAvatarItemPath = (category: AvatarCategory, id: string): string => {
-  const item = AVATAR_ITEMS.find(i => i.id === id);
-  return item?.path || '';
-};
-
-interface AvatarLayersProps {
-  avatarConfig: AvatarConfig;
-  containerClassName?: string;
-  containerStyle?: React.CSSProperties;
-  faceShrink?: number;
-  hairShrink?: number;
-  hairShift?: number;
-  faceStyleOverride?: React.CSSProperties;
-  hairStyleOverride?: React.CSSProperties;
-}
-
-const AvatarLayers = ({
-  avatarConfig,
-  containerClassName,
-  containerStyle,
-  faceShrink = 0.94,
-  hairShrink = 0.918,
-  hairShift = 0.33,
-  faceStyleOverride,
-  hairStyleOverride,
-}: AvatarLayersProps) => {
-  const faceStyle = faceStyleOverride ?? getFacePosition(avatarConfig.faceId, faceShrink);
-  const hairStyle = hairStyleOverride ?? getHairPosition(avatarConfig.hairId, hairShrink, hairShift);
-
-  return (
-    <div className={containerClassName} style={containerStyle}>
-      <img src={getAvatarItemPath('body', avatarConfig.bodyId)} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 1 }} />
-      {avatarConfig.faceId !== 'no_face' && <img src={getAvatarItemPath('face', avatarConfig.faceId)} className="absolute" style={{ zIndex: 2, ...faceStyle }} />}
-      <img src={getAvatarItemPath('outfit', avatarConfig.outfitId)} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 3 }} />
-      {avatarConfig.hairId !== 'none' && <img src={getAvatarItemPath('hair', avatarConfig.hairId)} className="absolute" style={{ zIndex: 4, ...hairStyle }} />}
-    </div>
-  );
-};
-
-// Helper: renders a cover image inside a book cover div, or fallback title if no image
-const CoverImg = ({ book }: { book: Book }) => book.coverImage ? (
-  <img src={book.coverImage} className="absolute inset-0 w-full h-full object-cover z-0" />
-) : (
-  <div className="absolute inset-0 flex items-center justify-center p-4 z-0">
-    <span className="text-white text-center font-bold text-lg leading-tight drop-shadow-lg" style={{ textShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
-      
-    </span>
-  </div>
-);
-
-
-
-// --- Mock Data ---
-const LOREM_CONTENT = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-
-const CURRENT_USER_MOCK: User = {
-  username: 'alex_writes',
-  displayName: 'Alex Rivers',
-  isOnline: true,
-  activity: 'Idle',
-  position: [0, 0, 0],
-  isMutual: false,
-  points: 1250,
-  admirersCount: 856,
-  mutualsCount: 42,
-  strikes: 0,
-};
-
-// Mock users for INITIAL_BOOKS (not used in app, just for reference)
-const MOCK_USERS: User[] = [
-  { username: 'jemma_b', displayName: 'Jemma Blair', isOnline: true, activity: 'Reading', position: [5, 0, -15], isMutual: true, points: 240, admirersCount: 1200, mutualsCount: 88, strikes: 0 },
-  { username: 'mark_da_don', displayName: 'Marcus D.', isOnline: true, activity: 'Writing', position: [-12, 0, 8], isMutual: true, points: 15, admirersCount: 450, mutualsCount: 12, strikes: 0 },
-];
-
-
-
-const INITIAL_BOOKS: Book[] = [
-  {
-    id: 'e1',
-    title: 'Cybergirl',
-    author: MOCK_USERS[0],
-    coverColor: '#2b2d42',
-    
-    category: 'Trending',
-    tagline: 'A silent thrill in a digital world.',
-    genres: ['Mystery', 'Dystopian'],
-    hashtags: ['Cyber', 'Void', 'Echo'],
-    likes: [1240],
-    commentsCount: 86,
-    publishedDate: '2025-01-10',
-    isCompleted: false,
-    isExplicit: false,
-    chaptersCount: 1,
-    progress: 45,
-    isOwned: false,
-    price: 14.99,
-    favoritesLastWeek: 850,
-    monetizationAttempts: 0,
-    commentsEnabled: true,
-    minLikesPerChapter: 60,
-    content: LOREM_CONTENT,
-    chapters: [{ title: 'Chapter 1', content: LOREM_CONTENT }]
-    
- 
-  },
-  {
-    id: 'p1',
-    title: 'Futuregirl',
-    author: MOCK_USERS[1],
-    coverColor: '#b8860b',
-    
-    category: 'Recommended',
-    tagline: 'The gold standard of future politics.',
-    genres: ['Sci-Fi', 'Romance'],
-    hashtags: ['Future', 'Gold'],
-    likes: [250, 250],
-    commentsCount: 200,
-    publishedDate: '2025-12-15',
-    isCompleted: true,
-    isExplicit: false,
-    chaptersCount: 2,
-    isOwned: false,
-    price: 14.99,
-    favoritesLastWeek: 925,
-    monetizationAttempts: 0,
-    commentsEnabled: true,
-    minLikesPerChapter: 15,
-    content: LOREM_CONTENT,
-    chapters: [{ title: 'Chapter 1', content: LOREM_CONTENT },
-    {title: 'Chapter 2', content: LOREM_CONTENT }]
-
-  },
-  {
-    id: 'e2',
-    title: 'Lovergirl',
-    author: MOCK_USERS[0],
-    coverColor: '#d4a574',
-    
-    category: 'Trending',
-    tagline: 'Some love stories are found between the pages.',
-    genres: ['Romance', 'Fiction'],
-    hashtags: ['LoveLetters', 'Historical', 'Mystery', 'Library'],
-    likes: [780, 780, 780],
-    commentsCount: 0,
-    publishedDate: '2026-01-22',
-    isCompleted: true,
-    isExplicit: false,
-    chaptersCount: 3,
-    isFavorite: true,
-    isOwned: false,
-    price: 14.99,
-    favoritesLastWeek: 1200,
-    monetizationAttempts: 0,
-    commentsEnabled: false,
-    minLikesPerChapter: 80,
-    content: LOREM_CONTENT,
-    chapters: [
-      { title: 'Chapter 1', content: LOREM_CONTENT },
-      { title: 'Chapter 2', content: LOREM_CONTENT },
-      { title: 'Chapter 3', content: LOREM_CONTENT }
-    ]
-  },
-];
-
-// --- Shared Components ---
-
-const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }: any) => {
-  const base = "h-14 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2";
-  const styles: any = {
-    primary: "bg-accent text-white shadow-xl shadow-accent/20",
-    secondary: "bg-gray-50 dark:bg-gray-900 text-gray-500",
-    outline: "border-2 border-gray-100 dark:border-gray-900 text-gray-400",
-    ghost: "text-gray-400 hover:text-accent",
-    destructive: "bg-red-500/10 text-red-500"
-  };
-  return (
-    <button disabled={disabled} onClick={onClick} className={`${base} ${styles[variant]} ${className} ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
-      {children}
-    </button>
-  );
-};
-
-const Input = ({ label, type = 'text', value, onChange, placeholder, description, maxLength }: any) => (
-  <div className="space-y-1.5 w-full">
-    {label && <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">{label}</label>}
-    <input 
-      type={type} 
-      value={value || ''} 
-      maxLength={maxLength}
-      onChange={(e) => onChange && onChange(e.target.value)} 
-      placeholder={placeholder} 
-      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-2 focus:ring-accent/20 outline-none transition-all" 
-    />
-    {description && <p className="text-[8px] font-bold text-gray-300 uppercase tracking-tighter ml-2">{description}</p>}
-  </div>
-);
-
-// --- 3D Components ---
-
-const AvatarModel: React.FC<{ name: string; activity: string; onClick?: () => void; online: boolean; isPlayer?: boolean; skinColor?: string; }> = ({ name, activity, onClick, online, isPlayer, skinColor }) => {
-  const { scene } = useGLTF(`${BASE}avatar.glb`);
-  const targetColor = isPlayer ? (skinColor || ACCENT_COLOR) : '#334155';
-
-  const clonedScene = useMemo(() => {
-    const group = new THREE.Group();
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        // Clone the geometry only (not the material)
-        const newGeometry = child.geometry.clone();
-        // Create fresh material without any textures
-        const newMaterial = new THREE.MeshStandardMaterial({
-          color: targetColor,
-          roughness: 0.6,
-          metalness: 0.1
-        });
-        const newMesh = new THREE.Mesh(newGeometry, newMaterial);
-        newMesh.position.copy(child.position);
-        newMesh.rotation.copy(child.rotation);
-        newMesh.scale.copy(child.scale);
-        group.add(newMesh);
-      }
-    });
-    return group;
-  }, [scene, targetColor]);
-
-  return (
-    <group onClick={(e) => { e.stopPropagation(); onClick?.(); }}>
-      <primitive object={clonedScene} scale={1} position={[0, 0, 0]} />
-      <Html position={[0, 2.4, 0]} center distanceFactor={10}>
-        <div className="flex flex-col items-center pointer-events-none select-none">
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-white/95 dark:bg-black/90 backdrop-blur-md rounded-full shadow-lg border border-gray-100 dark:border-gray-800">
-            <div className={`w-2 h-2 rounded-full ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
-            <span className="text-[10px] font-bold text-black dark:text-white whitespace-nowrap">{name}</span>
-          </div>
-          <div className="mt-1 px-2 py-0.5 bg-accent/10 rounded-md border border-accent/20"><span className="text-[8px] font-bold uppercase tracking-widest text-accent">{activity}</span></div>
-        </div>
-      </Html>
-    </group>
-  );
-};
-
-const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({ user, onClick }) => {
-  const groupRef = useRef<THREE.Group>(null);
-  const targetPos = useRef(new THREE.Vector3(...user.position));
-  const waitTimer = useRef(0);
-
-  const getNewTarget = () => {
-    return new THREE.Vector3(
-      (Math.random() - 0.5) * WORLD_RADIUS * 0.8,
-      0,
-      (Math.random() - 0.5) * WORLD_RADIUS * 0.8
-    );
-  };
-
-  useFrame((state, delta) => {
-    if (!groupRef.current) return;
-
-    if (waitTimer.current > 0) {
-      waitTimer.current -= delta;
-      return;
-    }
-
-    const currentPos = groupRef.current.position;
-    const distance = currentPos.distanceTo(targetPos.current);
-
-    if (distance < 0.2) {
-      waitTimer.current = 2 + Math.random() * 5; // Wait 2 to 7 seconds
-      targetPos.current = getNewTarget();
-    } else {
-      const moveDir = targetPos.current.clone().sub(currentPos).normalize();
-      currentPos.add(moveDir.clone().multiplyScalar(1.5 * delta)); // Speed 1.5
-      
-      // Face the direction of travel
-      const targetRotation = Math.atan2(moveDir.x, moveDir.z);
-      groupRef.current.rotation.y = THREE.MathUtils.lerp(
-        groupRef.current.rotation.y,
-        targetRotation,
-        0.05
-      );
-    }
-  });
-
-  return (
-    <group ref={groupRef} position={user.position}>
-      <AvatarModel 
-        name={user.displayName} 
-        activity={user.activity} 
-        online={user.isOnline} 
-        onClick={onClick} 
-      />
-    </group>
-  );
-};
-
-const Player: React.FC<{ moveDir: THREE.Vector3; skinColor?: string }> = ({ moveDir, skinColor }) => {
-  const meshRef = useRef<THREE.Group>(null);
-  const keys = useRef<Record<string, boolean>>({});
-  useEffect(() => {
-    const handleDown = (e: KeyboardEvent) => { keys.current[e.code] = true; };
-    const handleUp = (e: KeyboardEvent) => { keys.current[e.code] = false; };
-    window.addEventListener('keydown', handleDown);
-    window.addEventListener('keyup', handleUp);
-    return () => { window.removeEventListener('keydown', handleDown); window.removeEventListener('keyup', handleUp); };
-  }, []);
-  useFrame((state, delta) => {
-    if (!meshRef.current) return;
-    const { camera } = state;
-    const speed = 6 * delta;
-    const direction = new THREE.Vector3();
-    if (keys.current['KeyW'] || keys.current['ArrowUp']) direction.z -= 1;
-    if (keys.current['KeyS'] || keys.current['ArrowDown']) direction.z += 1;
-    if (keys.current['KeyA'] || keys.current['ArrowLeft']) direction.x -= 1;
-    if (keys.current['KeyD'] || keys.current['ArrowRight']) direction.x += 1;
-    if (moveDir.length() > 0) direction.add(moveDir);
-    if (direction.length() > 0) { direction.normalize().multiplyScalar(speed); meshRef.current.position.add(direction); meshRef.current.rotation.y = Math.atan2(direction.x, direction.z); }
-    const idealOffset = new THREE.Vector3(0, 5, 8).add(meshRef.current.position);
-    camera.position.lerp(idealOffset, 0.1); camera.lookAt(meshRef.current.position.x, meshRef.current.position.y + 1, meshRef.current.position.z);
-  });
-  return <group ref={meshRef}><AvatarModel name="You" activity="Exploring" online={true} isPlayer={true} skinColor={skinColor} /></group>;
-};
-
 // --- App Root ---
 
 const App: React.FC = () => {
@@ -3221,7 +2567,9 @@ const handleSpinWheel = () => {
               id: Math.random().toString(36).substr(2, 9),
               title,
               message,
-              icon: 'warning'
+              icon: 'warning',
+              timestamp: new Date(),
+              recipient: user.username || 'system',
             };
             setNotifications(prev => [newNotif, ...prev]);
           }}
