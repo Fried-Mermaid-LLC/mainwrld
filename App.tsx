@@ -15,9 +15,6 @@ import {
   STRIPE_PREMIUM_PAYMENT_LINK,
   STRIPE_PREMIUM_PRICE_ID,
   STRIPE_BOOK_PRICE_ID,
-  EMAILJS_SERVICE_ID,
-  EMAILJS_TEMPLATE_ID,
-  EMAILJS_PUBLIC_KEY,
   sendWelcomeEmail,
 } from './app/config';
 import {

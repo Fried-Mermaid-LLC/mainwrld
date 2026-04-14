@@ -27,29 +27,43 @@ export const STRIPE_PREMIUM_PAYMENT_LINK = 'https://buy.stripe.com/test_premium'
 export const STRIPE_PREMIUM_PRICE_ID = '';
 export const STRIPE_BOOK_PRICE_ID = '';
 
-export const EMAILJS_SERVICE_ID = 'service_kbm17fr';
-export const EMAILJS_TEMPLATE_ID = 'template_nb60w6i';
-export const EMAILJS_PUBLIC_KEY = 'drZ-kExBHYqajT2vm';
-
-declare const emailjs: any;
+export const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY;
+export const RESEND_FROM_EMAIL = import.meta.env.VITE_RESEND_FROM_EMAIL ?? 'welcome@mainwrld.com';
+export const RESEND_SUBJECT = 'Welcome to MainWRLD!';
 
 export const sendWelcomeEmail = async (email: string, displayName: string, username: string) => {
   try {
-    if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
-      console.log('[MainWRLD] Welcome email skipped — EmailJS not configured.');
+    if (!RESEND_API_KEY) {
+      console.log('[MainWRLD] Welcome email skipped — Resend API key not configured.');
       console.log(`[MainWRLD] Would send welcome email to: ${email} for user ${displayName} (@${username})`);
       return;
     }
-    if (typeof emailjs === 'undefined') {
-      console.log('[MainWRLD] EmailJS SDK not loaded.');
-      return;
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: RESEND_FROM_EMAIL,
+        to: email,
+        subject: `${RESEND_SUBJECT} ${displayName}`,
+        html: `
+          <p>Hi ${displayName},</p>
+          <p>Welcome to MainWRLD! Your username is <strong>@${username}</strong>.</p>
+          <p>Jump in and start exploring stories, connecting with readers, and building your world.</p>
+          <p>See you inside,</p>
+          <p>The MainWRLD Team</p>
+        `,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Resend API error ${response.status}: ${errorText}`);
     }
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: email,
-      to_name: displayName,
-      username,
-      app_name: 'MainWRLD',
-    }, EMAILJS_PUBLIC_KEY);
+
     console.log('[MainWRLD] Welcome email sent to', email);
   } catch (err) {
     console.error('[MainWRLD] Failed to send welcome email:', err);
@@ -65,8 +79,8 @@ export default {
   STRIPE_PREMIUM_PAYMENT_LINK,
   STRIPE_PREMIUM_PRICE_ID,
   STRIPE_BOOK_PRICE_ID,
-  EMAILJS_SERVICE_ID,
-  EMAILJS_TEMPLATE_ID,
-  EMAILJS_PUBLIC_KEY,
+  RESEND_API_KEY,
+  RESEND_FROM_EMAIL,
+  RESEND_SUBJECT,
   sendWelcomeEmail,
 };

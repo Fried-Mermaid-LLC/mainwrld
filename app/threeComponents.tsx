@@ -37,7 +37,7 @@ export const AvatarModel: React.FC<{
 
     // -----------------------------
     // Load modular assets
-    // -----------------------------
+    
     const bodyGLTF = useGLTF(
         avatarConfig ? '../MochaMattel3Dassets/GLB/bodyId/' + avatarConfig.bodyId + '.glb' : `${BASE}avatar.glb`
     );
