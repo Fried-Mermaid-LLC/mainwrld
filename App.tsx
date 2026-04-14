@@ -4879,17 +4879,21 @@ const AdminDashboard = ({
   onBack, onRemoveBook, onRemoveComment, onAddStrike, onRemoveStrike, onBanUser, onDismissReport,
   getItemCost, onUpdateItemPrice
 }: any) => {
-  const [activeTab, setActiveTab] = useState<'reports' | 'users' | 'books' | 'pricing'>('reports');
+  const [activeTab, setActiveTab] = useState<'reports' | 'users' | 'books' | 'monetized' | 'pricing'>('reports');
   const [pricingFilter, setPricingFilter] = useState<'all' | 'face' | 'hair' | 'outfit'>('all');
 
   const tabs = [
     { id: 'reports', label: 'Reports', icon: 'flag' },
     { id: 'users', label: 'Users', icon: 'people' },
     { id: 'books', label: 'Books', icon: 'menu_book' },
+    { id: 'monetized', label: 'Monetized', icon: 'paid' },
     { id: 'pricing', label: 'Pricing', icon: 'sell' },
   ];
 
   const pendingReports = reports.filter((r: Report) => r.status === 'pending');
+  const monetizedBooks = books.filter((b: Book) => b.isMonetized);
+  const monetizedAuthors = new Set(monetizedBooks.map((b: Book) => b.author.username)).size;
+  const monetizedRevenue = monetizedBooks.reduce((sum: number, b: Book) => sum + (b.price || 0), 0);
 
   return (
     <div className="fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500">
@@ -4901,7 +4905,7 @@ const AdminDashboard = ({
       </header>
 
       {/* Stats Overview */}
-      <div className="px-6 mb-6 grid grid-cols-3 gap-3">
+      <div className="px-6 mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="bg-gray-50 rounded-2xl p-4 text-center border border-gray-100">
           <p className="text-lg font-bold">{pendingReports.length}</p>
           <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">Pending</p>
@@ -4913,6 +4917,10 @@ const AdminDashboard = ({
         <div className="bg-gray-50 rounded-2xl p-4 text-center border border-gray-100">
           <p className="text-lg font-bold">{books.length}</p>
           <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">Books</p>
+        </div>
+        <div className="bg-gray-50 rounded-2xl p-4 text-center border border-gray-100">
+          <p className="text-lg font-bold">{monetizedBooks.length}</p>
+          <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">Monetized</p>
         </div>
       </div>
 
@@ -5049,6 +5057,49 @@ const AdminDashboard = ({
                   <span className="material-icons-round text-4xl mb-4">menu_book</span>
                   <p className="text-[10px] font-bold uppercase tracking-widest">No books</p>
                 </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Monetized Tab */}
+        {activeTab === 'monetized' && (
+          <>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-4">Monetized Content</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-center">
+                <p className="text-sm font-bold">{monetizedBooks.length}</p>
+                <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Monetized Works</p>
+              </div>
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-center">
+                <p className="text-sm font-bold">{monetizedAuthors}</p>
+                <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Authors</p>
+              </div>
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-center">
+                <p className="text-sm font-bold">${monetizedRevenue.toFixed(2)}</p>
+                <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-1">Total Price Value</p>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-[2.5rem] overflow-hidden border border-gray-100 mt-4">
+              {monetizedBooks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-300">
+                  <span className="material-icons-round text-4xl mb-4">paid</span>
+                  <p className="text-[10px] font-bold uppercase tracking-widest">No monetized books yet</p>
+                </div>
+              ) : (
+                monetizedBooks.map((book: Book) => (
+                  <div key={book.id} className="p-6 border-b border-gray-100 last:border-none flex justify-between items-start gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold truncate">{book.title}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">by {book.author.displayName} (@{book.author.username})</p>
+                      <p className="text-[10px] text-gray-400 mt-2">{book.chaptersCount} chapters · {book.commentsCount} comments</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold">${(book.price || 0).toFixed(2)}</p>
+                      <p className="text-[9px] uppercase tracking-widest text-gray-400 mt-1">Monetized</p>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </>
