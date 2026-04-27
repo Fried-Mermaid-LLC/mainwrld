@@ -11,31 +11,31 @@ export const DEFAULT_HAIR_POSITIONS: Record<string, { width: string; left: strin
   W_Hair_4_v1: { width: '43.5%', left: '28.5%', top: '-4.5%' },
   W_Hair_5:    { width: '42%', left: '29%', top: '-1.5%' },
   W_Hair_5_v1: { width: '42%', left: '29%', top: '-1.5%' },
-  M_Hair_1:    { width: '31%', left: '34%', top: '-4.5%' },
-  M_Hair_2:    { width: '36%', left: '32%', top: '-2.5%' },
-  M_Hair_3:    { width: '34%', left: '33.5%', top: '-4%' },
-  M_Hair_4:    { width: '29%', left: '35.5%', top: '-3%' },
-  M_Hair_4_v1: { width: '29%', left: '35.5%', top: '-3%' },
-  M_Hair_5:    { width: '37.5%', left: '31.5%', top: '-4%' },
-  M_Hair_5_v1: { width: '37.5%', left: '31.5%', top: '-4%' },
+  M_Hair1:    { width: '31%', left: '34%', top: '-4.5%' },
+  M_Hair2:    { width: '36%', left: '32%', top: '-2.5%' },
+  M_Hair3:    { width: '34%', left: '33.5%', top: '-4%' },
+  M_Hair4:    { width: '29%', left: '35.5%', top: '-3%' },
+  M_Hair4_variation1: { width: '29%', left: '35.5%', top: '-3%' },
+  M_Hair5:    { width: '37.5%', left: '31.5%', top: '-4%' },
+  M_Hair5_variation1: { width: '37.5%', left: '31.5%', top: '-4%' },
 };
 
 export const DEFAULT_FACE_POSITIONS: Record<string, { width: string; left: string; top: string }> = {
   W_Eye_1:     { width: '23%', left: '38.5%', top: '8%' },
   W_Eye_2:     { width: '23%', left: '38.5%', top: '7.5%' },
   W_Eye_3:     { width: '21%', left: '39.5%', top: '8%' },
-  W_Eye_1_v1:  { width: '28%', left: '36%', top: '4.5%' },
-  W_Eye_2_v1:  { width: '28%', left: '36%', top: '4.5%' },
-  W_Eye_3_v1:  { width: '21%', left: '39.5%', top: '8%' },
+  W_Eye_1_Variation1:  { width: '28%', left: '36%', top: '4.5%' },
+  W_Eye_2_Variation1:  { width: '28%', left: '36%', top: '4.5%' },
+  W_Eye_3_Variation1:  { width: '21%', left: '39.5%', top: '8%' },
   M_Eye_1:     { width: '28%', left: '36%', top: '7%' },
   M_Eye_2:     { width: '22%', left: '39%', top: '7%' },
   M_Eye_3:     { width: '22%', left: '39%', top: '7%' },
-  M_Eye_1_v1:  { width: '28%', left: '36%', top: '7%' },
-  M_Eye_1_v2:  { width: '28%', left: '36%', top: '7%' },
-  M_Eye_2_v1:  { width: '23%', left: '38.5%', top: '7%' },
-  M_Eye_2_v2:  { width: '24%', left: '38%', top: '6.5%' },
-  M_Eye_3_v1:  { width: '21%', left: '39.5%', top: '7.5%' },
-  M_Eye_3_v2:  { width: '21%', left: '39.5%', top: '7.5%' },
+  M_Eye_1_variation_1:  { width: '28%', left: '36%', top: '7%' },
+  M_Eye_1_variation_2:  { width: '28%', left: '36%', top: '7%' },
+  M_Eye_2_variation_1:  { width: '23%', left: '38.5%', top: '7%' },
+  M_Eye_2_variation_2:  { width: '24%', left: '38%', top: '6.5%' },
+  M_Eye_3_variation_1:  { width: '21%', left: '39.5%', top: '7.5%' },
+  M_Eye_3_variation_2:  { width: '21%', left: '39.5%', top: '7.5%' },
 };
 
 export const loadPositions = (key: string, defaults: Record<string, { width: string; left: string; top: string }>) => {
@@ -72,14 +72,9 @@ export const getFacePosition = (faceId: string, shrink = 1) => {
 };
 
 export const AVATAR_ITEMS: AvatarItem[] = [
-  { id: 'A1', label: 'Tone 1', path: `${BASE}assets/avatar/body/female/A1.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A2', label: 'Tone 2', path: `${BASE}assets/avatar/body/female/A2.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A3', label: 'Tone 3', path: `${BASE}assets/avatar/body/female/A3.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A4', label: 'Tone 4', path: `${BASE}assets/avatar/body/female/A4.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A5', label: 'Tone 5', path: `${BASE}assets/avatar/body/female/A5.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A5_5', label: 'Tone 5.5', path: `${BASE}assets/avatar/body/female/A5.5.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A6', label: 'Tone 6', path: `${BASE}assets/avatar/body/female/A6.png`, category: 'body', gender: 'female', cost: 0 },
-  { id: 'A7', label: 'Tone 7', path: `${BASE}assets/avatar/body/female/A7.png`, category: 'body', gender: 'female', cost: 0 },
+
+  // MALE BODY (B)
+
   { id: 'B1', label: 'Tone 1', path: `${BASE}assets/avatar/body/male/B1.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B2', label: 'Tone 2', path: `${BASE}assets/avatar/body/male/B2.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B3', label: 'Tone 3', path: `${BASE}assets/avatar/body/male/B3.png`, category: 'body', gender: 'male', cost: 0 },
@@ -88,48 +83,83 @@ export const AVATAR_ITEMS: AvatarItem[] = [
   { id: 'B5_5', label: 'Tone 5.5', path: `${BASE}assets/avatar/body/male/B5.5.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B6', label: 'Tone 6', path: `${BASE}assets/avatar/body/male/B6.png`, category: 'body', gender: 'male', cost: 0 },
   { id: 'B7', label: 'Tone 7', path: `${BASE}assets/avatar/body/male/B7.png`, category: 'body', gender: 'male', cost: 0 },
-  { id: 'no_face', label: 'No Face', path: '', category: 'face', gender: 'any', cost: 0 },
-  { id: 'W_Eye_1', label: 'Face 1', path: `${BASE}assets/avatar/face/W_Eye_1.png`, category: 'face', gender: 'female', cost: 0 },
-  { id: 'W_Eye_2', label: 'Face 2', path: `${BASE}assets/avatar/face/W_Eye_2.png`, category: 'face', gender: 'female', cost: 0 },
-  { id: 'W_Eye_3', label: 'Face 3', path: `${BASE}assets/avatar/face/W_Eye_3.png`, category: 'face', gender: 'female', cost: 0 },
-  { id: 'W_Eye_3_v1', label: 'Face 3 Alt', path: `${BASE}assets/avatar/face/W_Eye_3_v1.png`, category: 'face', gender: 'female', cost: 0 },
+
+  // MALE HAIR (H)
+
+  { id: 'M_Hair1', label: 'Hair 1', path: `${BASE}assets/avatar/hair/male/M_Hair_1.png`, category: 'hair', gender: 'male', cost: 0 },
+  { id: 'M_Hair2', label: 'Hair 2', path: `${BASE}assets/avatar/hair/male/M_Hair_2.png`, category: 'hair', gender: 'male', cost: 0 },
+  { id: 'M_Hair3', label: 'Hair 3', path: `${BASE}assets/avatar/hair/male/M_Hair_3.png`, category: 'hair', gender: 'male', cost: 0 },
+  { id: 'M_Hair4', label: 'Hair 4', path: `${BASE}assets/avatar/hair/male/M_Hair_4.png`, category: 'hair', gender: 'male', cost: 0 },
+  { id: 'M_Hair4_variation1', label: 'Hair 4 Alt', path: `${BASE}assets/avatar/hair/male/M_Hair_4_v1.png`, category: 'hair', gender: 'male', cost: 0 },
+  { id: 'M_Hair5', label: 'Hair 5', path: `${BASE}assets/avatar/hair/male/M_Hair_5.png`, category: 'hair', gender: 'male', cost: 0 },
+  { id: 'M_Hair5_variation1', label: 'Hair 5 Alt', path: `${BASE}assets/avatar/hair/male/M_Hair_5_v1.png`, category: 'hair', gender: 'male', cost: 0 },
+
+  // MALE FACE (M)
+
   { id: 'M_Eye_1', label: 'Face 1', path: `${BASE}assets/avatar/face/M_Eye_1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_1_v1', label: 'Face 1 Alt', path: `${BASE}assets/avatar/face/M_Eye_1_v1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_1_v2', label: 'Face 1 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_1_v2.png`, category: 'face', gender: 'male', cost: 0 },
+  { id: 'M_Eye_1_variation_1', label: 'Face 1 Alt', path: `${BASE}assets/avatar/face/M_Eye_1_v1.png`, category: 'face', gender: 'male', cost: 0 },
+  { id: 'M_Eye_1_variation_2', label: 'Face 1 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_1_v2.png`, category: 'face', gender: 'male', cost: 0 },
   { id: 'M_Eye_2', label: 'Face 2', path: `${BASE}assets/avatar/face/M_Eye_2.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_2_v1', label: 'Face 2 Alt', path: `${BASE}assets/avatar/face/M_Eye_2_v1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_2_v2', label: 'Face 2 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_2_v2.png`, category: 'face', gender: 'male', cost: 0 },
+  { id: 'M_Eye_2_variation_1', label: 'Face 2 Alt', path: `${BASE}assets/avatar/face/M_Eye_2_v1.png`, category: 'face', gender: 'male', cost: 0 },
+  { id: 'M_Eye_2_variation_2', label: 'Face 2 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_2_v2.png`, category: 'face', gender: 'male', cost: 0 },
   { id: 'M_Eye_3', label: 'Face 3', path: `${BASE}assets/avatar/face/M_Eye_3.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_3_v1', label: 'Face 3 Alt', path: `${BASE}assets/avatar/face/M_Eye_3_v1.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'M_Eye_3_v2', label: 'Face 3 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_3_v2.png`, category: 'face', gender: 'male', cost: 0 },
-  { id: 'none', label: 'No Hair', path: '', category: 'hair', gender: 'any', cost: 0 },
-  { id: 'W_Hair_1', label: 'Hair 1', path: `${BASE}assets/avatar/hair/female/W_Hair_1.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_2', label: 'Hair 2', path: `${BASE}assets/avatar/hair/female/W_Hair_2.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_2_v1', label: 'Hair 2 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_2_v1.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_3', label: 'Hair 3', path: `${BASE}assets/avatar/hair/female/W_Hair_3.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_4', label: 'Hair 4', path: `${BASE}assets/avatar/hair/female/W_Hair_4.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_4_v1', label: 'Hair 4 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_4_v1.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_5', label: 'Hair 5', path: `${BASE}assets/avatar/hair/female/W_Hair_5.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'W_Hair_5_v1', label: 'Hair 5 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_5_v1.png`, category: 'hair', gender: 'female', cost: 0 },
-  { id: 'M_Hair_1', label: 'Hair 1', path: `${BASE}assets/avatar/hair/male/M_Hair_1.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_2', label: 'Hair 2', path: `${BASE}assets/avatar/hair/male/M_Hair_2.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_3', label: 'Hair 3', path: `${BASE}assets/avatar/hair/male/M_Hair_3.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_4', label: 'Hair 4', path: `${BASE}assets/avatar/hair/male/M_Hair_4.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_4_v1', label: 'Hair 4 Alt', path: `${BASE}assets/avatar/hair/male/M_Hair_4_v1.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_5', label: 'Hair 5', path: `${BASE}assets/avatar/hair/male/M_Hair_5.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'M_Hair_5_v1', label: 'Hair 5 Alt', path: `${BASE}assets/avatar/hair/male/M_Hair_5_v1.png`, category: 'hair', gender: 'male', cost: 0 },
-  { id: 'D1', label: 'Outfit 1', path: `${BASE}assets/avatar/outfit/female/D1.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D2', label: 'Outfit 2', path: `${BASE}assets/avatar/outfit/female/D2.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D3', label: 'Outfit 3', path: `${BASE}assets/avatar/outfit/female/D3.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D4', label: 'Outfit 4', path: `${BASE}assets/avatar/outfit/female/D4.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D5', label: 'Outfit 5', path: `${BASE}assets/avatar/outfit/female/D5.png`, category: 'outfit', gender: 'female', cost: 0 },
-  { id: 'D6', label: 'Outfit 6', path: `${BASE}assets/avatar/outfit/female/D6.png`, category: 'outfit', gender: 'female', cost: 0 },
+  { id: 'M_Eye_3_variation_1', label: 'Face 3 Alt', path: `${BASE}assets/avatar/face/M_Eye_3_v1.png`, category: 'face', gender: 'male', cost: 0 },
+  { id: 'M_Eye_3_variation_2', label: 'Face 3 Alt 2', path: `${BASE}assets/avatar/face/M_Eye_3_v2.png`, category: 'face', gender: 'male', cost: 0 },
+
+  // MALE OUTFIT (E)
+
   { id: 'E1', label: 'Outfit 1', path: `${BASE}assets/avatar/outfit/male/E1.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E2', label: 'Outfit 2', path: `${BASE}assets/avatar/outfit/male/E2.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E3', label: 'Outfit 3', path: `${BASE}assets/avatar/outfit/male/E3.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E4', label: 'Outfit 4', path: `${BASE}assets/avatar/outfit/male/E4.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E5', label: 'Outfit 5', path: `${BASE}assets/avatar/outfit/male/E5.png`, category: 'outfit', gender: 'male', cost: 0 },
   { id: 'E6', label: 'Outfit 6', path: `${BASE}assets/avatar/outfit/male/E6.png`, category: 'outfit', gender: 'male', cost: 0 },
+
+  // end of male
+
+  // NONE / DEFAULT
+
+  { id: 'no_face', label: 'No Face', path: '', category: 'face', gender: 'any', cost: 0 },
+  { id: 'none', label: 'No Hair', path: '', category: 'hair', gender: 'any', cost: 0 },
+
+  // FEMALE FACE (W)
+
+  { id: 'W_Eye_1', label: 'Face 1', path: `${BASE}assets/avatar/face/W_Eye_1.png`, category: 'face', gender: 'female', cost: 0 },
+  { id: 'W_Eye_2', label: 'Face 2', path: `${BASE}assets/avatar/face/W_Eye_2.png`, category: 'face', gender: 'female', cost: 0 },
+  { id: 'W_Eye_3', label: 'Face 3', path: `${BASE}assets/avatar/face/W_Eye_3.png`, category: 'face', gender: 'female', cost: 0 },
+  { id: 'W_Eye_3_Variation1', label: 'Face 3 Alt', path: `${BASE}assets/avatar/face/W_Eye_3_v1.png`, category: 'face', gender: 'female', cost: 0 },
+
+  // FEMALE BODY (A)
+
+  { id: 'A1', label: 'Tone 1', path: `${BASE}assets/avatar/body/female/A1.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A2', label: 'Tone 2', path: `${BASE}assets/avatar/body/female/A2.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A3', label: 'Tone 3', path: `${BASE}assets/avatar/body/female/A3.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A4', label: 'Tone 4', path: `${BASE}assets/avatar/body/female/A4.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A5', label: 'Tone 5', path: `${BASE}assets/avatar/body/female/A5.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A5_5', label: 'Tone 5.5', path: `${BASE}assets/avatar/body/female/A5.5.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A6', label: 'Tone 6', path: `${BASE}assets/avatar/body/female/A6.png`, category: 'body', gender: 'female', cost: 0 },
+  { id: 'A7', label: 'Tone 7', path: `${BASE}assets/avatar/body/female/A7.png`, category: 'body', gender: 'female', cost: 0 },
+
+  // FEMALE HAIR (W)
+
+  { id: 'W_Hair_1', label: 'Hair 1', path: `${BASE}assets/avatar/hair/female/W_Hair_1.png`, category: 'hair', gender: 'female', cost: 0 },
+  { id: 'W_Hair_2', label: 'Hair 2', path: `${BASE}assets/avatar/hair/female/W_Hair_2.png`, category: 'hair', gender: 'female', cost: 0 },
+  { id: 'W_Hair_2_Variation1', label: 'Hair 2 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_2_v1.png`, category: 'hair', gender: 'female', cost: 0 },
+  { id: 'W_Hair_3', label: 'Hair 3', path: `${BASE}assets/avatar/hair/female/W_Hair_3.png`, category: 'hair', gender: 'female', cost: 0 },
+  { id: 'W_Hair_4', label: 'Hair 4', path: `${BASE}assets/avatar/hair/female/W_Hair_4.png`, category: 'hair', gender: 'female', cost: 0 },
+  { id: 'W_Hair_4_Variation1', label: 'Hair 4 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_4_v1.png`, category: 'hair', gender: 'female', cost: 0 },
+  { id: 'W_Hair_5', label: 'Hair 5', path: `${BASE}assets/avatar/hair/female/W_Hair_5.png`, category: 'hair', gender: 'female', cost: 0 },
+  { id: 'W_Hair_5_Variation1', label: 'Hair 5 Alt', path: `${BASE}assets/avatar/hair/female/W_Hair_5_v1.png`, category: 'hair', gender: 'female', cost: 0 },
+
+  // FEMALE OUTFIT (D)
+
+  { id: 'D1', label: 'Outfit 1', path: `${BASE}assets/avatar/outfit/female/D1.png`, category: 'outfit', gender: 'female', cost: 0 },
+  { id: 'D2', label: 'Outfit 2', path: `${BASE}assets/avatar/outfit/female/D2.png`, category: 'outfit', gender: 'female', cost: 0 },
+  { id: 'D3', label: 'Outfit 3', path: `${BASE}assets/avatar/outfit/female/D3.png`, category: 'outfit', gender: 'female', cost: 0 },
+  { id: 'D4', label: 'Outfit 4', path: `${BASE}assets/avatar/outfit/female/D4.png`, category: 'outfit', gender: 'female', cost: 0 },
+  { id: 'D5', label: 'Outfit 5', path: `${BASE}assets/avatar/outfit/female/D5.png`, category: 'outfit', gender: 'female', cost: 0 },
+  { id: 'D6', label: 'Outfit 6', path: `${BASE}assets/avatar/outfit/female/D6.png`, category: 'outfit', gender: 'female', cost: 0 },
+
 ];
 
 export const getAvatarItemPath = (category: AvatarCategory, id: string): string => {

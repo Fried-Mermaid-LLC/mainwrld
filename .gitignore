@@ -4,3 +4,5 @@ dist/
 *.local
 .env
 MochaMattel3Dassets/
+
+CharactersAnimated/
