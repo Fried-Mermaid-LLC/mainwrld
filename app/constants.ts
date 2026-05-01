@@ -8,7 +8,7 @@ export const CHAPTER_LIKES_THRESHOLD = 10;
 export const MAX_DAILY_CHAPTERS = 7;
 export const MAX_WORD_COUNT = 11000;
 export const GENRE_LIST = ['Mystery', 'Sci-Fi', 'Romance', 'Horror', 'Dystopian', 'Fantasy', 'Action', 'Drama', 'Western', 'Fiction', 'Non-Fiction', 'Thriller', 'FanFic', 'Poetry', 'Religious', 'Erotica', 'LGBTQ+', 'Self-Help', 'Sports'];
-export const ADMIN_USERNAMES = ['admin', 'mochamattel'];
+export const ADMIN_USERNAMES = ['admin', 'mochamattel', 'jevonmahoney'];
 
 export const BAD_WORDS = ['fuck','dick','cock','bastard','slut','cunt','nigger','nigga','n1gger','nigg3r','fag','faggot','retard','rape','penis','vagina','anal','porn','hentai','cum','jizz','sex','xxx','tits','kys','kms','stfu'];
 export const containsBadWord = (text: string): boolean => {

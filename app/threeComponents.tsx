@@ -103,7 +103,7 @@ export const AvatarModel: React.FC<{
   }, [scene, avatarConfig, targetColor])
 
   // -----------------------------
-  // ANIMATIONS (FIXED LIFECYCLE)
+  // ANIMATIONS
   // -----------------------------
   const { actions } = useAnimations(avatarGLTF.animations, avatarRef)
 
@@ -122,7 +122,7 @@ export const AvatarModel: React.FC<{
       action.timeScale = 1
       action.fadeIn(0.2).play()
     } else {
-      action.fadeOut(0.2)
+      action.fadeOut(0.3).play();
     }
 
     return () => {

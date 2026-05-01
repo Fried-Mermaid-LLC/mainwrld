@@ -81,6 +81,8 @@ import {
   BookProgress
 } from './app/types'
 
+// sendWelcomeEmail('mochamattel@gmail.com', 'Jevon', 'jevonmahoney')
+
 /**
  * MainWRLD- Full Integrated Creator & Reader Platform
  */
@@ -751,15 +753,15 @@ const App: React.FC = () => {
     return () => unsubscribe()
   }, [])
 
+  const [spotlightInit, setSpotlightInit] = useState(false)
+
   useEffect(() => {
-    if (books.length === 0) return
+    if (books.length === 0 || spotlightInit) return
+    setSpotlightInit(true)
     fbService.ensureGlobalSpotlight(books).catch((err: any) => {
-      console.warn(
-        '[MainWRLD] Global spotlight fallback active:',
-        err?.message || err
-      )
+      console.warn('[MainWRLD] Spotlight disabled:', err?.message || err)
     })
-  }, [books])
+  }, [books, spotlightInit])
 
   useEffect(() => {
     setBooks(prev =>
@@ -2894,6 +2896,7 @@ const App: React.FC = () => {
             <Canvas shadows>
               <Suspense fallback={null}>
                 <PerspectiveCamera makeDefault position={[0, 5, 10]} fov={50} />
+                <ambientLight intensity={0.8} />
                 <pointLight position={[10, 10, 10]} intensity={1.5} />
                 <mesh scale={[WORLD_RADIUS, WORLD_RADIUS, WORLD_RADIUS]}>
                   <sphereGeometry args={[1, 64, 64]} />
@@ -7196,11 +7199,17 @@ const PublishingView = ({ initialData, onPost, onBack, isNewBook }: any) => {
     )
   }
 
+  const MAX_FILE_SIZE = 1 * 1024 * 1024 // 1MB
+
   const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
       setCoverUploadError('Please choose an image file.')
+      return
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setCoverUploadError('File is too large. Maximum size is 1MB.')
       return
     }
 
@@ -7245,11 +7254,14 @@ const PublishingView = ({ initialData, onPost, onBack, isNewBook }: any) => {
             onChange={handleCoverUpload}
             className='hidden'
           />
+
           {coverUploadError && (
             <p className='text-[10px] font-bold text-red-500 ml-2'>
               {coverUploadError}
             </p>
           )}
+          <p className='text-[10px] font-bold text-gray-500 ml-2'>Maximum file size: 1MB</p>
+
           {coverImage ? (
             <div className='relative w-40 aspect-[2/3] rounded-3xl overflow-hidden shadow-lg border-4 border-white group'>
               <img src={coverImage} className='w-full h-full object-cover' />
