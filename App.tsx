@@ -640,6 +640,8 @@ const App: React.FC = () => {
     let idleTimer: ReturnType<typeof setTimeout> | null = null
     const IDLE_TIMEOUT = 5 * 60 * 1000 // 5 minutes
 
+    console.log(user)
+
     const setOnline = () => {
       if (!user.isOnline) {
         setUser(prev => ({ ...prev, isOnline: true }))
@@ -656,7 +658,7 @@ const App: React.FC = () => {
         setUser(prev => ({ ...prev, isOnline: false }))
         fbService
           .updateUserProfile(firebaseUid, {
-            isOnline: false,
+            isOnline: true,
             lastOnline: new Date().toISOString()
           })
           .catch(console.error)
@@ -1189,7 +1191,8 @@ const App: React.FC = () => {
                 mutualsCount: (profile as any).mutualsCount || 0,
                 strikes: (profile as any).strikes || 0,
                 isPremium: (profile as any).isPremium || false,
-                admiringCount: (profile as any).admiringCount || 0
+                admiringCount: (profile as any).admiringCount || 0,
+                premiumSince: (profile as any).premiumSince || 0
               })
               setFirebaseUid(firebaseUser.uid)
               setView('home')
@@ -2952,33 +2955,49 @@ const App: React.FC = () => {
                     })
                     .filter(Boolean) as User[]
                   // If no dynamic mutuals, show MUTUALS as fallback so world isn't empty
-                  const avatarsToShow =
-                    dynamicMutuals.length > 0 ? dynamicMutuals : MUTUALS
-                  // Limit visible mutuals to avoid overwhelming the scene
-                  const eightHoursAgo = Date.now() - 8 * 3600 * 1000
-                  const visibleMutuals =
-                    avatarsToShow.length > 200
-                      ? avatarsToShow
-                          .filter(
-                            (m: any) =>
-                              m.isOnline ||
-                              (m.lastOnline && m.lastOnline > eightHoursAgo)
-                          )
-                          .slice(0, 200)
-                      : avatarsToShow.slice(0, 200)
-                  // Filter out blocked users
-                  return visibleMutuals
+                  // const avatarsToShow =
+                  //   dynamicMutuals.length > 0 ? dynamicMutuals : MUTUALS
+                  // // Limit visible mutuals to avoid overwhelming the scene
+                  // const eightHoursAgo = Date.now() - 8 * 3600 * 1000
+                  // const visibleMutuals =
+                  //   avatarsToShow.length > 200
+                  //     ? avatarsToShow
+                  //         .filter(
+                  //           (m: any) =>
+                  //             m.isOnline ||
+                  //             (m.lastOnline && m.lastOnline > eightHoursAgo)
+                  //         )
+                  //         .slice(0, 200)
+                  //     : avatarsToShow.slice(0, 200)
+                  // // Filter out blocked users
+                  // return visibleMutuals
+                  //   .filter(u => !blockedUsers.has(u.username))
+                  //   .map(u => (
+                  //     <MovingAvatar
+                  //       key={u.username}
+                  //       user={u}
+                  //       onClick={() => {
+                  //         setSelectedProfileUser(u)
+                  //         setView('profile')
+                  //       }}
+                  //     />
+                  //   ))
+                  // ONLY SHOW USERS WHO ARE ONLINE & MUTUAL
+                  const onlineMutuals = dynamicMutuals
+                    .filter(u => u.isOnline)
                     .filter(u => !blockedUsers.has(u.username))
-                    .map(u => (
-                      <MovingAvatar
-                        key={u.username}
-                        user={u}
-                        onClick={() => {
-                          setSelectedProfileUser(u)
-                          setView('profile')
-                        }}
-                      />
-                    ))
+                    .slice(0, 200)
+
+                  return onlineMutuals.map(u => (
+                    <MovingAvatar
+                      key={u.username}
+                      user={u}
+                      onClick={() => {
+                        setSelectedProfileUser(u)
+                        setView('profile')
+                      }}
+                    />
+                  ))
                 })()}
                 <Environment preset='city' />
               </Suspense>
@@ -3277,7 +3296,10 @@ const App: React.FC = () => {
                       {user.isPremium ? 'Active Subscription' : '$30 a year'}
                     </p>
                   </div>
-                  {user.isPremium ? (
+
+                  {/* HERE */}
+
+                  {!user.isPremium ? (
                     <div className='w-full space-y-3'>
                       <div className='flex items-center gap-2 text-amber-700'>
                         <span className='material-icons-round text-sm'>
@@ -3321,10 +3343,12 @@ const App: React.FC = () => {
                         <span className='text-[9px] font-bold text-amber-500 uppercase tracking-widest'>
                           Member since{' '}
                           {user.premiumSince
-                            ? new Date(user.premiumSince).toLocaleDateString(
-                                'en-US',
-                                { month: 'short', year: 'numeric' }
-                              )
+                            ? new Date(
+                                user.premiumSince.seconds * 1000
+                              ).toLocaleDateString('en-US', {
+                                month: 'short',
+                                year: 'numeric'
+                              })
                             : 'today'}
                         </span>
                       </div>
@@ -7260,7 +7284,9 @@ const PublishingView = ({ initialData, onPost, onBack, isNewBook }: any) => {
               {coverUploadError}
             </p>
           )}
-          <p className='text-[10px] font-bold text-gray-500 ml-2'>Maximum file size: 1MB</p>
+          <p className='text-[10px] font-bold text-gray-500 ml-2'>
+            Maximum file size: 1MB
+          </p>
 
           {coverImage ? (
             <div className='relative w-40 aspect-[2/3] rounded-3xl overflow-hidden shadow-lg border-4 border-white group'>

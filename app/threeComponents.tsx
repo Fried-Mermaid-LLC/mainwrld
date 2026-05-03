@@ -176,6 +176,7 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({
   const waitTimer = useRef(0)
   const [isMoving, setIsMoving] = useState(false)
 
+  console.log(user.displayName + " : " + user.isOnline)
   const getNewTarget = () =>
     new THREE.Vector3(
       (Math.random() - 0.5) * WORLD_RADIUS * 0.8,
