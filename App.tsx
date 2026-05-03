@@ -3299,7 +3299,7 @@ const App: React.FC = () => {
 
                   {/* HERE */}
 
-                  {!user.isPremium ? (
+                  {user.isPremium ? (
                     <div className='w-full space-y-3'>
                       <div className='flex items-center gap-2 text-amber-700'>
                         <span className='material-icons-round text-sm'>
