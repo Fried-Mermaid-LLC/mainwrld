@@ -130,6 +130,8 @@ export const AvatarModel: React.FC<{
     }
   }, [actions, isMoving])
 
+  console.log(name + " : " + online)
+
   return (
     <group
       onClick={e => {
@@ -144,7 +146,7 @@ export const AvatarModel: React.FC<{
           <div className='flex items-center gap-1.5 px-3 py-1 bg-white/95 dark:bg-black/90 backdrop-blur-md rounded-full shadow-lg border border-gray-100 dark:border-gray-800'>
             <div
               className={`w-2 h-2 rounded-full ${
-                online ? 'bg-green-500' : 'bg-gray-300'
+                online === true ? 'bg-green-500' : 'bg-gray-300'
               }`}
             />
             <span className='text-[10px] font-bold text-black dark:text-white whitespace-nowrap'>

@@ -2955,49 +2955,34 @@ const App: React.FC = () => {
                     })
                     .filter(Boolean) as User[]
                   // If no dynamic mutuals, show MUTUALS as fallback so world isn't empty
-                  // const avatarsToShow =
-                  //   dynamicMutuals.length > 0 ? dynamicMutuals : MUTUALS
-                  // // Limit visible mutuals to avoid overwhelming the scene
-                  // const eightHoursAgo = Date.now() - 8 * 3600 * 1000
-                  // const visibleMutuals =
-                  //   avatarsToShow.length > 200
-                  //     ? avatarsToShow
-                  //         .filter(
-                  //           (m: any) =>
-                  //             m.isOnline ||
-                  //             (m.lastOnline && m.lastOnline > eightHoursAgo)
-                  //         )
-                  //         .slice(0, 200)
-                  //     : avatarsToShow.slice(0, 200)
-                  // // Filter out blocked users
-                  // return visibleMutuals
-                  //   .filter(u => !blockedUsers.has(u.username))
-                  //   .map(u => (
-                  //     <MovingAvatar
-                  //       key={u.username}
-                  //       user={u}
-                  //       onClick={() => {
-                  //         setSelectedProfileUser(u)
-                  //         setView('profile')
-                  //       }}
-                  //     />
-                  //   ))
-                  // ONLY SHOW USERS WHO ARE ONLINE & MUTUAL
-                  const onlineMutuals = dynamicMutuals
-                    .filter(u => u.isOnline)
+                  const avatarsToShow =
+                    dynamicMutuals.length > 0 ? dynamicMutuals : MUTUALS
+                  // Limit visible mutuals to avoid overwhelming the scene
+                  const eightHoursAgo = Date.now() - 8 * 3600 * 1000
+                  const visibleMutuals =
+                    avatarsToShow.length > 200
+                      ? avatarsToShow
+                          .filter(
+                            (m: any) =>
+                              m.isOnline ||
+                              (m.lastOnline && m.lastOnline > eightHoursAgo)
+                          )
+                          .slice(0, 200)
+                      : avatarsToShow.slice(0, 200)
+                  // Filter out blocked users
+                  return visibleMutuals
                     .filter(u => !blockedUsers.has(u.username))
-                    .slice(0, 200)
-
-                  return onlineMutuals.map(u => (
-                    <MovingAvatar
-                      key={u.username}
-                      user={u}
-                      onClick={() => {
-                        setSelectedProfileUser(u)
-                        setView('profile')
-                      }}
-                    />
-                  ))
+                    .map(u => (
+                      <MovingAvatar
+                        key={u.username}
+                        user={u}
+                        onClick={() => {
+                          setSelectedProfileUser(u)
+                          setView('profile')
+                        }}
+                      />
+                    ))
+                  // ONLY SHOW USERS WHO ARE ONLINE & MUTUAL
                 })()}
                 <Environment preset='city' />
               </Suspense>
