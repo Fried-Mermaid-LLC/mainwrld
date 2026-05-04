@@ -620,18 +620,18 @@ const App: React.FC = () => {
       }
       fbService.updateUserProfile(firebaseUid, batchUpdate).catch(() => {})
     }
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushToFirestore()
-    }
-    const handlePageHide = () => flushToFirestore()
-    window.addEventListener('beforeunload', flushToFirestore)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('pagehide', handlePageHide)
-    return () => {
-      window.removeEventListener('beforeunload', flushToFirestore)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('pagehide', handlePageHide)
-    }
+    // const handleVisibilityChange = () => {
+    //   if (document.visibilityState === 'hidden') flushToFirestore()
+    // }
+    // const handlePageHide = () => flushToFirestore()
+    // window.addEventListener('beforeunload', flushToFirestore)
+    // document.addEventListener('visibilitychange', handleVisibilityChange)
+    // window.addEventListener('pagehide', handlePageHide)
+    // return () => {
+    //   window.removeEventListener('beforeunload', flushToFirestore)
+    //   document.removeEventListener('visibilitychange', handleVisibilityChange)
+    //   window.removeEventListener('pagehide', handlePageHide)
+    // }
   })
 
   // Online/offline presence: visibility change + idle timeout
@@ -2958,14 +2958,13 @@ const App: React.FC = () => {
                   const avatarsToShow =
                     dynamicMutuals.length > 0 ? dynamicMutuals : MUTUALS
                   // Limit visible mutuals to avoid overwhelming the scene
-                  const eightHoursAgo = Date.now() - 8 * 3600 * 1000
+                  // const eightHoursAgo = Date.now() - 8 * 3600 * 1000
                   const visibleMutuals =
                     avatarsToShow.length > 200
                       ? avatarsToShow
                           .filter(
                             (m: any) =>
-                              m.isOnline ||
-                              (m.lastOnline && m.lastOnline > eightHoursAgo)
+                              m.isOnline 
                           )
                           .slice(0, 200)
                       : avatarsToShow.slice(0, 200)

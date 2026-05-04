@@ -217,6 +217,8 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({
     }
   })
 
+  // console.log(user.displayName + " : " + user.isOnline)
+
   return (
     <group ref={groupRef} position={user.position}>
       <AvatarModel
