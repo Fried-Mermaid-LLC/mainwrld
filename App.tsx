@@ -634,68 +634,42 @@ const App: React.FC = () => {
     // }
   })
 
-  // Online/offline presence: visibility change + idle timeout
+  // Online/offline presence: only on open/close, not tab switching
   useEffect(() => {
     if (!firebaseUid || !user.username) return
-    let idleTimer: ReturnType<typeof setTimeout> | null = null
-    const IDLE_TIMEOUT = 5 * 60 * 1000 // 5 minutes
-
-    console.log(user)
 
     const setOnline = () => {
-      if (!user.isOnline) {
-        setUser(prev => ({ ...prev, isOnline: true }))
-        fbService
-          .updateUserProfile(firebaseUid, {
-            isOnline: true,
-            lastOnline: new Date().toISOString()
-          })
-          .catch(console.error)
-      }
-      // Reset idle timer on any activity
-      if (idleTimer) clearTimeout(idleTimer)
-      idleTimer = setTimeout(() => {
-        setUser(prev => ({ ...prev, isOnline: false }))
-        fbService
-          .updateUserProfile(firebaseUid, {
-            isOnline: true,
-            lastOnline: new Date().toISOString()
-          })
-          .catch(console.error)
-      }, IDLE_TIMEOUT)
+      setUser(prev => ({ ...prev, isOnline: true }))
+
+      fbService
+        .updateUserProfile(firebaseUid, {
+          isOnline: true,
+          lastOnline: new Date().toISOString()
+        })
+        .catch(console.error)
     }
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Tab hidden: mark offline
-        if (idleTimer) clearTimeout(idleTimer)
-        setUser(prev => ({ ...prev, isOnline: false }))
-        fbService
-          .updateUserProfile(firebaseUid, {
-            isOnline: false,
-            lastOnline: new Date().toISOString()
-          })
-          .catch(console.error)
-      } else {
-        // Tab visible again: mark online
-        setOnline()
-      }
+    const setOffline = () => {
+      setUser(prev => ({ ...prev, isOnline: false }))
+
+      fbService
+        .updateUserProfile(firebaseUid, {
+          isOnline: false,
+          lastOnline: new Date().toISOString()
+        })
+        .catch(console.error)
     }
 
-    // Start idle timer
+    // Mark online when this tab/window is active
     setOnline()
 
-    // Listen for user activity to reset idle timer
-    const activityEvents = ['pointerdown', 'keydown', 'scroll', 'touchstart']
-    activityEvents.forEach(evt =>
-      window.addEventListener(evt, setOnline, { passive: true })
-    )
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+    // Mark offline only when tab/window is closed/refreshed/navigated away
+    window.addEventListener('beforeunload', setOffline)
+    window.addEventListener('pagehide', setOffline)
 
     return () => {
-      if (idleTimer) clearTimeout(idleTimer)
-      activityEvents.forEach(evt => window.removeEventListener(evt, setOnline))
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', setOffline)
+      window.removeEventListener('pagehide', setOffline)
     }
   }, [firebaseUid, user.username])
 
@@ -2962,10 +2936,7 @@ const App: React.FC = () => {
                   const visibleMutuals =
                     avatarsToShow.length > 200
                       ? avatarsToShow
-                          .filter(
-                            (m: any) =>
-                              m.isOnline 
-                          )
+                          .filter((m: any) => m.isOnline)
                           .slice(0, 200)
                       : avatarsToShow.slice(0, 200)
                   // Filter out blocked users
