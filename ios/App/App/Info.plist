@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- App Store: declares that the app uses only standard, exempt
+	     cryptography (TLS via system networking). Setting this to false
+	     skips the per-build export-compliance prompt. Required for
+	     TestFlight submission. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
