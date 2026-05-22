@@ -66,6 +66,18 @@ export const signUp = async (
   // 3. Create username lookup document for uniqueness checking + login
   await setDoc(doc(db, 'usernames', username.toLowerCase()), { uid, email });
 
+  // 4. The setUsernameClaim Cloud Function (Stage 2c) fires on the
+  // users/{uid} create above and stamps the username into the auth
+  // token's custom claims. The current ID token was minted *before*
+  // that claim existed, so force a refresh now. Otherwise firestore.
+  // rules that check `request.auth.token.username` reject this user's
+  // first session — particularly chat, relationships, notifications.
+  try {
+    await credential.user.getIdToken(true);
+  } catch {
+    // Non-fatal: claim will land on next token rotation.
+  }
+
   return { uid, username, displayName, email, birthDate };
 };
 

@@ -239,7 +239,33 @@ const App: React.FC = () => {
       }))
   }, [user.username, relationships, registeredUsers])
 
-  const isAdmin = ADMIN_USERNAMES.includes(user.username)
+  // Admin authority lives in the Firebase Auth custom claim `admin`,
+  // set by the setAdmin Cloud Function (Stage 2c). The Firestore Rules
+  // enforce this server-side; this client state is just for UI.
+  // ADMIN_USERNAMES.includes(...) is kept as a TEMPORARY fallback so
+  // existing admins keep working until the bootstrap setAdmin call is
+  // run for them — it should be removed once all admins have the claim.
+  const [hasAdminClaim, setHasAdminClaim] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    const unsubscribe = auth.onIdTokenChanged(async (fbUser) => {
+      if (!fbUser) {
+        if (!cancelled) setHasAdminClaim(false)
+        return
+      }
+      try {
+        const tokenResult = await fbUser.getIdTokenResult()
+        if (!cancelled) setHasAdminClaim(tokenResult.claims.admin === true)
+      } catch {
+        if (!cancelled) setHasAdminClaim(false)
+      }
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [])
+  const isAdmin = hasAdminClaim || ADMIN_USERNAMES.includes(user.username)
 
   // Check if current user is under 16 (for explicit content filtering)
   const userIsUnder16 = useMemo(() => {
@@ -7995,7 +8021,7 @@ const AdminDashboard = ({
                       </div>
                     )}
                   </div>
-                  {!ADMIN_USERNAMES.includes(u.username) && (
+                  {!(u.isAdmin || ADMIN_USERNAMES.includes(u.username)) && (
                     <div className='flex gap-2'>
                       <button
                         onClick={() => onAddStrike(u.username)}
