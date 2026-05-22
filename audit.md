@@ -69,9 +69,9 @@
 | 6a. Установка Capacitor | ✅ | 1 | `@capacitor/core@8.3.4 + ios + cli`; `capacitor.config.ts` с placeholder bundle ID |
 | 6b. `npx cap add ios` | ✅ | (вместе с 6a) | iOS Xcode-проект на SPM создан; собирается через `xcodebuild` для iphonesimulator |
 | 6 (фикс). Firebase Auth iframe | ✅ | 1 | Критический iOS-блокер: `getAuth(app)` → `initializeAuth(app, {persistence: [...]})` без `browserPopupRedirectResolver` |
-| 6c. Capacitor-плагины | ⏳ Следующий | — | Preferences, StatusBar, SplashScreen, Keyboard, App, Share |
-| 6d. `localStorage` → Preferences | ⏳ | — | ~12 точек в App.tsx (`mainwrld_*` ключи) |
-| 6e. Иконки + сплеш | ⏳ | — | Через `@capacitor/assets` из 1024×1024 логотипа |
+| 6c. Capacitor-плагины | ✅ | 1 | Установлены 6 плагинов (Preferences, StatusBar, SplashScreen, Keyboard, App, Share); подключены SplashScreen.hide + StatusBar.setStyle |
+| 6d. `localStorage` → Preferences | ❌ Пропущен сознательно | — | См. ниже «Решение по 6d». localStorage в WKWebView работает; миграция не даёт выгоды для App Store |
+| 6e. Иконки + сплеш | ⏳ Следующий | — | Через `@capacitor/assets` из 1024×1024 логотипа |
 | 5. Мобильная UI-адаптация | ⏳ | — | Safe-area insets, `100dvh`, tap targets, Three.js перформанс |
 | 2. Firebase security | ⏳ Требует Stage 0 | — | Firestore Rules, admin claims, `deleteAccount`, modaration; сейчас Firestore сыплет `permission-denied` (см. ниже) |
 | 3. IAP | ⏳ Требует Stage 0 | — | App Store Connect IAP-продукты + Cloud Function receipt verification |
@@ -115,6 +115,21 @@ export const auth = initializeAuth(app, {
 - Reverse DNS домена клиента (если он есть, например `com.mochamattel.mainwrld`);
 - Не использовать `com.example.*` в проде — Apple отклоняет.
 - Будет переименовано перед TestFlight upload, для этого требуется пересоздать iOS-проект (`npx cap add ios` после правки `appId`).
+
+#### Решение по 6d: пропускаем миграцию localStorage → Preferences
+
+В первоначальном плане Stage 6d предполагал замену всех вызовов `localStorage.*` на `@capacitor/preferences` API. После аудита фактического использования это решение пересмотрено.
+
+**Аргументы за миграцию:**
+- «Capacitor-style» — нативное хранилище вместо браузерного.
+
+**Аргументы против:**
+- `localStorage` **полноценно работает** в WKWebView (часть стандарта WebView, хранится в `Library/WebKit/` контейнера приложения, переживает рестарт).
+- Apple App Privacy Manifest (iOS 17+) требует декларации только для `UserDefaults` API; `localStorage` под манифест не подпадает.
+- На dev-ветке есть `loadPositions()` в [app/avatar.tsx:41-49](app/avatar.tsx#L41-L49), вызываемый **синхронно** при импорте модуля для инициализации экспортируемых констант `HAIR_POSITIONS` / `FACE_POSITIONS`. Конвертация в async = top-level await или ломаются константы — оба варианта инвазивны.
+- Ключи `mainwrld_pending_purchase`, `mainwrld_pending_points`, `mainwrld_pending_premium`, `mainwrld_pending_coupon` — это temporary redirect-state для веб-Stripe-флоу через `window.location.href`. В iOS-сборке весь Stripe-флоу заменяется на IAP в Stage 3, эти ключи перестанут использоваться.
+
+**Решение:** оставляем `localStorage` как есть. `@capacitor/preferences` остаётся установленным на случай, если в Stage 3 для IAP receipt cache понадобится нативное хранилище (это правильное место для async API).
 
 #### Capacitor 8 на SPM
 
