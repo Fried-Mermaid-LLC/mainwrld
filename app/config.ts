@@ -1,9 +1,13 @@
 export const BASE = import.meta.env.BASE_URL
 
+// Stripe is used on the web. On iOS the equivalent flow will be Apple IAP
+// (Stage 3), so the iOS bundle can ship with an empty STRIPE_PUBLISHABLE_KEY.
 export const STRIPE_PUBLISHABLE_KEY =
-  'pk_test_51SxGPW2Urthc1FwfeRDmVhtNVchR7iiZATzRQJcyRjzNLA3ME99cQXQbbgP0ngtnVxAQCckZYcFKAi2vld0w4YR900P0pvdCEO'
+  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
+
 declare const Stripe: any
 export const getStripe = () => {
+  if (!STRIPE_PUBLISHABLE_KEY) return null
   if (typeof Stripe !== 'undefined') {
     return Stripe(STRIPE_PUBLISHABLE_KEY)
   }
@@ -28,8 +32,8 @@ export const STRIPE_PREMIUM_PAYMENT_LINK = 'https://buy.stripe.com/test_premium'
 export const STRIPE_PREMIUM_PRICE_ID = ''
 export const STRIPE_BOOK_PRICE_ID = ''
 
-export const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY
-export const RESEND_FROM_EMAIL = import.meta.env.VITE_RESEND_FROM_EMAIL ?? 'welcome@mainwrld.com'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
+export const RESEND_FROM_EMAIL = 'welcome@mainwrld.com'
 export const RESEND_SUBJECT = 'Welcome to MainWRLD!'
 
 export const sendWelcomeEmail = async (
@@ -38,16 +42,16 @@ export const sendWelcomeEmail = async (
   username: string
 ) => {
   try {
-    const res = await fetch('http://localhost:3001/send-welcome-email', {
+    const res = await fetch(`${API_BASE_URL}/send-welcome-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, displayName, username })
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
-    console.log('[MainWRLD] Email sent')
+    console.log('[MainWRLD] Welcome email sent')
   } catch (err) {
-    console.error('[MainWRLD] Failed:', err)
+    console.error('[MainWRLD] Welcome email failed:', err)
   }
 }
 
@@ -60,7 +64,6 @@ export default {
   STRIPE_PREMIUM_PAYMENT_LINK,
   STRIPE_PREMIUM_PRICE_ID,
   STRIPE_BOOK_PRICE_ID,
-  RESEND_API_KEY,
   RESEND_FROM_EMAIL,
   RESEND_SUBJECT,
   sendWelcomeEmail
