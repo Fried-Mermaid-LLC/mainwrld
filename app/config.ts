@@ -32,8 +32,6 @@ export const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY
 export const RESEND_FROM_EMAIL = import.meta.env.VITE_RESEND_FROM_EMAIL ?? 'welcome@mainwrld.com'
 export const RESEND_SUBJECT = 'Welcome to MainWRLD!'
 
-console.log(RESEND_API_KEY)
-
 export const sendWelcomeEmail = async (
   email: string,
   displayName: string,

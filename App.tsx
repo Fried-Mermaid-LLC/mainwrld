@@ -17,7 +17,6 @@ import {
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from './firebase'
 import * as fbService from './firebaseService'
-import { on } from 'events'
 import {
   BASE,
   STRIPE_PUBLISHABLE_KEY,
