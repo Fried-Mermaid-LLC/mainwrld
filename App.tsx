@@ -5941,7 +5941,7 @@ const CartView = ({
 
     setIsProcessing(true)
     try {
-      const stripe = getStripe()
+      const stripe = await getStripe()
       if (!stripe || STRIPE_PUBLISHABLE_KEY.includes('REPLACE')) {
         // Stripe not configured yet - use in-app confirmation
         showConfirm({
@@ -5978,6 +5978,11 @@ const CartView = ({
 
       // Use Stripe Checkout with Price ID if available, otherwise use line items
       if (STRIPE_BOOK_PRICE_ID) {
+        // The line-items variant of redirectToCheckout is removed from
+        // @stripe/stripe-js types (deprecated by Stripe; only works with test
+        // keys). This whole branch is replaced by Apple IAP on iOS in Stage 3,
+        // and the web flow will move to a server-created Checkout Session.
+        // @ts-expect-error deprecated lineItems variant
         const { error } = await stripe.redirectToCheckout({
           lineItems: [{ price: STRIPE_BOOK_PRICE_ID, quantity: cart.length }],
           mode: 'payment',

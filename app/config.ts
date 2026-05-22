@@ -1,3 +1,5 @@
+import { loadStripe, type Stripe } from '@stripe/stripe-js'
+
 export const BASE = import.meta.env.BASE_URL
 
 // Stripe is used on the web. On iOS the equivalent flow will be Apple IAP
@@ -5,13 +7,15 @@ export const BASE = import.meta.env.BASE_URL
 export const STRIPE_PUBLISHABLE_KEY =
   import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? ''
 
-declare const Stripe: any
-export const getStripe = () => {
-  if (!STRIPE_PUBLISHABLE_KEY) return null
-  if (typeof Stripe !== 'undefined') {
-    return Stripe(STRIPE_PUBLISHABLE_KEY)
+// loadStripe lazily fetches the SDK on first call and caches the Promise,
+// so this won't trigger a network request unless the checkout path is used.
+let stripePromise: Promise<Stripe | null> | null = null
+export const getStripe = (): Promise<Stripe | null> => {
+  if (!STRIPE_PUBLISHABLE_KEY) return Promise.resolve(null)
+  if (!stripePromise) {
+    stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY)
   }
-  return null
+  return stripePromise
 }
 
 export const STRIPE_PRICE_IDS: Record<string, string> = {
