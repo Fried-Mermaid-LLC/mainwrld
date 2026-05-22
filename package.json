@@ -30,6 +30,7 @@
     "three": "0.174.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.3.4",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
