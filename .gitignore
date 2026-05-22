@@ -33,3 +33,11 @@ ios/App/App/public/
 
 # Vite cache
 .vite/
+
+# Firebase
+functions/node_modules/
+functions/lib/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
