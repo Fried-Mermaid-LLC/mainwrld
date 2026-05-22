@@ -40,6 +40,100 @@
 
 ---
 
+## 0.5. Прогресс реализации
+
+Раздел обновляется по мере работы. Декомпозиция из §5 разбита на подэтапы; коммиты — на ветке `upwork-iamursky` (ответвление от `dev`).
+
+### Зафиксированные решения по ходу работы
+
+| Решение | Что выбрали | Почему |
+| --- | --- | --- |
+| Рабочая ветка | `upwork-iamursky` от `dev` | Клиент работает на dev, не трогаем её историю |
+| Bundle ID | `com.example.mainwrld` (placeholder) | До подтверждения клиенткой реального ID; переименование после `cap add ios` болезненно |
+| Стек IAP | `@capacitor-community/in-app-purchases` | Бесплатно vs RevenueCat ($2.5K MTR free tier); receipt validation реализуем сами через Cloud Function |
+| Папка `docs/` | Убрана из репо, gitignored | Build output не место в репо; перед мержем в main нужны GitHub Actions для деплоя mainwrld.com |
+| Стиль коммитов | По одному на подэтап | Лёгкий ревью и откаты |
+| Tailwind v3 vs v4 | v3 | Совпадает 1:1 с инлайн-конфигом из старого CDN; v4 имеет другую модель конфига |
+| Capacitor 8 | SPM вместо CocoaPods | Дефолт в Capacitor 8 (с конца 2024); чище, без `pod install` |
+
+### Статус этапов
+
+| Этап | Статус | Коммитов | Примечания |
+| --- | --- | --- | --- |
+| 0. Подготовка (доступы клиента) | ⏳ Ждём клиентку | — | Apple Developer, Firebase Editor, реальный bundle ID, Stripe |
+| 1a. Чистка кода | ✅ | 1 | `import {on} from 'events'` убран, `.DS_Store`/`docs/` gitignored, `console.log(RESEND_API_KEY)` убран |
+| 1b. Секреты в `.env` | ✅ | 1 | Firebase + Stripe pk + Resend URL в env; `.env.example` создан; `vite.config.ts` подчищен |
+| 1c. Локальный Tailwind | ✅ | 1 | `cdn.tailwindcss.com` → npm-pipeline (Tailwind v3 + PostCSS + autoprefixer); +44 кБ CSS, минус runtime JIT |
+| 1d. Бандлинг Stripe.js | ✅ | 1 | `js.stripe.com/v3/` CDN → `@stripe/stripe-js` с `loadStripe` (lazy); +2.7 кБ JS |
+| 1e. Безопасность зависимостей | ✅ | 1 | `npm audit`: 5 уязвимостей (1 critical) → 0; protobufjs 7.5.4 → 7.6.1 через `overrides`, picomatch + vite обновлены |
+| 6a. Установка Capacitor | ✅ | 1 | `@capacitor/core@8.3.4 + ios + cli`; `capacitor.config.ts` с placeholder bundle ID |
+| 6b. `npx cap add ios` | ✅ | (вместе с 6a) | iOS Xcode-проект на SPM создан; собирается через `xcodebuild` для iphonesimulator |
+| 6 (фикс). Firebase Auth iframe | ✅ | 1 | Критический iOS-блокер: `getAuth(app)` → `initializeAuth(app, {persistence: [...]})` без `browserPopupRedirectResolver` |
+| 6c. Capacitor-плагины | ⏳ Следующий | — | Preferences, StatusBar, SplashScreen, Keyboard, App, Share |
+| 6d. `localStorage` → Preferences | ⏳ | — | ~12 точек в App.tsx (`mainwrld_*` ключи) |
+| 6e. Иконки + сплеш | ⏳ | — | Через `@capacitor/assets` из 1024×1024 логотипа |
+| 5. Мобильная UI-адаптация | ⏳ | — | Safe-area insets, `100dvh`, tap targets, Three.js перформанс |
+| 2. Firebase security | ⏳ Требует Stage 0 | — | Firestore Rules, admin claims, `deleteAccount`, modaration; сейчас Firestore сыплет `permission-denied` (см. ниже) |
+| 3. IAP | ⏳ Требует Stage 0 | — | App Store Connect IAP-продукты + Cloud Function receipt verification |
+| 4. Архитектурный рефакторинг | ⏳ | — | Минимальный набор (Context, lazy routes), без полной декомпозиции |
+| 7. Юридическое | ⏳ Требует Stage 0 | — | Privacy Policy, EULA, PrivacyInfo.xcprivacy |
+| 8. TestFlight + сабмит | ⏳ Требует Stage 0 | — | Внутренний TestFlight → App Review |
+
+### Ключевые технические находки/решения по ходу работы
+
+#### iOS-блокер: Firebase Auth iframe в WKWebView
+
+Самый болезненный неочевидный баг этой стадии. По умолчанию Firebase Web SDK при вызове `getAuth(app)` регистрирует popup/redirect resolver, который грузит скрытый iframe на `<project>.firebaseapp.com/__/auth/iframe` для OAuth-флоу. Из `capacitor://localhost` (схема WKWebView в Capacitor на iOS) cross-origin postMessage с этим iframe **никогда не завершается**, и `onAuthStateChanged` callback **никогда не вызывается** → splash зависает.
+
+**Симптомы:**
+- На вебе всё работает; в iOS Simulator — белый экран после React-сплеша;
+- В JS-console на экране (debug-оверлей): `[BOOT] splash useEffect mounted` → `1.5s timer fired, subscribing onAuthStateChanged` → cross-origin masked «Script error.» × 2 → callback не приходит никогда;
+- Из `xcrun simctl spawn ... log stream` ничего не видно — WKWebView не пробрасывает JS-консоль в `os_log` по умолчанию.
+
+**Фикс** в [firebase.ts](firebase.ts):
+```ts
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth'
+// БЕЗ browserPopupRedirectResolver — приложение не использует OAuth
+export const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+})
+```
+
+Это работает потому что email/password auth не требует iframe. Проверено `grep -n "signInWithPopup\|signInWithRedirect\|GoogleAuthProvider" — ни одного использования.
+
+Если потом понадобится OAuth (Google Sign-In / Sign In with Apple), нужно будет переходить на native-плагин `@capacitor-firebase/authentication`, который вместо Web SDK дёргает нативный Firebase Auth SDK iOS, и iframe не нужен в принципе.
+
+#### Firestore «permission-denied» при загрузке
+
+После починки iframe-бага сразу выяснилось, что Firestore snapshot listeners (на `books`, `users`, `relationships` и т.д.) валятся с `Missing or insufficient permissions` для неаутентифицированных пользователей. Это **корректное поведение**, если Firestore Security Rules настроены правильно — публичный доступ к чтению пользовательских коллекций не должен быть открыт. UI продолжает работать, ошибки только в консоли.
+
+**Действия:** Stage 2 пропишет правила, разрешающие чтение `books` (опубликованных), но требующие auth для всего остального. Сейчас правила в проекте — неизвестно какие; нужен доступ Editor в Firebase Console (см. Stage 0).
+
+#### Bundle ID
+
+Решено использовать `com.example.mainwrld` как placeholder до подтверждения клиенткой. Реальный bundle ID должен соответствовать:
+- Reverse DNS домена клиента (если он есть, например `com.mochamattel.mainwrld`);
+- Не использовать `com.example.*` в проде — Apple отклоняет.
+- Будет переименовано перед TestFlight upload, для этого требуется пересоздать iOS-проект (`npx cap add ios` после правки `appId`).
+
+#### Capacitor 8 на SPM
+
+Capacitor 8.x (с конца 2024) перешёл с CocoaPods на Swift Package Manager. Это означает:
+- Нет `Podfile`, нет `pod install`;
+- Плагины подключаются через [ios/App/CapApp-SPM/Package.swift](ios/App/CapApp-SPM/Package.swift), который Capacitor генерирует автоматически при `cap sync ios`;
+- В CI достаточно `npm i && npm run build && npx cap sync ios && xcodebuild`.
+
+#### Что НЕ закоммичено в `ios/`
+
+Игнорятся:
+- `ios/App/App/public/` — туда `cap sync` копирует `docs/`. Регенерируется каждый раз, нет смысла хранить.
+- `ios/App/App/capacitor.config.json` и `config.xml` — синкятся из корневого `capacitor.config.ts`.
+- `App/build`, `App/Pods`, `DerivedData`, `xcuserdata`.
+
+Что трекается: `.xcodeproj`, `Package.swift` (SPM container), `AppDelegate.swift`, `Assets.xcassets` (заглушки иконок и сплеша — заменим в Stage 6e), `Info.plist`, `LaunchScreen.storyboard`, `Main.storyboard`, `debug.xcconfig`.
+
+---
+
 ## 1. Что это за приложение
 
 - **Стек:** React 19 + Vite 6 + TypeScript + Three.js / @react-three/fiber + Firebase (Auth, Firestore) + Stripe Payment Links + EmailJS (на main) / Resend через localhost Express-сервер (на dev).
