@@ -71,7 +71,7 @@
 | 6 (фикс). Firebase Auth iframe | ✅ | 1 | Критический iOS-блокер: `getAuth(app)` → `initializeAuth(app, {persistence: [...]})` без `browserPopupRedirectResolver` |
 | 6c. Capacitor-плагины | ✅ | 1 | Установлены 6 плагинов (Preferences, StatusBar, SplashScreen, Keyboard, App, Share); подключены SplashScreen.hide + StatusBar.setStyle |
 | 6d. `localStorage` → Preferences | ❌ Пропущен сознательно | — | См. ниже «Решение по 6d». localStorage в WKWebView работает; миграция не даёт выгоды для App Store |
-| 6e. Иконки + сплеш | ⏳ Следующий | — | Через `@capacitor/assets` из 1024×1024 логотипа |
+| 6e. Иконки + сплеш | ✅ | 1 | `assets/icon.png` (1024×1024 white-padded) + `assets/splash.png` (2732×2732); generated через `@capacitor/assets` |
 | 5. Мобильная UI-адаптация | ⏳ | — | Safe-area insets, `100dvh`, tap targets, Three.js перформанс |
 | 2. Firebase security | ⏳ Требует Stage 0 | — | Firestore Rules, admin claims, `deleteAccount`, modaration; сейчас Firestore сыплет `permission-denied` (см. ниже) |
 | 3. IAP | ⏳ Требует Stage 0 | — | App Store Connect IAP-продукты + Cloud Function receipt verification |

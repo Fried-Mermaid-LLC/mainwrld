@@ -4512,10 +4512,16 @@ const App: React.FC = () => {
   ].includes(view)
 
   return (
-    <div className='min-h-screen bg-white transition-colors duration-500 overflow-hidden text-black font-sans'>
+    <div
+      className='min-h-dvh bg-white transition-colors duration-500 overflow-hidden text-black font-sans'
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       {renderView()}
       {showNav && (
-        <nav className='fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-6 py-4 flex justify-around items-center z-[200]'>
+        <nav
+          className='fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-6 pt-4 flex justify-around items-center z-[200]'
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+        >
           {[
             { id: 'home', icon: 'home', label: 'Home' },
             { id: 'explore', icon: 'explore', label: 'Explore' },

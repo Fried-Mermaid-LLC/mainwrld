@@ -13,6 +13,13 @@ body {
   padding: 0;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
+  /* Dynamic viewport height accounts for iOS browser chrome / Dynamic
+     Island. 100dvh = 100% of the visible viewport height. */
+  height: 100dvh;
+}
+
+#root {
+  height: 100dvh;
 }
 
 .reader-content,
@@ -39,7 +46,7 @@ body {
   display: flex;
   overflow-x: scroll;
   scroll-snap-type: x mandatory;
-  height: calc(100vh - 200px);
+  height: calc(100dvh - 200px);
   width: 100%;
 }
 
