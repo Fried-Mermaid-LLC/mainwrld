@@ -73,7 +73,10 @@
 | 6d. `localStorage` → Preferences | ❌ Пропущен сознательно | — | См. ниже «Решение по 6d». localStorage в WKWebView работает; миграция не даёт выгоды для App Store |
 | 6e. Иконки + сплеш | ✅ | 1 | `assets/icon.png` (1024×1024 white-padded) + `assets/splash.png` (2732×2732); generated через `@capacitor/assets` |
 | 5. Мобильная UI baseline | 🟡 Частично | 1 | Safe-area top/bottom + `100dvh`. Полировка (input-zoom, keyboard plugin, tap targets) — в следующей итерации |
-| 2. Firebase security | ⏳ Требует Stage 0 | — | Firestore Rules, admin claims, `deleteAccount`, modaration; сейчас Firestore сыплет `permission-denied` (см. ниже) |
+| 2a. Firebase project + Firestore Rules | ✅ (\*) | 1 | `firebase.json`, `.firebaserc`, `firestore.rules` (9 коллекций, default-deny), `firestore.indexes.json`. (\*) код готов, deploy ждёт Editor-доступ |
+| 2b. Cloud Function `deleteAccount` (App Store 5.1.1) | ✅ (\*) | 1 | Реальное удаление вместо фейкового logout; scrub user-доков из 8 коллекций + `auth.deleteUser` |
+| 2c. setUsernameClaim + setAdmin (claims вместо `ADMIN_USERNAMES`) | ✅ (\*) | 1 | onCreate trigger ставит `username` claim; setAdmin callable + зеркало в users/{uid}.isAdmin |
+| 2d. UGC moderation (App Store 1.2) | ✅ (\*) | 1 | OpenAI Moderation API; onCreate comments + onUpdate books; flagged → delete + лог в reports |
 | 3. IAP | ⏳ Требует Stage 0 | — | App Store Connect IAP-продукты + Cloud Function receipt verification |
 | 4. Архитектурный рефакторинг | ⏳ | — | Минимальный набор (Context, lazy routes), без полной декомпозиции |
 | 7. Юридическое | ⏳ Требует Stage 0 | — | Privacy Policy, EULA, PrivacyInfo.xcprivacy |
@@ -115,6 +118,42 @@ export const auth = initializeAuth(app, {
 - Reverse DNS домена клиента (если он есть, например `com.mochamattel.mainwrld`);
 - Не использовать `com.example.*` в проде — Apple отклоняет.
 - Будет переименовано перед TestFlight upload, для этого требуется пересоздать iOS-проект (`npx cap add ios` после правки `appId`).
+
+#### Деплой Stage 2 (Firebase) — что должен будет сделать клиент
+
+Весь код для Firebase Security Rules и четырёх Cloud Functions написан и проходит локальную сборку. Деплой требует Editor-доступа к проекту `mainwrld-f7acf` (или мне, или клиентке).
+
+**Команды деплоя** (выполнять из корня репозитория):
+```bash
+# 1. Авторизация (один раз)
+firebase login
+
+# 2. Установить секрет для модерации (один раз)
+firebase functions:secrets:set OPENAI_API_KEY
+# вставить ключ из https://platform.openai.com/api-keys
+
+# 3. Деплой
+firebase deploy --only firestore:rules,firestore:indexes,functions
+```
+
+**Bootstrap первого администратора** (один раз). Поскольку `setAdmin` требует, чтобы вызывающий уже был админом, первого админа нужно создать локально через Firebase Admin SDK:
+```bash
+cd functions
+node -e "
+  const admin = require('firebase-admin');
+  admin.initializeApp({credential: admin.credential.applicationDefault()});
+  admin.auth().setCustomUserClaims('<UID-of-mochamattel>', {admin: true, username: 'mochamattel'})
+    .then(() => admin.firestore().collection('users').doc('<UID-of-mochamattel>').set({isAdmin: true}, {merge: true}))
+    .then(() => { console.log('done'); process.exit(0); });
+"
+```
+Где `<UID-of-mochamattel>` — Firebase UID существующего админ-аккаунта (взять из Firebase Console → Authentication).
+
+**Ожидаемые эффекты после деплоя:**
+- Firestore `permission-denied` ошибки, которые сейчас видны в JS-консоли iOS-сборки, пропадут (rules разрешают чтение публичного контента аутентифицированным).
+- Если live-правила сейчас открыты (`allow read/write: if true`) — деплой их закроет. Это безопасностный win, но клиент должен быть в курсе.
+- Кнопка «Permanently Delete Account» в Settings начнёт реально удалять данные (раньше — фейк).
+- Админ-панель будет видна только пользователям с custom claim `admin`. Существующие админы из `ADMIN_USERNAMES` продолжают работать через fallback в [App.tsx:262](App.tsx#L262) — но это deprecated и должно быть убрано после миграции.
 
 #### Решение по 6d: пропускаем миграцию localStorage → Preferences
 
