@@ -1,5 +1,9 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import {
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+} from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const requireEnv = (key: keyof ImportMetaEnv): string => {
@@ -23,6 +27,21 @@ const firebaseConfig = {
 }
 
 const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+
+// Firebase's default `getAuth(app)` opens a hidden iframe pointing at
+// <project>.firebaseapp.com to manage session and OAuth redirect state.
+// In a Capacitor WKWebView the page lives on `capacitor://localhost`, so
+// cross-origin postMessage to that iframe never settles and
+// onAuthStateChanged never fires — the splash hangs forever.
+//
+// `initializeAuth` lets us skip the iframe by picking an explicit
+// persistence and *not* registering a popup/redirect resolver (the app
+// only uses email + password auth, no Google/Apple OAuth, so the
+// resolver is unused). IndexedDB works in both WKWebView and modern
+// browsers; browserLocalPersistence is the fallback.
+export const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+})
+
 export const db = getFirestore(app)
 export default app
