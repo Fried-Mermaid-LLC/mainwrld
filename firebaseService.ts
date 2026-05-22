@@ -1,4 +1,5 @@
 import { auth, db } from './firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -155,6 +156,27 @@ export const changePassword = async (newPassword: string) => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
   await updatePassword(user, newPassword);
+};
+
+// Calls the `deleteAccount` Cloud Function (Stage 2b). The function
+// scrubs the user's data from Firestore and deletes the Auth record,
+// satisfying App Store guideline 5.1.1(v). After this returns the
+// client's ID token is invalid, so we sign out unconditionally.
+export const deleteCurrentAccount = async () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const functions = getFunctions();
+  const deleteAccountFn = httpsCallable<void, { deletedUid: string }>(
+    functions,
+    'deleteAccount'
+  );
+  try {
+    await deleteAccountFn();
+  } finally {
+    // Even if the function partly failed, the auth record may already
+    // be gone — sign out so the UI does not try to act as the user.
+    await signOut(auth).catch(() => {});
+  }
 };
 
 // ==================== USER QUERY FUNCTIONS ====================

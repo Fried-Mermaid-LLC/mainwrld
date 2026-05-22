@@ -7635,10 +7635,20 @@ const SettingsView = ({
                 Cancel
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setShowDeleteConfirm(false)
+                  try {
+                    await fbService.deleteCurrentAccount()
+                    showToast('Account deleted', 'check_circle')
+                  } catch (err: any) {
+                    console.error('[MainWRLD] deleteAccount failed:', err)
+                    showToast(
+                      err?.message || 'Account deletion failed. Please try again.',
+                      'error'
+                    )
+                  }
+                  // Either way, route back to login state.
                   handleLogout()
-                  showToast('Account deleted', 'check_circle')
                 }}
                 className='flex-1 py-4 rounded-2xl bg-red-500 text-white text-sm font-bold transition-all active:scale-95'
               >
