@@ -79,7 +79,7 @@
 | 2d. UGC moderation (App Store 1.2) | ✅ (\*) | 1 | OpenAI Moderation API; onCreate comments + onUpdate books; flagged → delete + лог в reports |
 | 3. IAP | ⏳ Требует Stage 0 | — | App Store Connect IAP-продукты + Cloud Function receipt verification |
 | 4. Архитектурный рефакторинг | ⏳ | — | Минимальный набор (Context, lazy routes), без полной декомпозиции |
-| 7. Юридическое | ⏳ Требует Stage 0 | — | Privacy Policy, EULA, PrivacyInfo.xcprivacy |
+| 7. Юридическое | ✅ (\*) | 1 | `PrivacyInfo.xcprivacy` (зарегистрирован в pbxproj), `ITSAppUsesNonExemptEncryption=false`, шаблоны Privacy Policy + EULA в `legal/`. (\*) клиенту нужно заполнить плейсхолдеры + захостить policy |
 | 8. TestFlight + сабмит | ⏳ Требует Stage 0 | — | Внутренний TestFlight → App Review |
 
 ### Ключевые технические находки/решения по ходу работы
