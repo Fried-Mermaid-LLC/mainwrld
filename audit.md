@@ -72,7 +72,7 @@
 | 6c. Capacitor-плагины | ✅ | 1 | Установлены 6 плагинов (Preferences, StatusBar, SplashScreen, Keyboard, App, Share); подключены SplashScreen.hide + StatusBar.setStyle |
 | 6d. `localStorage` → Preferences | ❌ Пропущен сознательно | — | См. ниже «Решение по 6d». localStorage в WKWebView работает; миграция не даёт выгоды для App Store |
 | 6e. Иконки + сплеш | ✅ | 1 | `assets/icon.png` (1024×1024 white-padded) + `assets/splash.png` (2732×2732); generated через `@capacitor/assets` |
-| 5. Мобильная UI-адаптация | ⏳ | — | Safe-area insets, `100dvh`, tap targets, Three.js перформанс |
+| 5. Мобильная UI baseline | 🟡 Частично | 1 | Safe-area top/bottom + `100dvh`. Полировка (input-zoom, keyboard plugin, tap targets) — в следующей итерации |
 | 2. Firebase security | ⏳ Требует Stage 0 | — | Firestore Rules, admin claims, `deleteAccount`, modaration; сейчас Firestore сыплет `permission-denied` (см. ниже) |
 | 3. IAP | ⏳ Требует Stage 0 | — | App Store Connect IAP-продукты + Cloud Function receipt verification |
 | 4. Архитектурный рефакторинг | ⏳ | — | Минимальный набор (Context, lazy routes), без полной декомпозиции |
