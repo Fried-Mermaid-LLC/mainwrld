@@ -308,7 +308,7 @@ Apple требует от UGC-приложений:
 4. **Действия по жалобам в течение 24 часов**;
 5. EULA с явным нулевым допуском к objectionable content.
 
-**Что делать:** добавить серверную проверку контента (минимум перерасширенный фильтр; в идеале — Perspective API / OpenAI Moderation), задокументировать SLA на разбор жалоб, добавить чек-бокс согласия с EULA при регистрации.
+**Что делать:** добавить серверную проверку контента (минимум перерасширенный фильтр; в идеале — OpenAI Moderation API — бесплатный, индустриальный стандарт после sunset Google Perspective API в декабре 2026), задокументировать SLA на разбор жалоб, добавить чек-бокс согласия с EULA при регистрации.
 
 ### 2.5. Админ-роль проверяется только на клиенте
 
@@ -417,7 +417,7 @@ Apple требует от UGC-приложений:
 1. Написать `firestore.rules`: чтение `users` только аутентифицированным, запись только владельцу, админский доступ через custom claim `admin`.
 2. Перенести `ADMIN_USERNAMES` в Firebase custom claims, выставить через Cloud Function.
 3. Cloud Function `deleteAccount` — для требования 5.1.1(v).
-4. Cloud Function `moderateContent` — для UGC: проверка комментариев/глав через OpenAI Moderation API или Perspective API при `onCreate`.
+4. Cloud Function `moderateContent` — для UGC: проверка комментариев/глав через OpenAI Moderation API при `onCreate`. (Альтернатива «Google Perspective API» больше не доступна — Google объявил sunset до 31 декабря 2026, новые quotas закрыты с февраля 2026.)
 5. Firestore indices для запросов вида `where('admirer', '==', x)`.
 
 ### Этап 3. Платежи через IAP (16-24 ч)
