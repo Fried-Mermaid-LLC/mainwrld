@@ -169,6 +169,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ---- iapTransactions ----
+    // Audit trail of verified Apple IAP transactions, written by the
+    // verifyAppleReceipt Cloud Function (Stage 3c). Used for replay
+    // protection (transactionId is the doc key — duplicates are
+    // ignored, restoring a purchase does not re-credit).
+    //
+    // Users can read their own entries (so the client can prove a
+    // purchase was credited). No client writes — only the function,
+    // which runs with admin privileges and bypasses these rules.
+    match /iapTransactions/{transactionId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
     // ---- appConfig ----
     // Global config (spotlight book of the week). Public read so the
     // home screen can show it before sign-in if desired. Writes go
