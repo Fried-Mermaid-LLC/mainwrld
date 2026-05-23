@@ -191,6 +191,28 @@ export const deleteCurrentAccount = async () => {
   }
 };
 
+// Calls the `verifyAppleReceipt` Cloud Function (Stage 3c). The
+// function verifies the receipt with Apple's App Store Server API,
+// credits points (or extends the premium subscription) inside a
+// Firestore transaction, and returns the new balance. We pass the
+// full base64 receipt rather than the transactionId alone because
+// the App Store Server API supports both StoreKit 1 and 2 via
+// receipts.
+export const verifyAppleReceipt = async (params: {
+  productId: string;
+  transactionId: string;
+  appStoreReceipt: string;
+}): Promise<{ credited: boolean; pointsAdded?: number; isPremium?: boolean }> => {
+  if (!auth.currentUser) throw new Error('Not authenticated');
+  const functions = getFunctions();
+  const verify = httpsCallable<
+    typeof params,
+    { credited: boolean; pointsAdded?: number; isPremium?: boolean }
+  >(functions, 'verifyAppleReceipt');
+  const res = await verify(params);
+  return res.data;
+};
+
 // ==================== USER QUERY FUNCTIONS ====================
 
 export const getAllUsers = async () => {

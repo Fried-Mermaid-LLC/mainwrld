@@ -53,6 +53,7 @@ import {
   FACE_POSITIONS
 } from './app/avatar'
 import { Button, Input, CoverImg } from './app/sharedComponents'
+import * as iap from './app/iap'
 import {
   LOREM_CONTENT,
   CURRENT_USER_MOCK,
@@ -1169,6 +1170,40 @@ const App: React.FC = () => {
       }
     }
   }, [view])
+
+  // IAP setup (Stage 3b). On iOS, wire the verify callback so any
+  // approved StoreKit transaction is sent to verifyAppleReceipt and
+  // we credit points / extend premium from the function's response.
+  useEffect(() => {
+    if (!iap.isNativeIAPAvailable()) return
+    iap.setVerifyCallback(async (tx) => {
+      try {
+        const result = await fbService.verifyAppleReceipt({
+          productId: tx.productId,
+          transactionId: tx.transactionId,
+          appStoreReceipt: tx.appStoreReceipt,
+        })
+        if (!result.credited) return false
+        if (result.pointsAdded) {
+          setUser((prev) => ({ ...prev, points: prev.points + result.pointsAdded! }))
+          showToast(`${result.pointsAdded} points added!`, 'check_circle')
+        }
+        if (result.isPremium) {
+          setUser((prev) => ({
+            ...prev,
+            isPremium: true,
+            premiumSince: prev.premiumSince ?? new Date().toISOString(),
+          }))
+          showToast('Welcome to MainWRLD+!', 'workspace_premium')
+        }
+        return true
+      } catch (err) {
+        console.error('[MainWRLD IAP] verify failed:', err)
+        showToast('Could not verify purchase. Please try again.', 'error')
+        return false
+      }
+    })
+  }, [])
 
   // Firebase Auth state listener - handles auto-login
   useEffect(() => {
@@ -3200,7 +3235,27 @@ const App: React.FC = () => {
                     ].map(pkg => (
                       <button
                         key={pkg.pts}
-                        onClick={() => {
+                        onClick={async () => {
+                          // On iOS go through Apple IAP (App Store 3.1.1).
+                          // The credit happens server-side after Apple
+                          // approves the transaction; see iap.setVerifyCallback
+                          // wired in the App useEffect above.
+                          if (iap.isNativeIAPAvailable()) {
+                            try {
+                              await iap.purchase(
+                                `points_${pkg.pts}` as iap.IapSku
+                              )
+                            } catch (err: any) {
+                              console.error('[MainWRLD IAP] purchase failed:', err)
+                              showToast(
+                                err?.message || 'Purchase failed.',
+                                'error'
+                              )
+                            }
+                            return
+                          }
+
+                          // Web path: Stripe Checkout link (unchanged).
                           const paymentLink =
                             STRIPE_PAYMENT_LINKS[`points_${pkg.pts}`]
 
@@ -3377,7 +3432,22 @@ const App: React.FC = () => {
                       </div>
                       <Button
                         className='w-full h-16 bg-amber-500 hover:bg-amber-600'
-                        onClick={() => {
+                        onClick={async () => {
+                          // iOS: Apple IAP subscription. The credit (set
+                          // isPremium=true) happens server-side via the
+                          // verifyAppleReceipt callback wired in App.
+                          if (iap.isNativeIAPAvailable()) {
+                            try {
+                              await iap.purchase('premium_monthly')
+                            } catch (err: any) {
+                              console.error('[MainWRLD IAP] premium purchase failed:', err)
+                              showToast(
+                                err?.message || 'Subscription failed.',
+                                'error'
+                              )
+                            }
+                            return
+                          }
                           if (
                             STRIPE_PREMIUM_PAYMENT_LINK &&
                             !STRIPE_PREMIUM_PAYMENT_LINK.includes(
