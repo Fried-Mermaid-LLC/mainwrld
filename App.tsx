@@ -7625,6 +7625,26 @@ const SettingsView = ({
       }
     },
     { label: 'Blocked Users', action: () => onNavigate('blocked-users') },
+    // Apple App Review guideline 3.1.1 requires a clearly-visible
+    // Restore Purchases option for apps that sell IAP subscriptions or
+    // non-consumables. Only shown on iOS — on web the Stripe flow has
+    // no equivalent.
+    ...(iap.isNativeIAPAvailable()
+      ? [
+          {
+            label: 'Restore Purchases',
+            action: async () => {
+              try {
+                await iap.restorePurchases()
+                showToast('Restoring any prior purchases…', 'sync')
+              } catch (err: any) {
+                console.error('[MainWRLD IAP] restore failed:', err)
+                showToast(err?.message || 'Restore failed.', 'error')
+              }
+            }
+          }
+        ]
+      : []),
     {
       label: 'Permanently Delete Account',
       action: () => setShowDeleteConfirm(true),

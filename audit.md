@@ -50,7 +50,7 @@
 | --- | --- | --- |
 | Рабочая ветка | `upwork-iamursky` от `dev` | Клиент работает на dev, не трогаем её историю |
 | Bundle ID | `com.example.mainwrld` (placeholder) | До подтверждения клиенткой реального ID; переименование после `cap add ios` болезненно |
-| Стек IAP | `@capacitor-community/in-app-purchases` | Бесплатно vs RevenueCat ($2.5K MTR free tier); receipt validation реализуем сами через Cloud Function |
+| Стек IAP | **`cordova-plugin-purchase`** (ревизия — `@capacitor-community/in-app-purchases` не существует на npm) | Без SaaS-зависимости; receipt validation в нашем Cloud Function через App Store Server API. ~15ч моего времени vs 0ч у клиентки на регистрацию RevenueCat |
 | Папка `docs/` | Убрана из репо, gitignored | Build output не место в репо; перед мержем в main нужны GitHub Actions для деплоя mainwrld.com |
 | Стиль коммитов | По одному на подэтап | Лёгкий ревью и откаты |
 | Tailwind v3 vs v4 | v3 | Совпадает 1:1 с инлайн-конфигом из старого CDN; v4 имеет другую модель конфига |
@@ -77,7 +77,10 @@
 | 2b. Cloud Function `deleteAccount` (App Store 5.1.1) | ✅ (\*) | 1 | Реальное удаление вместо фейкового logout; scrub user-доков из 8 коллекций + `auth.deleteUser` |
 | 2c. setUsernameClaim + setAdmin (claims вместо `ADMIN_USERNAMES`) | ✅ (\*) | 1 | onCreate trigger ставит `username` claim; setAdmin callable + зеркало в users/{uid}.isAdmin |
 | 2d. UGC moderation (App Store 1.2) | ✅ (\*) | 1 | OpenAI Moderation API; onCreate comments + onUpdate books; flagged → delete + лог в reports |
-| 3. IAP | ⏳ Требует Stage 0 | — | App Store Connect IAP-продукты + Cloud Function receipt verification |
+| 3a. IAP plugin install + service module | ✅ | 1 | `cordova-plugin-purchase` (не `@capacitor-community/in-app-purchases` — не существует). `app/iap.ts` с lazy-загрузкой |
+| 3b. Wire IAP в points + premium флоу | ✅ | 1 | На iOS — `iap.purchase(sku)`; на web — старый Stripe Checkout |
+| 3c. Cloud Function verifyAppleReceipt | ✅ (\*) | 1 | App Store Server API через `@apple/app-store-server-library`; идемпотентный credit в Firestore transaction |
+| 3d. Restore Purchases UI | ✅ | 1 | Кнопка в Settings → Account & Privacy (только на iOS) |
 | 4. Архитектурный рефакторинг | ⏳ | — | Минимальный набор (Context, lazy routes), без полной декомпозиции |
 | 7. Юридическое | ✅ (\*) | 1 | `PrivacyInfo.xcprivacy` (зарегистрирован в pbxproj), `ITSAppUsesNonExemptEncryption=false`, шаблоны Privacy Policy + EULA в `legal/`. (\*) клиенту нужно заполнить плейсхолдеры + захостить policy |
 | 8. TestFlight + сабмит | ⏳ Требует Stage 0 | — | Внутренний TestFlight → App Review |
@@ -154,6 +157,60 @@ node -e "
 - Если live-правила сейчас открыты (`allow read/write: if true`) — деплой их закроет. Это безопасностный win, но клиент должен быть в курсе.
 - Кнопка «Permanently Delete Account» в Settings начнёт реально удалять данные (раньше — фейк).
 - Админ-панель будет видна только пользователям с custom claim `admin`. Существующие админы из `ADMIN_USERNAMES` продолжают работать через fallback в [App.tsx:262](App.tsx#L262) — но это deprecated и должно быть убрано после миграции.
+
+#### Setup для Stage 3 (IAP) — что должен будет сделать клиент
+
+Чтобы заработали покупки на iOS после деплоя, клиентке нужно:
+
+**1. В App Store Connect (https://appstoreconnect.apple.com):**
+
+В разделе **My App → In-App Purchases** создать 5 продуктов с точно такими identifier'ами (они захардкожены в [app/iap.ts](app/iap.ts) и [functions/src/verifyAppleReceipt.ts](functions/src/verifyAppleReceipt.ts)):
+
+| Identifier | Тип | Назначение |
+| --- | --- | --- |
+| `mainwrld.points_100` | Consumable | 100 points за $0.99 |
+| `mainwrld.points_300` | Consumable | 300 points за $2.99 |
+| `mainwrld.points_500` | Consumable | 500 points за $4.99 |
+| `mainwrld.points_1000` | Consumable | 1000 points за $9.99 |
+| `mainwrld.premium_monthly` | Auto-Renewable Subscription | MainWRLD+ |
+
+Цены настраиваются в Apple's pricing tiers (точные доллары зависят от региона). Каждый продукт нужно подать на review вместе с приложением; до первого approve они в статусе «Waiting for Review».
+
+**2. App Store Connect → Users and Access → Integrations → In-App Purchase:**
+
+Сгенерировать API Key:
+- **Key Name:** MainWRLD Server
+- **Access:** In-App Purchase (это всё, что нужно)
+
+После создания сохранить:
+- **Issuer ID** (UUID, виден в верхней части страницы Keys)
+- **Key ID** (например `2X9Y8Z7A6B`)
+- **Private Key (.p8 file)** — Apple даёт скачать только один раз!
+
+**3. Firebase secrets** (выполнять из корня репо после `firebase login`):
+
+```bash
+firebase functions:secrets:set APPLE_ISSUER_ID
+# вставить Issuer ID
+firebase functions:secrets:set APPLE_KEY_ID
+# вставить Key ID
+firebase functions:secrets:set APPLE_BUNDLE_ID
+# например com.mochamattel.mainwrld (= реальный bundle ID, не placeholder)
+firebase functions:secrets:set APPLE_PRIVATE_KEY
+# вставить ВЕСЬ файл .p8 включая строки -----BEGIN PRIVATE KEY----- и -----END PRIVATE KEY-----
+firebase functions:secrets:set APPLE_ENV
+# "Sandbox" пока работаем в TestFlight, "Production" после live
+```
+
+**4. Bundle ID:** placeholder `com.example.mainwrld` в [capacitor.config.ts](capacitor.config.ts) и в Info.plist должен быть заменён на реальный (например `com.mochamattel.mainwrld`). После замены — `npx cap sync ios`. IAP **не работает** с `com.example.*` — Apple отклоняет.
+
+**5. Sandbox testing** (до TestFlight): можно тестировать на устройстве с Sandbox Tester аккаунтом из App Store Connect → Users and Access → Sandbox → Testers. На симуляторе IAP полностью не работает — нужен реальный iPhone.
+
+**Что произойдёт после полной конфигурации:**
+- Кнопки покупки points / Premium на iOS откроют родной Apple StoreKit popup.
+- После approve — `verifyAppleReceipt` Cloud Function проверит подпись Apple's JWS, сверит productId/transactionId/bundleId, идемпотентно начислит points в Firestore (через `iapTransactions` коллекцию-журнал).
+- «Restore Purchases» в Settings восстанавливает Premium подписку при реинсталле.
+- Web-версия mainwrld.com продолжает использовать Stripe Checkout (branch по `Capacitor.isNativePlatform()`).
 
 #### Решение по 6d: пропускаем миграцию localStorage → Preferences
 
