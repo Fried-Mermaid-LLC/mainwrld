@@ -28,6 +28,10 @@ export interface User {
   lastMembershipRewardDate?: number;
   dailyChaptersPublished?: number;
   lastChapterPublishReset?: number;
+  // Mirrored from the Firebase Auth custom claim by the setAdmin
+  // Cloud Function (Stage 2c). UI-only — the security source of truth
+  // is the token's `admin` claim, enforced by firestore.rules.
+  isAdmin?: boolean;
 }
 
 export interface UserRecord extends User {
