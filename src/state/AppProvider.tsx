@@ -102,6 +102,7 @@ import { useRewards } from './hooks/useRewards'
 import { useAvatar } from './hooks/useAvatar'
 import { useNotifications } from './hooks/useNotifications'
 import { useComments } from './hooks/useComments'
+import { useChat } from './hooks/useChat'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -158,7 +159,6 @@ export function useAppValue() {
     string | null
   >(null)
   // Chat messages (Firestore real-time)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
 
   const [likedBooks, setLikedBooks] = useState<Set<string>>(new Set())
   const [favoriteBookIds, setFavoriteBookIds] = useState<Set<string>>(new Set())
@@ -346,6 +346,20 @@ export function useAppValue() {
     setRewardedItems
   })
   const { allComments, setAllComments, postComment, handleLikeComment } = comments
+
+  // Chat domain lives in useChat (Phase B), placed after useNotifications
+  // (handleSendMessage uses addNotification).
+  const chat = useChat({
+    user,
+    firebaseUid,
+    view,
+    selectedChatUser,
+    registeredUsers,
+    mutuals: MUTUALS,
+    showToast,
+    addNotification
+  })
+  const { chatMessages, setChatMessages, handleSendMessage } = chat
 
   // Cart (loaded from Firestore user doc)
   const [cart, setCart] = useState<Book[]>([])
@@ -807,23 +821,6 @@ export function useAppValue() {
     return () => unsub()
   }, [firebaseUid])
 
-  // Subscribe to chat messages
-  useEffect(() => {
-    if (!firebaseUid) return
-    const unsub = fbService.subscribeToChatMessages((msgs: any[]) => {
-      setChatMessages(
-        msgs.map(m => ({
-          id: m.id,
-          from: m.from,
-          to: m.to,
-          text: m.text,
-          timestamp: m.timestamp,
-          read: m.read
-        }))
-      )
-    })
-    return () => unsub()
-  }, [firebaseUid])
 
 
 
@@ -969,24 +966,7 @@ export function useAppValue() {
     }
   }, [likedBooks])
 
-  // Message expiry: delete messages older than 1 year from Firestore
-  useEffect(() => {
-    if (!user.username) return
-    const oneYearAgo = new Date()
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    fbService
-      .deleteChatMessagesOlderThan(oneYearAgo.toISOString())
-      .catch(console.error)
-  }, [])
 
-  // Mark messages as read when viewing a chat conversation (writes to Firestore)
-  useEffect(() => {
-    if (view === 'chat-conversation' && selectedChatUser && user.username) {
-      fbService
-        .markMessagesRead(selectedChatUser, user.username)
-        .catch(console.error)
-    }
-  }, [view, selectedChatUser])
 
   // NOTE: Individual persist effects removed — all user data is now batched
   // into a single debounced write (see persistTimerRef effect above)
@@ -1384,31 +1364,6 @@ export function useAppValue() {
     }
   }
 
-  const handleSendMessage = (toUsername: string, text: string) => {
-    if (!text.trim()) return
-    if (containsBadWord(text)) {
-      showToast('Your message contains inappropriate language.', 'warning')
-      return
-    }
-    // Write to Firestore — real-time subscription will update local state
-    fbService
-      .sendChatMessage(user.username, toUsername, text.trim())
-      .catch(console.error)
-    // Send notification to recipient
-    const recipientUser =
-      registeredUsers.find(u => u.username === toUsername) ||
-      MUTUALS.find(u => u.username === toUsername)
-    if (recipientUser) {
-      addNotification(
-        'New Message',
-        `${user.displayName}: ${text.trim().slice(0, 50)}${
-          text.length > 50 ? '...' : ''
-        }`,
-        'chat',
-        toUsername
-      )
-    }
-  }
 
   const handleLike = async (bookId: string, chapterIndex: number = 0) => {
     likedBooksInteracted.current = true
