@@ -16,16 +16,6 @@ import {
 } from '@react-three/drei'
 import * as fbService from '@/services/firebaseService'
 import {
-  BASE,
-  STRIPE_PUBLISHABLE_KEY,
-  getStripe,
-  STRIPE_PRICE_IDS,
-  STRIPE_PAYMENT_LINKS,
-  STRIPE_PREMIUM_PAYMENT_LINK,
-  STRIPE_PREMIUM_PRICE_ID,
-  STRIPE_BOOK_PRICE_ID
-} from '@/config/config'
-import {
   ACCENT_COLOR,
   WORLD_RADIUS,
   MAX_LIBRARY_SIZE,
@@ -45,7 +35,6 @@ import {
   FACE_POSITIONS
 } from '@/components/avatar'
 import { Button, Input, CoverImg } from '@/components/sharedComponents'
-import * as iap from '@/services/iap'
 import {
   LOREM_CONTENT,
   CURRENT_USER_MOCK,
@@ -100,6 +89,7 @@ import { useReading } from './hooks/useReading'
 import { useAdmin } from './hooks/useAdmin'
 import { useAuthActions } from './hooks/useAuthActions'
 import { useUserDataLoader } from './hooks/useUserDataLoader'
+import { usePayments } from './hooks/usePayments'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -676,144 +666,11 @@ export function useAppValue() {
   // into a single debounced write (see persistTimerRef effect above)
   // This reduces Firestore writes by ~8x and prevents quota exhaustion
 
-  // Handle Stripe payment redirects and pending purchases - only after user is loaded
-  useEffect(() => {
-    if (view === 'splash' || view === 'landing' || view === 'login' || view === 'signup') return
-    const urlParams = new URLSearchParams(window.location.search)
-    // Handle redirect with ?points_success=true
-    if (urlParams.get('points_success') === 'true') {
-      const pendingPoints = JSON.parse(
-        localStorage.getItem('mainwrld_pending_points') || 'null'
-      )
-      if (pendingPoints) {
-        setUser(prev => ({ ...prev, points: prev.points + pendingPoints.pts }))
-        showToast(
-          `${pendingPoints.pts} points added to your account!`,
-          'check_circle'
-        )
-        localStorage.removeItem('mainwrld_pending_points')
-      }
-      window.history.replaceState({}, '', window.location.pathname)
-      return
-    }
-    // Handle premium subscription success
-    if (urlParams.get('premium_success') === 'true') {
-      setUser(prev => ({
-        ...prev,
-        isPremium: true,
-        premiumSince: new Date().toISOString(),
-        membershipStartDate: Date.now()
-      }))
-      showToast('Welcome to MainWRLD+!', 'workspace_premium')
-      localStorage.removeItem('mainwrld_pending_premium')
-      window.history.replaceState({}, '', window.location.pathname)
-      return
-    }
-    if (urlParams.get('payment_cancelled') === 'true') {
-      showToast('Payment cancelled.', 'info')
-      localStorage.removeItem('mainwrld_pending_purchase')
-      localStorage.removeItem('mainwrld_pending_coupon')
-      localStorage.removeItem('mainwrld_pending_points')
-      localStorage.removeItem('mainwrld_pending_premium')
-      window.history.replaceState({}, '', window.location.pathname)
-      return
-    }
-    // Auto-detect pending purchase when user returns to app (no redirect needed)
-    const pendingPoints = JSON.parse(
-      localStorage.getItem('mainwrld_pending_points') || 'null'
-    )
-    if (pendingPoints) {
-      // Check if enough time passed (user was likely on Stripe checkout)
-      const timeSinceSet = Date.now() - (pendingPoints.timestamp || 0)
-      if (timeSinceSet > 5000) {
-        showConfirm({
-          title: 'Purchase Complete?',
-          message: `Did you complete the purchase of ${pendingPoints.pts} points for $${pendingPoints.usd}?`,
-          confirmLabel: 'Yes, Add Points',
-          cancelLabel: 'No',
-          icon: 'check_circle',
-          onConfirm: () => {
-            setUser(prev => ({
-              ...prev,
-              points: prev.points + pendingPoints.pts
-            }))
-            showToast(
-              `${pendingPoints.pts} points added to your account!`,
-              'check_circle'
-            )
-            localStorage.removeItem('mainwrld_pending_points')
-          },
-          onCancel: () => {
-            localStorage.removeItem('mainwrld_pending_points')
-          }
-        })
-      }
-    }
-    // Auto-detect pending premium subscription
-    const pendingPremium = JSON.parse(
-      localStorage.getItem('mainwrld_pending_premium') || 'null'
-    )
-    if (pendingPremium) {
-      const timeSinceSet = Date.now() - (pendingPremium.timestamp || 0)
-      if (timeSinceSet > 5000) {
-        showConfirm({
-          title: 'Subscription Complete?',
-          message: 'Did you complete the MainWRLD Premium subscription?',
-          confirmLabel: 'Yes, Activate',
-          cancelLabel: 'No',
-          icon: 'workspace_premium',
-          onConfirm: () => {
-            setUser(prev => ({
-              ...prev,
-              isPremium: true,
-              premiumSince: new Date().toISOString(),
-              membershipStartDate: Date.now()
-            }))
-            showToast('Welcome to MainWRLD+!', 'workspace_premium')
-            localStorage.removeItem('mainwrld_pending_premium')
-          },
-          onCancel: () => {
-            localStorage.removeItem('mainwrld_pending_premium')
-          }
-        })
-      }
-    }
-  }, [view])
 
-  // IAP setup (Stage 3b). On iOS, wire the verify callback so any
-  // approved StoreKit transaction is sent to verifyAppleReceipt and
-  // we credit points / extend premium from the function's response.
-  useEffect(() => {
-    if (!iap.isNativeIAPAvailable()) return
-    iap.setVerifyCallback(async (tx) => {
-      try {
-        const result = await fbService.verifyAppleReceipt({
-          productId: tx.productId,
-          transactionId: tx.transactionId,
-          appStoreReceipt: tx.appStoreReceipt,
-        })
-        if (!result.credited) return false
-        if (result.pointsAdded) {
-          setUser((prev) => ({ ...prev, points: prev.points + result.pointsAdded! }))
-          showToast(`${result.pointsAdded} points added!`, 'check_circle')
-        }
-        if (result.isPremium) {
-          setUser((prev) => ({
-            ...prev,
-            isPremium: true,
-            premiumSince: prev.premiumSince ?? new Date().toISOString(),
-          }))
-          showToast('Welcome to MainWRLD+!', 'workspace_premium')
-        }
-        return true
-      } catch (err) {
-        console.error('[MainWRLD IAP] verify failed:', err)
-        showToast('Could not verify purchase. Please try again.', 'error')
-        return false
-      }
-    })
-  }, [])
-
+  // Payments (Stripe web redirects + native IAP verify) live in usePayments
+  // (Phase B). Placed after the user-data loader and before useAuthActions so its
+  // [view] and [] effects register in the same order as the monolith.
+  usePayments({ view, setUser, showToast, showConfirm })
 
   // Auth actions live in useAuthActions (Phase B). Placed at the tail so its
   // onAuthStateChanged listener registers LAST (after persist/loader/payment
