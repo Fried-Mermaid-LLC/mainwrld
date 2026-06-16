@@ -2,9 +2,7 @@
 export default {
   content: [
     './index.html',
-    './index.tsx',
-    './App.tsx',
-    './app/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}',
   ],
   darkMode: 'class',
   theme: {

@@ -1,4 +1,4 @@
-import { auth, db } from './firebase';
+import { auth, db } from '@/lib/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   createUserWithEmailAndPassword,

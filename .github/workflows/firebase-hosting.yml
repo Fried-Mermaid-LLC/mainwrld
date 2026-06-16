@@ -1,6 +1,6 @@
 name: Deploy to Firebase Hosting
 
-# Builds the Vite app (output: docs/) and deploys it to Firebase Hosting on
+# Builds the Vite app (output: dist/) and deploys it to Firebase Hosting on
 # push to main. Replaces the GitHub Pages deployment.
 #
 # Requires repo secret FIREBASE_SERVICE_ACCOUNT: a Firebase service-account

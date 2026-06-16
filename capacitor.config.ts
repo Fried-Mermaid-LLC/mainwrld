@@ -9,9 +9,9 @@ import type { CapacitorConfig } from '@capacitor/cli'
 const config: CapacitorConfig = {
   appId: 'com.example.mainwrld',
   appName: 'MainWRLD',
-  // Vite outputs to docs/ (legacy from the GitHub Pages deploy). Capacitor
-  // copies from this folder into ios/App/App/public/ on `npx cap sync`.
-  webDir: 'docs',
+  // Vite outputs to dist/. Capacitor copies from this folder into
+  // ios/App/App/public/ on `npx cap sync`.
+  webDir: 'dist',
   ios: {
     // Lets web content extend under the notch / Dynamic Island; the
     // app uses CSS `env(safe-area-inset-*)` and `100dvh` to lay out

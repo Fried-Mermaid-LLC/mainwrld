@@ -1,7 +1,7 @@
 import React, { useState, useEffect, use } from 'react';
-import { BASE } from './config';
-import { AvatarLayers, AVATAR_ITEMS, getHairPosition, getFacePosition, HAIR_POSITIONS, FACE_POSITIONS } from './avatar';
-import { AvatarCategory, AvatarConfig, AvatarGender, AvatarItem, User } from './types';
+import { BASE } from '@/config/config';
+import { AvatarLayers, AVATAR_ITEMS, getHairPosition, getFacePosition, HAIR_POSITIONS, FACE_POSITIONS } from '@/components/avatar';
+import { AvatarCategory, AvatarConfig, AvatarGender, AvatarItem, User } from '@/types';
 
 interface CustomizationViewProps {
     user: User;

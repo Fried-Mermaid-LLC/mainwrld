@@ -2,9 +2,9 @@ import React, { useMemo, useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Html, useGLTF, useAnimations } from '@react-three/drei'
-import { BASE } from './config'
-import { ACCENT_COLOR, WORLD_RADIUS, SKIN_TONE_COLORS } from './constants'
-import { AvatarConfig, User } from './types'
+import { BASE } from '@/config/config'
+import { ACCENT_COLOR, WORLD_RADIUS, SKIN_TONE_COLORS } from '@/config/constants'
+import { AvatarConfig, User } from '@/types'
 import { SkeletonUtils } from 'three-stdlib'
 
 // -----------------------------

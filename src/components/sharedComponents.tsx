@@ -1,5 +1,5 @@
 import React from 'react';
-import { Book } from './types';
+import { Book } from '@/types';
 
 export const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }: any) => {
   const base = "h-14 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2";

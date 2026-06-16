@@ -1,6 +1,6 @@
 import React from 'react';
-import { AvatarConfig, AvatarItem, AvatarCategory, AvatarGender } from './types';
-import { BASE } from './config';
+import { AvatarConfig, AvatarItem, AvatarCategory, AvatarGender } from '@/types';
+import { BASE } from '@/config/config';
 
 export const DEFAULT_HAIR_POSITIONS: Record<string, { width: string; left: string; top: string }> = {
   W_Hair_1:    { width: '33%', left: '33.5%', top: '-2.5%' },

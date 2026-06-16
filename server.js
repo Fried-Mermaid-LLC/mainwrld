@@ -1,7 +1,7 @@
-import express from 'express';
-import cors from 'cors';
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
+import express from "express";
+import cors from "cors";
+import fetch from "node-fetch";
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -10,22 +10,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.post('/send-welcome-email', async (req, res) => {
+app.post("/send-welcome-email", async (req, res) => {
   const { email, displayName, username } = req.body;
 
   if (!email || !displayName || !username) {
-    return res.status(400).json({ error: 'Missing fields' });
+    return res.status(400).json({ error: "Missing fields" });
   }
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'onboarding@resend.dev', // safe test sender
+        from: "noreply@mainwrld.com", // safe test sender
         to: email,
         subject: `Welcome to MainWRLD, ${displayName}`,
         html: `
@@ -42,12 +42,11 @@ app.post('/send-welcome-email', async (req, res) => {
       return res.status(response.status).json({ error: data });
     }
 
-    console.log('[MainWRLD] Email sent to', email);
+    console.log("[MainWRLD] Email sent to", email);
     res.json({ success: true });
-
   } catch (err) {
-    console.error('[MainWRLD] Email failed:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error("[MainWRLD] Email failed:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 

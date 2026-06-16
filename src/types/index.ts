@@ -20,6 +20,7 @@ export interface User {
   strikes: number;
   admiringCount?: number;
   avatar?: AvatarConfig;
+  avatarConfig?: AvatarConfig;
   isPremium?: boolean;
   premiumSince?: string;
   dailyEarnedPoints?: number;
