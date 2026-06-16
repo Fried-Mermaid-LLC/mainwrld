@@ -2,17 +2,37 @@ import React, { useState } from 'react'
 import { Button } from '@/components/sharedComponents'
 import * as iap from '@/services/iap'
 import * as fbService from '@/services/firebaseService'
+import { useApp } from '@/state/AppContext'
+import type { User, View } from '@/types'
 
-export const SettingsView = ({
-  onBack,
-  handleLogout,
-  onNavigate,
-  isAdmin,
-  user,
-  onUpdateUser,
-  onUpdatePassword,
-  showToast
-}: any) => {
+export const SettingsView = () => {
+  const { handleLogout, isAdmin, user, showToast, setView, setUser, firebaseUid } =
+    useApp()
+  const onBack = () => setView('self-profile')
+  const onNavigate = (v: View) => setView(v)
+  const onUpdateUser = (updatedUser: User) => {
+    setUser(updatedUser)
+    if (firebaseUid) {
+      fbService
+        .updateUserProfile(firebaseUid, {
+          displayName: updatedUser.displayName,
+          points: updatedUser.points,
+          strikes: updatedUser.strikes
+        })
+        .catch(console.error)
+    }
+  }
+  const onUpdatePassword = async (newPassword: string) => {
+    try {
+      await fbService.changePassword(newPassword)
+      showToast('Password updated!', 'check_circle')
+    } catch (err: any) {
+      showToast(
+        'Failed to update password. You may need to log in again.',
+        'error'
+      )
+    }
+  }
   const [activeModal, setActiveModal] = useState<string | null>(null)
   const [formValue, setFormValue] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')

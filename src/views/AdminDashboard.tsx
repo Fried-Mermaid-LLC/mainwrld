@@ -3,22 +3,34 @@ import { CoverImg } from '@/components/sharedComponents'
 import { AVATAR_ITEMS } from '@/components/avatar'
 import { ADMIN_USERNAMES } from '@/config/constants'
 import type { Report, Book, UserRecord, Comment, AvatarItem } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const AdminDashboard = ({
-  reports,
-  books,
-  comments,
-  registeredUsers,
-  onBack,
-  onRemoveBook,
-  onRemoveComment,
-  onAddStrike,
-  onRemoveStrike,
-  onBanUser,
-  onDismissReport,
-  getItemCost,
-  onUpdateItemPrice
-}: any) => {
+export const AdminDashboard = () => {
+  const {
+    reports,
+    books: rawBooks,
+    allComments,
+    registeredUsers,
+    handleRemoveBook,
+    handleRemoveComment,
+    handleAddStrike,
+    handleRemoveStrike,
+    handleBanUser,
+    handleDismissReport,
+    getItemCost,
+    handleUpdateItemPrice,
+    setView
+  } = useApp()
+  const books = rawBooks.filter((b: any) => !b.isDraft)
+  const comments = allComments
+  const onBack = () => setView('settings')
+  const onRemoveBook = handleRemoveBook
+  const onRemoveComment = handleRemoveComment
+  const onAddStrike = handleAddStrike
+  const onRemoveStrike = handleRemoveStrike
+  const onBanUser = handleBanUser
+  const onDismissReport = handleDismissReport
+  const onUpdateItemPrice = handleUpdateItemPrice
   const [activeTab, setActiveTab] = useState<
     'reports' | 'users' | 'books' | 'monetized' | 'pricing'
   >('reports')

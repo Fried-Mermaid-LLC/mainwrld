@@ -1,21 +1,30 @@
 import React from 'react'
-import { AvatarLayers } from '@/components/avatar'
+import { AvatarLayers, getAvatarItemPath } from '@/components/avatar'
 import type { Relationship, ChatMessage } from '@/types'
+import { useApp } from '@/state/AppContext'
 
 // --- Chat Components ---
 
-export const ChatListView = ({
-  currentUsername,
-  relationships,
-  registeredUsers,
-  mutualsFallback,
-  chatMessages,
-  blockedUsers,
-  onSelectChat,
-  onBack,
-  getAvatarItemPath,
-  avatarConfigs = {}
-}: any) => {
+export const ChatListView = () => {
+  const {
+    user,
+    relationships,
+    registeredUsers,
+    MUTUALS,
+    chatMessages,
+    blockedUsers,
+    allAvatarConfigs,
+    setSelectedChatUser,
+    setView
+  } = useApp()
+  const currentUsername = user.username
+  const mutualsFallback = MUTUALS
+  const avatarConfigs = allAvatarConfigs
+  const onSelectChat = (username: string) => {
+    setSelectedChatUser(username)
+    setView('chat-conversation')
+  }
+  const onBack = () => setView('home')
   // Get actual mutual usernames
   const myAdmiring = relationships
     .filter((r: Relationship) => r.admirer === currentUsername)

@@ -9,6 +9,7 @@ export type View =
 export interface User {
   username: string;
   displayName: string;
+  email?: string;
   isOnline: boolean;
   activity: 'Reading' | 'Writing' | 'Idle';
   position: [number, number, number];

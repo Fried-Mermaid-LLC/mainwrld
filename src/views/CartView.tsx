@@ -2,17 +2,65 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/sharedComponents'
 import { getStripe, STRIPE_PUBLISHABLE_KEY, STRIPE_BOOK_PRICE_ID } from '@/config/config'
 import type { Coupon } from '@/types'
+import * as fbService from '@/services/firebaseService'
+import { useApp } from '@/state/AppContext'
 
-export const CartView = ({
-  cart,
-  setCart,
-  coupons,
-  setCoupons,
-  onBack,
-  onOwnedUpdate,
-  showToast,
-  showConfirm
-}: any) => {
+export const CartView = () => {
+  const {
+    cart,
+    setCart,
+    coupons,
+    setCoupons,
+    showToast,
+    showConfirm,
+    setView,
+    userBookDataRef,
+    user,
+    setUserBookData,
+    setBooks,
+    selectedBook,
+    setSelectedBook,
+    firebaseUid
+  } = useApp()
+  const onBack = () => setView('self-profile')
+  const onOwnedUpdate = (bookId: string) => {
+    const currentUd = userBookDataRef.current[user.username] || {
+      ownedBookIds: [],
+      bookProgress: {},
+      purchasedBookIds: []
+    }
+    const newOwned = currentUd.ownedBookIds.includes(bookId)
+      ? currentUd.ownedBookIds
+      : [...currentUd.ownedBookIds, bookId]
+    const currentPurchased = currentUd.purchasedBookIds || []
+    const newPurchased = currentPurchased.includes(bookId)
+      ? currentPurchased
+      : [...currentPurchased, bookId]
+    const updatedUd = {
+      ...currentUd,
+      ownedBookIds: newOwned,
+      purchasedBookIds: newPurchased
+    }
+    userBookDataRef.current = {
+      ...userBookDataRef.current,
+      [user.username]: updatedUd
+    }
+    setUserBookData(prev => ({ ...prev, [user.username]: updatedUd }))
+    setBooks(prev => {
+      const updated = prev.map(b =>
+        b.id === bookId ? { ...b, isOwned: true } : b
+      )
+      if (selectedBook && selectedBook.id === bookId) {
+        setSelectedBook({ ...selectedBook, isOwned: true })
+      }
+      return updated
+    })
+    if (firebaseUid) {
+      fbService
+        .addBookToLibrary(firebaseUid, bookId)
+        .catch(console.error)
+    }
+  }
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 

@@ -96,55 +96,7 @@ export const AppShell: React.FC = () => {
         return <DailyRewardsView />
 
       case 'cart':
-        return (
-          <CartView
-            cart={cart}
-            setCart={setCart}
-            coupons={coupons}
-            setCoupons={setCoupons}
-            onBack={() => setView('self-profile')}
-            onOwnedUpdate={(bookId: string) => {
-              const currentUd = userBookDataRef.current[user.username] || {
-                ownedBookIds: [],
-                bookProgress: {},
-                purchasedBookIds: []
-              }
-              const newOwned = currentUd.ownedBookIds.includes(bookId)
-                ? currentUd.ownedBookIds
-                : [...currentUd.ownedBookIds, bookId]
-              const currentPurchased = currentUd.purchasedBookIds || []
-              const newPurchased = currentPurchased.includes(bookId)
-                ? currentPurchased
-                : [...currentPurchased, bookId]
-              const updatedUd = {
-                ...currentUd,
-                ownedBookIds: newOwned,
-                purchasedBookIds: newPurchased
-              }
-              userBookDataRef.current = {
-                ...userBookDataRef.current,
-                [user.username]: updatedUd
-              }
-              setUserBookData(prev => ({ ...prev, [user.username]: updatedUd }))
-              setBooks(prev => {
-                const updated = prev.map(b =>
-                  b.id === bookId ? { ...b, isOwned: true } : b
-                )
-                if (selectedBook && selectedBook.id === bookId) {
-                  setSelectedBook({ ...selectedBook, isOwned: true })
-                }
-                return updated
-              })
-              if (firebaseUid) {
-                fbService
-                  .addBookToLibrary(firebaseUid, bookId)
-                  .catch(console.error)
-              }
-            }}
-            showToast={showToast}
-            showConfirm={showConfirm}
-          />
-        )
+        return <CartView />
 
       case 'explore':
         return (
@@ -364,39 +316,7 @@ export const AppShell: React.FC = () => {
         )
 
       case 'settings':
-        return (
-          <SettingsView
-            onBack={() => setView('self-profile')}
-            handleLogout={handleLogout}
-            onNavigate={(v: View) => setView(v)}
-            isAdmin={isAdmin}
-            user={user}
-            onUpdateUser={(updatedUser: User) => {
-              setUser(updatedUser)
-              if (firebaseUid) {
-                fbService
-                  .updateUserProfile(firebaseUid, {
-                    displayName: updatedUser.displayName,
-                    points: updatedUser.points,
-                    strikes: updatedUser.strikes
-                  })
-                  .catch(console.error)
-              }
-            }}
-            onUpdatePassword={async (newPassword: string) => {
-              try {
-                await fbService.changePassword(newPassword)
-                showToast('Password updated!', 'check_circle')
-              } catch (err: any) {
-                showToast(
-                  'Failed to update password. You may need to log in again.',
-                  'error'
-                )
-              }
-            }}
-            showToast={showToast}
-          />
-        )
+        return <SettingsView />
 
       case 'notification-settings':
         return <NotificationSettingsView />
@@ -546,42 +466,10 @@ export const AppShell: React.FC = () => {
         )
 
       case 'admin-dashboard':
-        return (
-          <AdminDashboard
-            reports={reports}
-            books={books.filter((b: any) => !b.isDraft)}
-            comments={allComments}
-            registeredUsers={registeredUsers}
-            onBack={() => setView('settings')}
-            onRemoveBook={handleRemoveBook}
-            onRemoveComment={handleRemoveComment}
-            onAddStrike={handleAddStrike}
-            onRemoveStrike={handleRemoveStrike}
-            onBanUser={handleBanUser}
-            onDismissReport={handleDismissReport}
-            getItemCost={getItemCost}
-            onUpdateItemPrice={handleUpdateItemPrice}
-          />
-        )
+        return <AdminDashboard />
 
       case 'chat':
-        return (
-          <ChatListView
-            currentUsername={user.username}
-            relationships={relationships}
-            registeredUsers={registeredUsers}
-            mutualsFallback={MUTUALS}
-            chatMessages={chatMessages}
-            blockedUsers={blockedUsers}
-            avatarConfigs={allAvatarConfigs}
-            onSelectChat={(username: string) => {
-              setSelectedChatUser(username)
-              setView('chat-conversation')
-            }}
-            onBack={() => setView('home')}
-            getAvatarItemPath={getAvatarItemPath}
-          />
-        )
+        return <ChatListView />
 
       case 'chat-conversation':
         const chatIsMutual = selectedChatUser
