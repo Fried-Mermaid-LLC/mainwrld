@@ -3,22 +3,72 @@ import { CoverImg } from '@/components/sharedComponents'
 import { AvatarLayers } from '@/components/avatar'
 import { GENRE_LIST } from '@/config/constants'
 import type { Book, User } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const ExploreView = ({
-  books,
-  spotlightSourceBooks = [],
-  spotlightBookId = null,
-  onSelect,
-  onAuthorSelect,
-  onOwnSelect,
-  users = [],
-  onUserSelect,
-  avatarConfigs = {},
-  blockedUsers = new Set(),
-  readingActivity = {},
-  currentUsername = '',
-  userFavoriteGenres = []
-}: any) => {
+export const ExploreView = () => {
+  const {
+    books: rawBooks,
+    globalSpotlightBookId,
+    setSelectedBook,
+    setView,
+    setSelectedProfileUser,
+    registeredUsers,
+    user,
+    MUTUALS,
+    allAvatarConfigs,
+    blockedUsers,
+    readingActivity,
+    userIsUnder16,
+    isBookFavorited
+  } = useApp()
+  const books = rawBooks.filter(
+    (b: Book) =>
+      !blockedUsers.has(b.author.username) &&
+      !b.isDraft &&
+      !(userIsUnder16 && b.isExplicit)
+  )
+  const spotlightSourceBooks = rawBooks.filter((b: Book) => !b.isDraft)
+  const spotlightBookId = globalSpotlightBookId
+  const onSelect = (b: Book) => {
+    setSelectedBook(b)
+    setView('book-detail')
+  }
+  const users = [
+    ...registeredUsers.filter((u: any) => u.username !== user.username),
+    ...MUTUALS.filter(
+      m =>
+        !registeredUsers.some((u: any) => u.username === m.username) &&
+        m.username !== user.username
+    )
+  ]
+  const onUserSelect = (u: User) => {
+    setSelectedProfileUser(u)
+    setView('profile')
+  }
+  const avatarConfigs = allAvatarConfigs
+  const currentUsername = user.username
+  const onAuthorSelect = (u: User) => {
+    setSelectedProfileUser(u)
+    setView('profile')
+  }
+  const onOwnSelect = (u: User) => {
+    setSelectedProfileUser(u)
+    setView('self-profile')
+  }
+  const userFavoriteGenres = (() => {
+    const genreCounts: Record<string, number> = {}
+    rawBooks
+      .filter(b => isBookFavorited(b.id) || b.isOwned)
+      .forEach(b => {
+        ;(b.genres || []).forEach((g: string) => {
+          genreCounts[g] = (genreCounts[g] || 0) + 1
+        })
+      })
+    return Object.entries(genreCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(e => e[0])
+  })()
   const [showFilter, setShowFilter] = useState(false)
   const [selectedGenres, setSelectedGenres] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')

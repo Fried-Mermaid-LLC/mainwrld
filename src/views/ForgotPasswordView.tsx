@@ -1,12 +1,17 @@
 import React, { useState } from 'react'
 import { Button, Input } from '@/components/sharedComponents'
+import { auth } from '@/lib/firebase'
+import { useApp } from '@/state/AppContext'
 
-export const ForgotPasswordView = ({
-  onBack,
-  registeredUsers,
-  onResetPassword,
-  showToast
-}: any) => {
+export const ForgotPasswordView = () => {
+  const { setView, registeredUsers, showToast } = useApp()
+  const onBack = () => setView('login')
+  const onResetPassword = async (email: string) => {
+    try {
+      const { sendPasswordResetEmail } = await import('firebase/auth')
+      await sendPasswordResetEmail(auth, email)
+    } catch {}
+  }
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
 

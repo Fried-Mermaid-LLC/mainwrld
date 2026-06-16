@@ -2,22 +2,125 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Button } from '@/components/sharedComponents'
 import { MAX_WORD_COUNT, MIN_WORD_COUNT } from '@/config/constants'
 import type { Chapter, Book } from '@/types'
+import * as fbService from '@/services/firebaseService'
+import { useApp } from '@/state/AppContext'
 
-export const WriteView = ({
-  books,
-  user,
-  initialBookId = 'new',
-  initialChapterIndex = 'new',
-  onSelectionChange,
-  onUnpublishChapter,
-  onDeleteChapter,
-  onPublish,
-  onSaveDraft,
-  onMonetize,
-  showToast,
-  onBack,
-  onNotify
-}: any) => {
+export const WriteView = () => {
+  const {
+    books,
+    user,
+    lastSelectedBookId,
+    lastSelectedChapterIndex,
+    setLastSelectedBookId,
+    setLastSelectedChapterIndex,
+    firebaseUid,
+    handleSaveDraft,
+    setCurrentPublishingId,
+    setCurrentPublishingTitle,
+    setCurrentPublishingContent,
+    setCurrentPublishingChapterTitle,
+    setCurrentPublishingChapterIndex,
+    setPublishingInitialData,
+    setView,
+    handleUnpublishChapter,
+    handleDeleteChapter,
+    showToast,
+    setNotifications
+  } = useApp()
+  const initialBookId = lastSelectedBookId
+  const initialChapterIndex = lastSelectedChapterIndex
+  const onSelectionChange = (id: string, ch: string) => {
+    setLastSelectedBookId(id)
+    setLastSelectedChapterIndex(ch)
+  }
+  const onPublish = async (
+    id: string | null,
+    title: string,
+    content: string,
+    chapterIndex: number | null,
+    chapterTitle: string
+  ) => {
+    let effectiveId = id
+    if (!effectiveId) {
+      // For new books, create in Firestore and wait for the ID
+      const resolvedChapterTitle = chapterTitle.trim() || 'Chapter 1'
+      const bookData = {
+        title: title.trim(),
+        authorUid: firebaseUid || '',
+        authorUsername: user?.username || '',
+        authorDisplayName: user?.displayName || '',
+        coverColor:
+          '#' + Math.floor(Math.random() * 16777215).toString(16),
+        likes: [0],
+        commentsCount: 0,
+        publishedDate: new Date().toISOString().split('T')[0],
+        isCompleted: false,
+        isDraft: true,
+        isExplicit: false,
+        chaptersCount: content.trim() ? 1 : 0,
+        tagline: '',
+        genres: [],
+        hashtags: [],
+        content,
+        chapters: content.trim()
+          ? [{ title: resolvedChapterTitle, content }]
+          : []
+      }
+      try {
+        const created = await fbService.createBook(bookData)
+        effectiveId = (created as any).id
+      } catch (err) {
+        console.error('Failed to create book:', err)
+        return
+      }
+    } else {
+      // Existing book — save draft
+      await handleSaveDraft(
+        id,
+        title,
+        content,
+        chapterIndex,
+        chapterTitle
+      )
+    }
+
+    if (effectiveId) {
+      const existingBook = books.find(b => b.id === effectiveId)
+      setCurrentPublishingId(effectiveId)
+      setCurrentPublishingTitle(title)
+      setCurrentPublishingContent(content)
+      setCurrentPublishingChapterTitle(chapterTitle.trim())
+      setCurrentPublishingChapterIndex(chapterIndex)
+      setPublishingInitialData(
+        existingBook
+          ? {
+              tagline: existingBook.tagline,
+              genres: existingBook.genres,
+              hashtags: existingBook.hashtags,
+              isExplicit: existingBook.isExplicit,
+              commentsEnabled: existingBook.commentsEnabled
+            }
+          : null
+      )
+      setView('publishing')
+    }
+  }
+  const onSaveDraft = handleSaveDraft
+  const onUnpublishChapter = handleUnpublishChapter
+  const onDeleteChapter = handleDeleteChapter
+  const onMonetize = () => setView('monetization-request')
+  const onBack = () => setView('home')
+  const onNotify = (title: string, message: string) => {
+    const newNotif = {
+      id: Math.random().toString(36).substr(2, 9),
+      title,
+      message,
+      icon: 'warning',
+      timestamp: new Date(),
+      recipient: user.username || 'system'
+    }
+    setNotifications(prev => [newNotif, ...prev])
+  }
   const [newTitle, setNewTitle] = useState('')
   const [chapterTitle, setChapterTitle] = useState('Chapter 1')
   const [selectedBookId, setSelectedBookId] = useState<string>(initialBookId)

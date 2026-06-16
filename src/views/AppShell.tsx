@@ -68,19 +68,7 @@ export const AppShell: React.FC = () => {
         return <LoginView />
 
       case 'forgot-password':
-        return (
-          <ForgotPasswordView
-            onBack={() => setView('login')}
-            registeredUsers={registeredUsers}
-            onResetPassword={async (email: string) => {
-              try {
-                const { sendPasswordResetEmail } = await import('firebase/auth')
-                await sendPasswordResetEmail(auth, email)
-              } catch {}
-            }}
-            showToast={showToast}
-          />
-        )
+        return <ForgotPasswordView />
 
       case 'terms':
       case 'privacy':
@@ -99,169 +87,13 @@ export const AppShell: React.FC = () => {
         return <CartView />
 
       case 'explore':
-        return (
-          <ExploreView
-            books={books.filter(
-              (b: Book) =>
-                !blockedUsers.has(b.author.username) &&
-                !b.isDraft &&
-                !(userIsUnder16 && b.isExplicit)
-            )}
-            spotlightSourceBooks={books.filter((b: Book) => !b.isDraft)}
-            spotlightBookId={globalSpotlightBookId}
-            onSelect={(b: Book) => {
-              setSelectedBook(b)
-              setView('book-detail')
-            }}
-            users={[
-              ...registeredUsers.filter(
-                (u: any) => u.username !== user.username
-              ),
-              ...MUTUALS.filter(
-                m =>
-                  !registeredUsers.some(
-                    (u: any) => u.username === m.username
-                  ) && m.username !== user.username
-              )
-            ]}
-            onUserSelect={(u: User) => {
-              setSelectedProfileUser(u)
-              setView('profile')
-            }}
-            avatarConfigs={allAvatarConfigs}
-            blockedUsers={blockedUsers}
-            readingActivity={readingActivity}
-            currentUsername={user.username}
-            onAuthorSelect={(u: User) => {
-              setSelectedProfileUser(u)
-              setView('profile')
-            }}
-            onOwnSelect={(u: User) => {
-              setSelectedProfileUser(u)
-              setView('self-profile')
-            }}
-            userFavoriteGenres={(() => {
-              const genreCounts: Record<string, number> = {}
-              books
-                .filter(b => isBookFavorited(b.id) || b.isOwned)
-                .forEach(b => {
-                  ;(b.genres || []).forEach((g: string) => {
-                    genreCounts[g] = (genreCounts[g] || 0) + 1
-                  })
-                })
-              return Object.entries(genreCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 2)
-                .map(e => e[0])
-            })()}
-          />
-        )
+        return <ExploreView />
 
       case 'library':
         return <LibraryView />
 
       case 'write':
-        return (
-          <WriteView
-            books={books}
-            user={user}
-            initialBookId={lastSelectedBookId}
-            initialChapterIndex={lastSelectedChapterIndex}
-            onSelectionChange={(id: string, ch: string) => {
-              setLastSelectedBookId(id)
-              setLastSelectedChapterIndex(ch)
-            }}
-            onPublish={async (
-              id: string | null,
-              title: string,
-              content: string,
-              chapterIndex: number | null,
-              chapterTitle: string
-            ) => {
-              let effectiveId = id
-              if (!effectiveId) {
-                // For new books, create in Firestore and wait for the ID
-                const resolvedChapterTitle = chapterTitle.trim() || 'Chapter 1'
-                const bookData = {
-                  title: title.trim(),
-                  authorUid: firebaseUid || '',
-                  authorUsername: user?.username || '',
-                  authorDisplayName: user?.displayName || '',
-                  coverColor:
-                    '#' + Math.floor(Math.random() * 16777215).toString(16),
-                  likes: [0],
-                  commentsCount: 0,
-                  publishedDate: new Date().toISOString().split('T')[0],
-                  isCompleted: false,
-                  isDraft: true,
-                  isExplicit: false,
-                  chaptersCount: content.trim() ? 1 : 0,
-                  tagline: '',
-                  genres: [],
-                  hashtags: [],
-                  content,
-                  chapters: content.trim()
-                    ? [{ title: resolvedChapterTitle, content }]
-                    : []
-                }
-                try {
-                  const created = await fbService.createBook(bookData)
-                  effectiveId = (created as any).id
-                } catch (err) {
-                  console.error('Failed to create book:', err)
-                  return
-                }
-              } else {
-                // Existing book — save draft
-                await handleSaveDraft(
-                  id,
-                  title,
-                  content,
-                  chapterIndex,
-                  chapterTitle
-                )
-              }
-
-              if (effectiveId) {
-                const existingBook = books.find(b => b.id === effectiveId)
-                setCurrentPublishingId(effectiveId)
-                setCurrentPublishingTitle(title)
-                setCurrentPublishingContent(content)
-                setCurrentPublishingChapterTitle(chapterTitle.trim())
-                setCurrentPublishingChapterIndex(chapterIndex)
-                setPublishingInitialData(
-                  existingBook
-                    ? {
-                        tagline: existingBook.tagline,
-                        genres: existingBook.genres,
-                        hashtags: existingBook.hashtags,
-                        isExplicit: existingBook.isExplicit,
-                        commentsEnabled: existingBook.commentsEnabled
-                      }
-                    : null
-                )
-                setView('publishing')
-              }
-            }}
-            onSaveDraft={handleSaveDraft}
-            onUnpublishChapter={handleUnpublishChapter}
-            onDeleteChapter={handleDeleteChapter}
-            onMonetize={() => setView('monetization-request')}
-            onBack={() => setView('home')}
-            showToast={showToast}
-            onNotify={(title: string, message: string) => {
-              const newNotif = {
-                id: Math.random().toString(36).substr(2, 9),
-                title,
-                message,
-                icon: 'warning',
-                timestamp: new Date(),
-                recipient: user.username || 'system'
-              }
-              setNotifications(prev => [newNotif, ...prev])
-            }}
-          />
-        )
+        return <WriteView />
 
       case 'publishing':
         return <PublishingView />
