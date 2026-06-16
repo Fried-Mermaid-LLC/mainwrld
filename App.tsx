@@ -54,6 +54,8 @@ import {
 } from './app/avatar'
 import { Button, Input, CoverImg } from './app/sharedComponents'
 import * as iap from './app/iap'
+import termsRaw from './legal/TERMS_OF_SERVICE.md?raw'
+import privacyRaw from './legal/PRIVACY_POLICY.md?raw'
 import {
   LOREM_CONTENT,
   CURRENT_USER_MOCK,
@@ -512,7 +514,7 @@ const App: React.FC = () => {
   // This replaces 8 separate persist effects, reducing writes by ~8x
   useEffect(() => {
     if (!firebaseUid || !user.username || !userDataLoaded) return
-    if (view === 'splash' || view === 'login' || view === 'signup') return
+    if (view === 'splash' || view === 'landing' || view === 'login' || view === 'signup') return
 
     // Clear previous timer
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
@@ -1069,7 +1071,7 @@ const App: React.FC = () => {
 
   // Handle Stripe payment redirects and pending purchases - only after user is loaded
   useEffect(() => {
-    if (view === 'splash' || view === 'login' || view === 'signup') return
+    if (view === 'splash' || view === 'landing' || view === 'login' || view === 'signup') return
     const urlParams = new URLSearchParams(window.location.search)
     // Handle redirect with ?points_success=true
     if (urlParams.get('points_success') === 'true') {
@@ -1239,15 +1241,15 @@ const App: React.FC = () => {
                 .catch(console.error)
             } else {
               setFavoriteBookIds(new Set())
-              setView('login')
+              setView('landing')
             }
           } catch {
             setFavoriteBookIds(new Set())
-            setView('login')
+            setView('landing')
           }
         } else {
           setFavoriteBookIds(new Set())
-          setView('login')
+          setView('landing')
         }
         setAuthLoading(false)
       })
@@ -1352,7 +1354,7 @@ const App: React.FC = () => {
     setFirebaseUid(null)
     setFavoriteBookIds(new Set())
     setUserDataLoaded(false)
-    setView('login')
+    setView('landing')
   }
 
   const handleNotificationClick = (n: NotificationItem) => {
@@ -2777,9 +2779,131 @@ const App: React.FC = () => {
           </div>
         )
 
+      case 'landing':
+        return (
+          <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in fade-in duration-700'>
+            <div className='min-h-dvh flex flex-col px-8 pt-safe-top pb-safe-bottom'>
+              {/* Hero */}
+              <div className='flex-1 flex flex-col items-center justify-center text-center py-16'>
+                <img
+                  src={`${BASE}logo.png`}
+                  alt='MainWRLD'
+                  className='w-24 h-24 mb-6 drop-shadow-xl'
+                />
+                <img
+                  src={`${BASE}wordlogo.png`}
+                  alt='MainWRLD'
+                  className='h-7 mb-8'
+                />
+                <h1 className='text-4xl font-display leading-tight mb-4'>
+                  Where stories
+                  <br />
+                  come to life.
+                </h1>
+                <p className='text-sm text-gray-400 font-medium max-w-xs leading-relaxed'>
+                  Read, write and share stories in a living 3D world. Meet
+                  authors, build your audience and earn as you create.
+                </p>
+              </div>
+
+              {/* Feature highlights */}
+              <div className='space-y-3 mb-10'>
+                {[
+                  {
+                    icon: 'auto_stories',
+                    title: 'Read & write freely',
+                    desc: 'Discover endless stories or publish your own in seconds.'
+                  },
+                  {
+                    icon: 'public',
+                    title: 'A living 3D world',
+                    desc: 'Walk in, meet readers and authors as 3D avatars.'
+                  },
+                  {
+                    icon: 'workspace_premium',
+                    title: 'Earn & go premium',
+                    desc: 'Collect points, grow your audience and unlock more.'
+                  }
+                ].map(f => (
+                  <div
+                    key={f.title}
+                    className='flex items-center gap-4 bg-gray-50 rounded-2xl p-4'
+                  >
+                    <div className='w-11 h-11 shrink-0 rounded-xl bg-accent/10 flex items-center justify-center text-accent'>
+                      <span className='material-icons-round text-[22px]'>
+                        {f.icon}
+                      </span>
+                    </div>
+                    <div className='text-left'>
+                      <p className='text-sm font-bold leading-tight'>
+                        {f.title}
+                      </p>
+                      <p className='text-[11px] text-gray-400 font-medium leading-snug mt-0.5'>
+                        {f.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTAs */}
+              <div className='space-y-3 pb-8'>
+                <Button
+                  className='w-full'
+                  onClick={() => {
+                    setAuthError(null)
+                    setView('signup')
+                  }}
+                >
+                  Get Started
+                </Button>
+                <button
+                  onClick={() => {
+                    setAuthError(null)
+                    setView('login')
+                  }}
+                  className='w-full text-xs font-bold text-gray-400 uppercase tracking-widest py-3'
+                >
+                  I already have an account
+                </button>
+              </div>
+
+              {/* Footer */}
+              <footer className='flex items-center justify-center gap-4 pb-6 text-center'>
+                <span className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
+                  © Fried Mermaid LLC
+                </span>
+                <span className='w-px h-3 bg-gray-200' />
+                <button
+                  onClick={() => setView('terms')}
+                  className='text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-accent transition-colors'
+                >
+                  Terms
+                </button>
+                <span className='w-px h-3 bg-gray-200' />
+                <button
+                  onClick={() => setView('privacy')}
+                  className='text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-accent transition-colors'
+                >
+                  Privacy
+                </button>
+              </footer>
+            </div>
+          </div>
+        )
+
       case 'login':
         return (
           <div className='fixed inset-0 bg-white p-8 flex flex-col items-center justify-center animate-in fade-in duration-500'>
+            <button
+              onClick={() => {
+                setAuthError(null)
+                setView('landing')
+              }}
+              className='absolute top-safe-top left-8 mt-4 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
+            >
+              <span className='material-icons-round'>arrow_back</span>
+            </button>
             <img
               src={`${BASE}logo.png`}
               alt='MainWRLD'
@@ -2844,6 +2968,12 @@ const App: React.FC = () => {
             }}
             showToast={showToast}
           />
+        )
+
+      case 'terms':
+      case 'privacy':
+        return (
+          <LegalView doc={LEGAL_DOCS[view]} onBack={() => setView('landing')} />
         )
 
       case 'signup':
@@ -7483,6 +7613,127 @@ const PublishingView = ({ initialData, onPost, onBack, isNewBook }: any) => {
     </div>
   )
 }
+
+// Renders a subset of Markdown (headings, bullet lists, **bold**, --- rules,
+// _italic_ lines, multi-line paragraphs) as styled JSX. Just enough to display
+// the EULA / Privacy Policy docs in-app without pulling in a markdown library.
+const renderLegalMarkdown = (md: string): React.ReactNode[] => {
+  const lines = md.split('\n')
+  const blocks: React.ReactNode[] = []
+  let para: string[] = []
+  let list: string[] = []
+
+  const renderInline = (text: string, keyBase: string) =>
+    text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+      part.startsWith('**') && part.endsWith('**') ? (
+        <strong key={`${keyBase}-${i}`} className='font-bold text-black'>
+          {part.slice(2, -2)}
+        </strong>
+      ) : (
+        <React.Fragment key={`${keyBase}-${i}`}>{part}</React.Fragment>
+      )
+    )
+
+  const flushPara = () => {
+    if (para.length) {
+      const key = `p-${blocks.length}`
+      blocks.push(
+        <p key={key} className='text-sm text-gray-600 leading-relaxed my-3'>
+          {renderInline(para.join(' '), key)}
+        </p>
+      )
+      para = []
+    }
+  }
+  const flushList = () => {
+    if (list.length) {
+      const key = `ul-${blocks.length}`
+      blocks.push(
+        <ul
+          key={key}
+          className='list-disc pl-5 space-y-1.5 my-3 text-sm text-gray-600 leading-relaxed'
+        >
+          {list.map((li, i) => (
+            <li key={`${key}-${i}`}>{renderInline(li, `${key}-${i}`)}</li>
+          ))}
+        </ul>
+      )
+      list = []
+    }
+  }
+
+  lines.forEach((line, idx) => {
+    const t = line.trim()
+    if (t === '') {
+      flushPara()
+      flushList()
+      return
+    }
+    if (t.startsWith('- ')) {
+      flushPara()
+      list.push(t.slice(2))
+      return
+    }
+    flushList()
+    if (t === '---') {
+      flushPara()
+      blocks.push(<hr key={idx} className='my-6 border-gray-100' />)
+    } else if (t.startsWith('## ')) {
+      flushPara()
+      blocks.push(
+        <h2 key={idx} className='text-base font-bold mt-7 mb-1'>
+          {renderInline(t.slice(3), `h2-${idx}`)}
+        </h2>
+      )
+    } else if (t.startsWith('# ')) {
+      flushPara()
+      blocks.push(
+        <h1 key={idx} className='text-2xl font-display mb-1'>
+          {t.slice(2)}
+        </h1>
+      )
+    } else if (t.startsWith('_') && t.endsWith('_')) {
+      flushPara()
+      blocks.push(
+        <p key={idx} className='text-xs text-gray-400 italic mb-4'>
+          {t.slice(1, -1)}
+        </p>
+      )
+    } else {
+      para.push(t)
+    }
+  })
+  flushPara()
+  flushList()
+  return blocks
+}
+
+const LEGAL_DOCS: Record<'terms' | 'privacy', { title: string; raw: string }> = {
+  terms: { title: 'Terms', raw: termsRaw },
+  privacy: { title: 'Privacy', raw: privacyRaw }
+}
+
+const LegalView = ({ doc, onBack }: any) => (
+  <div className='fixed inset-0 bg-white flex flex-col animate-in slide-in-from-right duration-300'>
+    <header
+      className='shrink-0 px-6 border-b border-gray-100'
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
+      <div className='flex items-center gap-4 h-16'>
+        <button
+          onClick={onBack}
+          className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 shrink-0'
+        >
+          <span className='material-icons-round'>arrow_back</span>
+        </button>
+        <h1 className='text-xl font-bold'>{doc.title}</h1>
+      </div>
+    </header>
+    <div className='flex-1 overflow-y-auto no-scrollbar px-6 py-6 pb-16'>
+      {renderLegalMarkdown(doc.raw)}
+    </div>
+  </div>
+)
 
 const ForgotPasswordView = ({
   onBack,

@@ -17,7 +17,8 @@ let package = Package(
         .package(name: "CapacitorPreferences", path: "../../../node_modules/@capacitor/preferences"),
         .package(name: "CapacitorShare", path: "../../../node_modules/@capacitor/share"),
         .package(name: "CapacitorSplashScreen", path: "../../../node_modules/@capacitor/splash-screen"),
-        .package(name: "CapacitorStatusBar", path: "../../../node_modules/@capacitor/status-bar")
+        .package(name: "CapacitorStatusBar", path: "../../../node_modules/@capacitor/status-bar"),
+        .package(name: "CordovaPluginPurchase", path: "../../capacitor-cordova-ios-plugins/sources/CordovaPluginPurchase")
     ],
     targets: [
         .target(
@@ -30,7 +31,8 @@ let package = Package(
                 .product(name: "CapacitorPreferences", package: "CapacitorPreferences"),
                 .product(name: "CapacitorShare", package: "CapacitorShare"),
                 .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen"),
-                .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar")
+                .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar"),
+                .product(name: "CordovaPluginPurchase", package: "CordovaPluginPurchase")
             ]
         )
     ]

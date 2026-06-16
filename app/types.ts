@@ -1,5 +1,5 @@
 export type View =
-  | 'splash' | 'login' | 'signup' | 'forgot-password'
+  | 'splash' | 'landing' | 'login' | 'signup' | 'forgot-password' | 'terms' | 'privacy'
   | 'home' | 'explore' | 'library' | 'write' | 'publishing'
   | 'monetization-request' | 'self-profile' | 'customization'
   | 'profile' | 'book-detail' | 'reading' | 'notifications'
