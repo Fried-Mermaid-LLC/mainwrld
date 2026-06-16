@@ -97,48 +97,42 @@ import { ChatListView } from '@/views/ChatListView'
 import { ChatConversationView } from '@/views/ChatConversationView'
 import { WriteView } from '@/views/WriteView'
 import { AppContext } from './AppContext'
+import { useUI } from './hooks/useUI'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
 // behaviour is identical to the previous monolithic component. Phase B will
 // strangle individual domains out of this hook into dedicated hook files.
 export function useAppValue() {
-  const [view, setView] = useState<View>('splash')
-  const [toast, setToast] = useState<{ message: string; icon: string } | null>(
-    null
-  )
-  const showToast = useCallback(
-    (message: string, icon: string = 'check_circle') => {
-      setToast({ message, icon })
-      setTimeout(() => setToast(null), 2500)
-    },
-    []
-  )
-  const [confirmModal, setConfirmModal] = useState<{
-    title: string
-    message: string
-    confirmLabel?: string
-    cancelLabel?: string
-    icon?: string
-    iconBg?: string
-    onConfirm: () => void
-    onCancel?: () => void
-  } | null>(null)
-  const showConfirm = useCallback(
-    (opts: {
-      title: string
-      message: string
-      confirmLabel?: string
-      cancelLabel?: string
-      icon?: string
-      iconBg?: string
-      onConfirm: () => void
-      onCancel?: () => void
-    }) => {
-      setConfirmModal(opts)
-    },
-    []
-  )
+  // UI / navigation / selection state lives in useUI (Phase B). Called first so
+  // its effects (clipboard guard) register in the same order as before.
+  const ui = useUI()
+  const {
+    view,
+    setView,
+    toast,
+    setToast,
+    showToast,
+    confirmModal,
+    setConfirmModal,
+    showConfirm,
+    selectedBook,
+    setSelectedBook,
+    readingChapterIndex,
+    setReadingChapterIndex,
+    selectedProfileUser,
+    setSelectedProfileUser,
+    selectedChatUser,
+    setSelectedChatUser,
+    moveDir,
+    setMoveDir,
+    readerSettings,
+    setReaderSettings,
+    activeCommentChapterKey,
+    setActiveCommentChapterKey,
+    scrollToCommentId,
+    setScrollToCommentId
+  } = ui
   const BLANK_USER: User = {
     username: '',
     displayName: '',
@@ -159,46 +153,8 @@ export function useAppValue() {
   const [globalSpotlightBookId, setGlobalSpotlightBookId] = useState<
     string | null
   >(null)
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null)
-  const [readingChapterIndex, setReadingChapterIndex] = useState(0)
-  const [selectedProfileUser, setSelectedProfileUser] = useState<User | null>(
-    null
-  )
-  const [selectedChatUser, setSelectedChatUser] = useState<string | null>(null)
   // Chat messages (Firestore real-time)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [moveDir, setMoveDir] = useState(new THREE.Vector3())
-  const [readerSettings, setReaderSettings] = useState({
-    fontSize: 13,
-    inverted: false,
-    scrollMode: true
-  })
-
-  useEffect(() => {
-    if (view !== 'home') return
-
-    const preventClipboard = (e: Event) => e.preventDefault()
-    const preventClipboardShortcuts = (e: KeyboardEvent) => {
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        ['c', 'x', 'v'].includes(e.key.toLowerCase())
-      ) {
-        e.preventDefault()
-      }
-    }
-
-    document.addEventListener('copy', preventClipboard)
-    document.addEventListener('cut', preventClipboard)
-    document.addEventListener('paste', preventClipboard)
-    document.addEventListener('keydown', preventClipboardShortcuts)
-
-    return () => {
-      document.removeEventListener('copy', preventClipboard)
-      document.removeEventListener('cut', preventClipboard)
-      document.removeEventListener('paste', preventClipboard)
-      document.removeEventListener('keydown', preventClipboardShortcuts)
-    }
-  }, [view])
 
   const [likedBooks, setLikedBooks] = useState<Set<string>>(new Set())
   const [favoriteBookIds, setFavoriteBookIds] = useState<Set<string>>(new Set())
@@ -215,12 +171,6 @@ export function useAppValue() {
 
   // Users loaded from Firestore
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([])
-  const [activeCommentChapterKey, setActiveCommentChapterKey] = useState<
-    string | null
-  >(null)
-  const [scrollToCommentId, setScrollToCommentId] = useState<string | null>(
-    null
-  )
 
   // Relationships state (Firestore real-time)
   const [relationships, setRelationships] = useState<Relationship[]>([])
