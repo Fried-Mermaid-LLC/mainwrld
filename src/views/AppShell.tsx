@@ -1,9 +1,6 @@
 import React from 'react'
-import { auth } from '@/lib/firebase'
-import * as fbService from '@/services/firebaseService'
-import { getAvatarItemPath } from '@/components/avatar'
+import type { View } from '@/types'
 import { CustomizationView } from '@/views/CustomizationView'
-import type { View, User, Book, BookProgress } from '@/types'
 import { ExploreView } from '@/views/ExploreView'
 import { OtherProfileView } from '@/views/OtherProfileView'
 import { PublicBookDetailPage } from '@/views/PublicBookDetailPage'
@@ -11,7 +8,7 @@ import { CartView } from '@/views/CartView'
 import { ReadingView } from '@/views/ReadingView'
 import { MonetizationRequestView } from '@/views/MonetizationRequestView'
 import { PublishingView } from '@/views/PublishingView'
-import { LegalView, LEGAL_DOCS } from '@/views/LegalView'
+import { LegalView } from '@/views/LegalView'
 import { ForgotPasswordView } from '@/views/ForgotPasswordView'
 import { SettingsView } from '@/views/SettingsView'
 import { AdminDashboard } from '@/views/AdminDashboard'
@@ -33,27 +30,14 @@ import { SignupView } from '@/views/SignupView'
 import { useApp } from '@/state/AppContext'
 
 
+
 // Presentation shell: the former App return + renderView, now reading all
 // state/handlers from context. The renderView/JSX below is byte-identical to
 // the original — only the data source changed (closure -> context destructure).
 export const AppShell: React.FC = () => {
   const {
-    view, setView, toast, showToast, confirmModal, setConfirmModal,
-    showConfirm, user, setUser, firebaseUid, userDataLoaded, books,
-    setBooks, globalSpotlightBookId, selectedBook, setSelectedBook, readingChapterIndex, setReadingChapterIndex,
-    selectedProfileUser, setSelectedProfileUser, selectedChatUser, setSelectedChatUser, chatMessages, readerSettings,
-    setReaderSettings, likedBooks, registeredUsers, scrollToCommentId, setScrollToCommentId, relationships,
-    MUTUALS, isAdmin, userIsUnder16, reports, setNotifications, allAvatarConfigs,
-    avatarConfig, setAvatarConfig, unlockedAvatarItems, setUnlockedAvatarItems, blockedUsers, readingActivity,
-    setReadingActivity, getItemCost, handleUpdateItemPrice, allComments, coupons, setCoupons,
-    cart, setCart, setUserBookData, userBookDataRef, getUserOwnedBookIds, isBookFavorited,
-    getUserBookProgress, setCurrentPublishingContent, setCurrentPublishingTitle, setCurrentPublishingChapterTitle, currentPublishingId, setCurrentPublishingId,
-    setCurrentPublishingChapterIndex, publishingInitialData, setPublishingInitialData, lastSelectedBookId, setLastSelectedBookId, lastSelectedChapterIndex,
-    setLastSelectedChapterIndex, handleUnpublishChapter, handleDeleteChapter, handleLogout, handleSendMessage, handleLike,
-    handleAdmire, handleReport, handleRemoveBook, handleRemoveComment, handleAddStrike, handleRemoveStrike,
-    handleBanUser, handleDismissReport, handleBlockUser, handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary,
-    handleToggleFavorite, handleAddToCart, handlePublish, handleUnpublish, handleDeleteBook, handleMarkCompleted,
-    handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate, handleShareBook
+    view, setView, toast, confirmModal, setConfirmModal, userDataLoaded,
+    selectedBook, selectedProfileUser
   } = useApp()
 
   const renderView = () => {
