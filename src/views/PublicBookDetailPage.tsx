@@ -1,28 +1,66 @@
 import React from 'react'
 import { Button, CoverImg } from '@/components/sharedComponents'
+import type { User } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const PublicBookDetailPage = ({
-  currentUser,
-  book,
-  totalCommentsCount = 0,
-  isOwned,
-  bookProgress,
-  onBack,
-  onRead,
-  onAuthorClick,
-  isLiked,
-  onLike,
-  onSave,
-  onRemove,
-  isSaved,
-  onReport,
-  onShare,
-  onAddToCart,
-  onToggleFavorite,
-  onUnpublish,
-  onDelete,
-  onMarkCompleted
-}: any) => {
+export const PublicBookDetailPage = () => {
+  const {
+    user,
+    selectedBook,
+    allComments,
+    getUserOwnedBookIds,
+    getUserBookProgress,
+    setView,
+    setReadingActivity,
+    setSelectedProfileUser,
+    handleSaveToLibrary,
+    handleRemoveFromLibrary,
+    isBookInLibrary,
+    handleReport,
+    handleShareBook,
+    handleAddToCart,
+    handleToggleFavorite,
+    handleDeleteBook,
+    handleUnpublish,
+    handleMarkCompleted
+  } = useApp()
+  const currentUser = user
+  const book = selectedBook!
+  const totalCommentsCount = allComments.filter(
+    (c: any) => c.bookId === book.id
+  ).length
+  const isOwned = getUserOwnedBookIds().has(book.id)
+  const bookProgress: any = getUserBookProgress(book.id)
+  const onBack = () => setView('explore')
+  const onRead = () => {
+    setReadingActivity(prev => {
+      const ua = [...(prev[user.username] || [])]
+      const ei = ua.findIndex(a => a.bookId === book.id)
+      const entry = {
+        bookId: book.id,
+        progress: getUserBookProgress(book.id).scrollProgress,
+        lastRead: new Date().toISOString()
+      }
+      if (ei >= 0) ua[ei] = entry
+      else ua.unshift(entry)
+      return { ...prev, [user.username]: ua.slice(0, 10) }
+    })
+    setView('reading')
+  }
+  const onAuthorClick = (u: User) => {
+    setSelectedProfileUser(u)
+    setView('profile')
+  }
+  const onSave = (_id?: string) => handleSaveToLibrary(book.id)
+  const onRemove = (_id?: string) => handleRemoveFromLibrary(book.id)
+  const isSaved = isBookInLibrary(book.id)
+  const onReport = () => handleReport('Book', book.id)
+  const onShare = () => handleShareBook(book)
+  const onAddToCart = () => handleAddToCart(book)
+  const onToggleFavorite = () => handleToggleFavorite(book.id)
+  const onDelete = handleDeleteBook
+  const onUnpublish = handleUnpublish
+  const onMarkCompleted = handleMarkCompleted
   const isAuthor = currentUser.username === book.author.username
 
   return (

@@ -111,41 +111,7 @@ export const AppShell: React.FC = () => {
         return <NotificationsView />
 
       case 'profile':
-        return (
-          selectedProfileUser && (
-            <OtherProfileView
-              user={selectedProfileUser}
-              books={books}
-              onBack={() => setView('home')}
-              onBookSelect={(b: Book) => {
-                setSelectedBook(b)
-                setView('book-detail')
-              }}
-              onAdmire={() => handleAdmire(selectedProfileUser)}
-              onBlock={() => handleBlockUser(selectedProfileUser.username)}
-              onReport={() =>
-                handleReport('User', selectedProfileUser.username)
-              }
-              onMessage={() => {
-                setSelectedChatUser(selectedProfileUser.username)
-                setView('chat-conversation')
-              }}
-              relationships={relationships}
-              currentUsername={user.username}
-              readingActivity={readingActivity}
-              avatarConfig={
-                allAvatarConfigs[selectedProfileUser.username] || null
-              }
-              favoriteBookIds={
-                new Set(
-                  registeredUsers.find(
-                    (u: any) => u.username === selectedProfileUser.username
-                  )?.favoriteBookIds || []
-                )
-              }
-            />
-          )
-        )
+        return selectedProfileUser ? <OtherProfileView /> : null
 
       case 'settings':
         return <SettingsView />
@@ -157,51 +123,7 @@ export const AppShell: React.FC = () => {
         return <BlockedUsersView />
 
       case 'book-detail':
-        return (
-          selectedBook && (
-            <PublicBookDetailPage
-              currentUser={user}
-              book={selectedBook}
-              totalCommentsCount={
-                allComments.filter((c: any) => c.bookId === selectedBook.id)
-                  .length
-              }
-              isOwned={getUserOwnedBookIds().has(selectedBook.id)}
-              bookProgress={getUserBookProgress(selectedBook.id)}
-              onBack={() => setView('explore')}
-              onRead={() => {
-                setReadingActivity(prev => {
-                  const ua = [...(prev[user.username] || [])]
-                  const ei = ua.findIndex(a => a.bookId === selectedBook.id)
-                  const entry = {
-                    bookId: selectedBook.id,
-                    progress: getUserBookProgress(selectedBook.id)
-                      .scrollProgress,
-                    lastRead: new Date().toISOString()
-                  }
-                  if (ei >= 0) ua[ei] = entry
-                  else ua.unshift(entry)
-                  return { ...prev, [user.username]: ua.slice(0, 10) }
-                })
-                setView('reading')
-              }}
-              onAuthorClick={(u: User) => {
-                setSelectedProfileUser(u)
-                setView('profile')
-              }}
-              onSave={() => handleSaveToLibrary(selectedBook.id)}
-              onRemove={() => handleRemoveFromLibrary(selectedBook.id)}
-              isSaved={isBookInLibrary(selectedBook.id)}
-              onReport={() => handleReport('Book', selectedBook.id)}
-              onShare={() => handleShareBook(selectedBook)}
-              onAddToCart={() => handleAddToCart(selectedBook)}
-              onToggleFavorite={() => handleToggleFavorite(selectedBook.id)}
-              onDelete={handleDeleteBook}
-              onUnpublish={handleUnpublish}
-              onMarkCompleted={handleMarkCompleted}
-            />
-          )
-        )
+        return selectedBook ? <PublicBookDetailPage /> : null
 
       case 'reading':
         if (!userDataLoaded) {
@@ -213,89 +135,10 @@ export const AppShell: React.FC = () => {
             </div>
           )
         }
-        const savedProgress = selectedBook
-          ? getUserBookProgress(selectedBook.id)
-          : { scrollProgress: 0, chapterIndex: 0 }
-        return (
-          <ReadingView
-            currentUser={user}
-            book={selectedBook}
-            initialScrollProgress={savedProgress.scrollProgress}
-            initialChapterIndex={savedProgress.chapterIndex}
-            initialExactPosition={savedProgress}
-            settings={readerSettings}
-            setSettings={setReaderSettings}
-            onBack={() => setView('book-detail')}
-            onComments={(chapterIdx?: number) => {
-              setReadingChapterIndex(chapterIdx ?? 0)
-              setView('comments')
-            }}
-            likedChapters={likedBooks}
-            onLike={(chapterIdx: number) =>
-              selectedBook && handleLike(selectedBook.id, chapterIdx)
-            }
-            onSave={() => selectedBook && handleSaveToLibrary(selectedBook.id)}
-            isSaved={selectedBook ? isBookInLibrary(selectedBook.id) : false}
-            canSave={
-              selectedBook
-                ? user.username !== selectedBook.author.username &&
-                  (getUserOwnedBookIds().has(selectedBook.id) ||
-                    selectedBook.isFree ||
-                    !selectedBook.isMonetized)
-                : false
-            }
-            chapterCommentsCount={
-              allComments.filter(
-                (c: any) =>
-                  c.bookId === selectedBook?.id &&
-                  (c.chapterIndex ?? 0) === readingChapterIndex
-              ).length
-            }
-            onProgressUpdate={(
-              scrollProgress: number,
-              chapterIndex: number,
-              exact?: Partial<BookProgress>
-            ) => {
-              setReadingChapterIndex(chapterIndex)
-              selectedBook &&
-                handleBookProgressUpdate(
-                  selectedBook.id,
-                  scrollProgress,
-                  chapterIndex,
-                  exact
-                )
-            }}
-            onShare={() => selectedBook && handleShareBook(selectedBook)}
-          />
-        )
+        return <ReadingView />
 
       case 'comments':
-        return (
-          <CommentsView
-            comments={allComments.filter(c => {
-              if (c.bookId !== selectedBook?.id) return false
-              // Filter out comments by blocked users (match by displayName)
-              const commentAuthor =
-                registeredUsers.find(u => u.displayName === c.author) ||
-                MUTUALS.find(u => u.displayName === c.author)
-              if (commentAuthor && blockedUsers.has(commentAuthor.username))
-                return false
-              return true
-            })}
-            onPost={postComment}
-            onBack={() => {
-              setScrollToCommentId(null)
-              setView('reading')
-            }}
-            onReport={(id: string) => handleReport('Comment', id)}
-            onLikeComment={handleLikeComment}
-            currentUsername={user.username}
-            chapters={selectedBook?.chapters || []}
-            initialChapterIndex={readingChapterIndex}
-            scrollToCommentId={scrollToCommentId}
-            onScrolledTo={() => setScrollToCommentId(null)}
-          />
-        )
+        return <CommentsView />
 
       case 'admin-dashboard':
         return <AdminDashboard />
@@ -304,41 +147,7 @@ export const AppShell: React.FC = () => {
         return <ChatListView />
 
       case 'chat-conversation':
-        const chatIsMutual = selectedChatUser
-          ? relationships.some(
-              r => r.admirer === user.username && r.target === selectedChatUser
-            ) &&
-            relationships.some(
-              r => r.admirer === selectedChatUser && r.target === user.username
-            )
-          : false
-        return (
-          <ChatConversationView
-            currentUsername={user.username}
-            currentDisplayName={user.displayName}
-            targetUsername={selectedChatUser || ''}
-            targetUser={
-              registeredUsers.find(u => u.username === selectedChatUser) ||
-              MUTUALS.find(u => u.username === selectedChatUser)
-            }
-            messages={chatMessages.filter(
-              m =>
-                (m.from === user.username && m.to === selectedChatUser) ||
-                (m.from === selectedChatUser && m.to === user.username)
-            )}
-            onSend={(text: string) =>
-              selectedChatUser && handleSendMessage(selectedChatUser, text)
-            }
-            onBack={() => setView('chat')}
-            getAvatarItemPath={getAvatarItemPath}
-            avatarConfig={
-              selectedChatUser
-                ? allAvatarConfigs[selectedChatUser] || null
-                : null
-            }
-            isMutual={chatIsMutual}
-          />
-        )
+        return <ChatConversationView />
 
       default:
         return (

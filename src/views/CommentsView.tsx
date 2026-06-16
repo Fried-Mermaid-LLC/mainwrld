@@ -1,18 +1,44 @@
 import React, { useState, useEffect, useRef } from 'react'
 import type { Comment } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const CommentsView = ({
-  comments,
-  onBack,
-  onPost,
-  onReport,
-  onLikeComment,
-  currentUsername = '',
-  chapters = [],
-  initialChapterIndex = 0,
-  scrollToCommentId,
-  onScrolledTo
-}: any) => {
+export const CommentsView = () => {
+  const {
+    allComments,
+    selectedBook,
+    registeredUsers,
+    MUTUALS,
+    blockedUsers,
+    postComment,
+    setScrollToCommentId,
+    setView,
+    handleReport,
+    handleLikeComment,
+    user,
+    readingChapterIndex,
+    scrollToCommentId
+  } = useApp()
+  const comments = allComments.filter(c => {
+    if (c.bookId !== selectedBook?.id) return false
+    // Filter out comments by blocked users (match by displayName)
+    const commentAuthor =
+      registeredUsers.find(u => u.displayName === c.author) ||
+      MUTUALS.find(u => u.displayName === c.author)
+    if (commentAuthor && blockedUsers.has(commentAuthor.username))
+      return false
+    return true
+  })
+  const onPost = postComment
+  const onBack = () => {
+    setScrollToCommentId(null)
+    setView('reading')
+  }
+  const onReport = (id: string) => handleReport('Comment', id)
+  const onLikeComment = handleLikeComment
+  const currentUsername = user.username
+  const chapters = selectedBook?.chapters || []
+  const initialChapterIndex = readingChapterIndex
+  const onScrolledTo = () => setScrollToCommentId(null)
   const [newText, setNewText] = useState('')
   const [activeChapter, setActiveChapter] =
     useState<number>(initialChapterIndex)

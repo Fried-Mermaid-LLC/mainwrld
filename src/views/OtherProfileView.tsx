@@ -2,22 +2,44 @@ import React, { useState } from 'react'
 import { Button, CoverImg } from '@/components/sharedComponents'
 import { AvatarLayers } from '@/components/avatar'
 import type { Relationship, User, Book } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const OtherProfileView = ({
-  user,
-  books,
-  onBack,
-  onBookSelect,
-  onAdmire,
-  onBlock,
-  onReport,
-  onMessage,
-  relationships = [],
-  currentUsername = '',
-  readingActivity = {},
-  avatarConfig = null,
-  favoriteBookIds = new Set()
-}: any) => {
+export const OtherProfileView = () => {
+  const {
+    selectedProfileUser,
+    books,
+    setView,
+    setSelectedBook,
+    handleAdmire,
+    handleBlockUser,
+    handleReport,
+    setSelectedChatUser,
+    relationships,
+    user: currentUser,
+    readingActivity,
+    allAvatarConfigs,
+    registeredUsers
+  } = useApp()
+  const user = selectedProfileUser!
+  const onBack = () => setView('home')
+  const onBookSelect = (b: Book) => {
+    setSelectedBook(b)
+    setView('book-detail')
+  }
+  const onAdmire = () => handleAdmire(user)
+  const onBlock = () => handleBlockUser(user.username)
+  const onReport = () => handleReport('User', user.username)
+  const onMessage = () => {
+    setSelectedChatUser(user.username)
+    setView('chat-conversation')
+  }
+  const currentUsername = currentUser.username
+  const avatarConfig = allAvatarConfigs[user.username] || null
+  const favoriteBookIds = new Set(
+    registeredUsers.find(
+      (u: any) => u.username === user.username
+    )?.favoriteBookIds || []
+  )
   const [showMenu, setShowMenu] = useState(false)
   const [showBlockConfirm, setShowBlockConfirm] = useState(false)
   const isAdmiring = relationships.some(

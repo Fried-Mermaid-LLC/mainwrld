@@ -1,19 +1,46 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { AvatarLayers } from '@/components/avatar'
+import { AvatarLayers, getAvatarItemPath } from '@/components/avatar'
 import type { ChatMessage } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const ChatConversationView = ({
-  currentUsername,
-  currentDisplayName,
-  targetUsername,
-  targetUser,
-  messages,
-  onSend,
-  onBack,
-  getAvatarItemPath,
-  avatarConfig,
-  isMutual
-}: any) => {
+export const ChatConversationView = () => {
+  const {
+    user,
+    selectedChatUser,
+    relationships,
+    registeredUsers,
+    MUTUALS,
+    chatMessages,
+    handleSendMessage,
+    setView,
+    allAvatarConfigs
+  } = useApp()
+  const chatIsMutual = selectedChatUser
+    ? relationships.some(
+        r => r.admirer === user.username && r.target === selectedChatUser
+      ) &&
+      relationships.some(
+        r => r.admirer === selectedChatUser && r.target === user.username
+      )
+    : false
+  const currentUsername = user.username
+  const currentDisplayName = user.displayName
+  const targetUsername = selectedChatUser || ''
+  const targetUser =
+    registeredUsers.find(u => u.username === selectedChatUser) ||
+    MUTUALS.find(u => u.username === selectedChatUser)
+  const messages = chatMessages.filter(
+    m =>
+      (m.from === user.username && m.to === selectedChatUser) ||
+      (m.from === selectedChatUser && m.to === user.username)
+  )
+  const onSend = (text: string) =>
+    selectedChatUser && handleSendMessage(selectedChatUser, text)
+  const onBack = () => setView('chat')
+  const avatarConfig = selectedChatUser
+    ? allAvatarConfigs[selectedChatUser] || null
+    : null
+  const isMutual = chatIsMutual
   const [newMessage, setNewMessage] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 

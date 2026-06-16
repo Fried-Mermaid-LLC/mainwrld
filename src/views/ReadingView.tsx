@@ -2,26 +2,73 @@ import React, { useState, useEffect, useRef } from 'react'
 import { ChapterAdBanner } from '@/components/ChapterAdBanner'
 import { renderFormattedContent } from '@/utils/renderFormattedContent'
 import type { Chapter, BookProgress } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const ReadingView = ({
-  currentUser,
-  book,
-  initialScrollProgress,
-  initialChapterIndex,
-  initialExactPosition,
-  settings,
-  setSettings,
-  onBack,
-  onComments,
-  likedChapters,
-  onLike,
-  onSave,
-  isSaved,
-  canSave,
-  onProgressUpdate,
-  onShare,
-  chapterCommentsCount
-}: any) => {
+export const ReadingView = () => {
+  const {
+    user,
+    selectedBook,
+    readerSettings,
+    setReaderSettings,
+    setView,
+    setReadingChapterIndex,
+    likedBooks,
+    handleLike,
+    handleSaveToLibrary,
+    isBookInLibrary,
+    getUserOwnedBookIds,
+    allComments,
+    readingChapterIndex,
+    handleBookProgressUpdate,
+    handleShareBook,
+    getUserBookProgress
+  } = useApp()
+  const currentUser = user
+  const book = selectedBook
+  const savedProgress: BookProgress = selectedBook
+    ? getUserBookProgress(selectedBook.id)
+    : { scrollProgress: 0, chapterIndex: 0 }
+  const initialScrollProgress = savedProgress.scrollProgress
+  const initialChapterIndex = savedProgress.chapterIndex
+  const initialExactPosition: any = savedProgress
+  const settings = readerSettings
+  const setSettings = setReaderSettings
+  const onBack = () => setView('book-detail')
+  const onComments = (chapterIdx?: number) => {
+    setReadingChapterIndex(chapterIdx ?? 0)
+    setView('comments')
+  }
+  const likedChapters = likedBooks
+  const onLike = (chapterIdx: number) =>
+    selectedBook && handleLike(selectedBook.id, chapterIdx)
+  const onSave = () => selectedBook && handleSaveToLibrary(selectedBook.id)
+  const isSaved = selectedBook ? isBookInLibrary(selectedBook.id) : false
+  const canSave = selectedBook
+    ? user.username !== selectedBook.author.username &&
+      (getUserOwnedBookIds().has(selectedBook.id) ||
+        selectedBook.isFree ||
+        !selectedBook.isMonetized)
+    : false
+  const chapterCommentsCount = allComments.filter(
+    (c: any) =>
+      c.bookId === selectedBook?.id &&
+      (c.chapterIndex ?? 0) === readingChapterIndex
+  ).length
+  const onProgressUpdate = (
+    scrollProgress: number,
+    chapterIndex: number,
+    exact?: Partial<BookProgress>
+  ) => {
+    setReadingChapterIndex(chapterIndex)
+    selectedBook &&
+      handleBookProgressUpdate(
+        selectedBook.id,
+        scrollProgress,
+        chapterIndex,
+        exact
+      )
+  }
+  const onShare = () => selectedBook && handleShareBook(selectedBook)
   const [showOptions, setShowOptions] = useState(false)
   const [currentChapterIdx, setCurrentChapterIdx] = useState(
     initialChapterIndex || 0
