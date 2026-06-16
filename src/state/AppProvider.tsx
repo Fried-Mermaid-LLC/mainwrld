@@ -100,6 +100,7 @@ import { AppContext } from './AppContext'
 import { useUI } from './hooks/useUI'
 import { useRewards } from './hooks/useRewards'
 import { useAvatar } from './hooks/useAvatar'
+import { useNotifications } from './hooks/useNotifications'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -251,7 +252,24 @@ export function useAppValue() {
   const [reports, setReports] = useState<Report[]>([])
 
   // Notifications state (Firestore real-time)
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  // Notifications domain lives in useNotifications (Phase B), placed after
+  // books/MUTUALS/registeredUsers (handleNotificationClick reads them) and
+  // before the handlers that call addNotification.
+  const notif = useNotifications({
+    user,
+    firebaseUid,
+    books,
+    mutuals: MUTUALS,
+    registeredUsers,
+    setView,
+    setSelectedBook,
+    setReadingChapterIndex,
+    setActiveCommentChapterKey,
+    setScrollToCommentId,
+    setSelectedProfileUser,
+    setSelectedChatUser
+  })
+  const { notifications, setNotifications, addNotification, handleNotificationClick } = notif
 
   // Avatar config / unlocked items live in useAvatar (Phase B).
   const avatar = useAvatar({ user, selectedProfileUser })
@@ -792,28 +810,6 @@ export function useAppValue() {
     return () => unsub()
   }, [firebaseUid])
 
-  // Subscribe to notifications
-  useEffect(() => {
-    if (!firebaseUid) return
-    const unsub = fbService.subscribeToNotifications((notifs: any[]) => {
-      setNotifications(
-        notifs.map(n => ({
-          id: n.id,
-          title: n.title,
-          message: n.message,
-          icon: n.icon,
-          timestamp: n.timestamp ? new Date(n.timestamp) : new Date(),
-          recipient: n.recipient,
-          sender: n.sender,
-          read: n.read,
-          targetId: n.targetId,
-          targetChapterIndex: n.targetChapterIndex,
-          commentId: n.commentId
-        }))
-      )
-    })
-    return () => unsub()
-  }, [firebaseUid])
 
   // Subscribe to comments
   useEffect(() => {
@@ -1190,34 +1186,6 @@ export function useAppValue() {
     return () => clearTimeout(timer)
   }, [])
 
-  const addNotification = useCallback(
-    (
-      title: string,
-      message: string,
-      icon: string,
-      recipient?: string,
-      sender?: string,
-      targetId?: string,
-      targetChapterIndex?: number,
-      commentId?: string
-    ) => {
-      const newNotif = {
-        id: Math.random().toString(36).substr(2, 9),
-        title,
-        message,
-        icon,
-        timestamp: new Date().toISOString(),
-        recipient: recipient || user.username,
-        sender: sender || user.username,
-        read: false,
-        targetId,
-        targetChapterIndex,
-        commentId
-      }
-      fbService.addNotificationDoc(newNotif).catch(console.error)
-    },
-    [user.username]
-  )
 
   const handleUnpublishChapter = (bookId: string, chapterIndex: number) => {
     setBooks(prev =>
@@ -1289,83 +1257,6 @@ export function useAppValue() {
     setView('landing')
   }
 
-  const handleNotificationClick = (n: NotificationItem) => {
-    console.log('[Notification Click]', n)
-
-    // Mark notification as read when clicked
-    if (n.id) {
-      fbService.markNotificationRead(n.id).catch(console.error)
-    }
-
-    // Handle comment notifications - link to comment
-    if (n.title.includes('Comment')) {
-      if (n.targetId) {
-        const targetBook = books.find(b => b.id === n.targetId)
-        if (targetBook) {
-          setSelectedBook(targetBook)
-          setReadingChapterIndex(n.targetChapterIndex || 0)
-          setActiveCommentChapterKey(
-            `${n.targetId}_${n.targetChapterIndex || 0}`
-          )
-          // Scroll to the specific comment if commentId is available
-          if (n.commentId) {
-            setScrollToCommentId(n.commentId)
-          }
-          setView('comments')
-        }
-      }
-      return
-    }
-
-    // Handle chapter like notifications - link to book
-    if (n.title.includes('Liked') || n.title === 'Chapter Liked') {
-      if (n.targetId) {
-        const targetBook = books.find(b => b.id === n.targetId)
-        if (targetBook) {
-          setSelectedBook(targetBook)
-          setView('book-detail')
-        }
-      }
-      return
-    }
-
-    // Handle admirer/mutual notifications
-    if (n.title === 'New Admirer' || n.title === 'Mutual Connection!') {
-      const username = n.targetId || n.sender
-      if (username) {
-        const targetUser =
-          MUTUALS.find(u => u.username === username) ||
-          registeredUsers.find(u => u.username === username)
-        if (targetUser) {
-          setSelectedProfileUser(targetUser)
-          setView('profile')
-        }
-      }
-      return
-    }
-
-    // Handle message notifications
-    if (n.title.includes('Message')) {
-      const chatUser = n.targetId || n.sender
-      if (chatUser) {
-        setSelectedChatUser(chatUser)
-        setView('chat-conversation')
-      }
-      return
-    }
-
-    // Handle new book/chapter notifications
-    if (n.title === 'New Book' || n.title === 'New Chapter') {
-      if (n.targetId) {
-        const targetBook = books.find(b => b.id === n.targetId)
-        if (targetBook) {
-          setSelectedBook(targetBook)
-          setView('book-detail')
-        }
-      }
-      return
-    }
-  }
 
   const handleLogin = async () => {
     try {
