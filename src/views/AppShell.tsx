@@ -1,86 +1,9 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  Suspense
-} from 'react'
-import * as THREE from 'three'
-import { Canvas, useFrame } from '@react-three/fiber'
-import {
-  Html,
-  Environment,
-  PerspectiveCamera,
-  useGLTF
-} from '@react-three/drei'
-import { onAuthStateChanged } from 'firebase/auth'
+import React from 'react'
 import { auth } from '@/lib/firebase'
 import * as fbService from '@/services/firebaseService'
-import {
-  BASE,
-  STRIPE_PUBLISHABLE_KEY,
-  getStripe,
-  STRIPE_PRICE_IDS,
-  STRIPE_PAYMENT_LINKS,
-  STRIPE_PREMIUM_PAYMENT_LINK,
-  STRIPE_PREMIUM_PRICE_ID,
-  STRIPE_BOOK_PRICE_ID,
-  sendWelcomeEmail
-} from '@/config/config'
-import {
-  ACCENT_COLOR,
-  WORLD_RADIUS,
-  MAX_LIBRARY_SIZE,
-  MIN_WORD_COUNT,
-  MAX_DAILY_EARNED_POINTS,
-  COMMENT_LIKES_THRESHOLD,
-  CHAPTER_LIKES_THRESHOLD,
-  MAX_DAILY_CHAPTERS,
-  MAX_WORD_COUNT,
-  GENRE_LIST,
-  ADMIN_USERNAMES,
-  containsBadWord,
-  SKIN_TONE_COLORS
-} from '@/config/constants'
-import {
-  getHairPosition,
-  getFacePosition,
-  getAvatarItemPath,
-  AvatarLayers,
-  AVATAR_ITEMS,
-  HAIR_POSITIONS,
-  FACE_POSITIONS
-} from '@/components/avatar'
-import { Button, Input, CoverImg } from '@/components/sharedComponents'
-import * as iap from '@/services/iap'
-import {
-  LOREM_CONTENT,
-  CURRENT_USER_MOCK,
-  MOCK_USERS,
-  INITIAL_BOOKS
-} from '@/data/mockData'
-import { AvatarModel, MovingAvatar, Player } from '@/components/three/threeComponents'
+import { getAvatarItemPath } from '@/components/avatar'
 import { CustomizationView } from '@/views/CustomizationView'
-import {
-  View,
-  User,
-  UserRecord,
-  NotificationItem,
-  ChatMessage,
-  Relationship,
-  Comment,
-  Coupon,
-  Report,
-  AvatarGender,
-  AvatarCategory,
-  AvatarConfig,
-  AvatarItem,
-  Chapter,
-  Book,
-  BookProgress
-} from '@/types'
-
+import type { View, User, Book, BookProgress } from '@/types'
 import { ExploreView } from '@/views/ExploreView'
 import { OtherProfileView } from '@/views/OtherProfileView'
 import { PublicBookDetailPage } from '@/views/PublicBookDetailPage'
@@ -109,38 +32,28 @@ import { LoginView } from '@/views/LoginView'
 import { SignupView } from '@/views/SignupView'
 import { useApp } from '@/state/AppContext'
 
+
 // Presentation shell: the former App return + renderView, now reading all
 // state/handlers from context. The renderView/JSX below is byte-identical to
 // the original — only the data source changed (closure -> context destructure).
 export const AppShell: React.FC = () => {
   const {
-    view, setView, toast, setToast, showToast, confirmModal,
-    setConfirmModal, showConfirm, BLANK_USER, user, setUser, authLoading,
-    setAuthLoading, firebaseUid, setFirebaseUid, userDataLoaded, setUserDataLoaded, books,
-    setBooks, globalSpotlightBookId, setGlobalSpotlightBookId, selectedBook, setSelectedBook, readingChapterIndex,
-    setReadingChapterIndex, selectedProfileUser, setSelectedProfileUser, selectedChatUser, setSelectedChatUser, chatMessages,
-    setChatMessages, moveDir, setMoveDir, readerSettings, setReaderSettings, likedBooks,
-    setLikedBooks, favoriteBookIds, setFavoriteBookIds, likedBooksInteracted, signUpForm, setSignUpForm,
-    loginForm, setLoginForm, authError, setAuthError, registeredUsers, setRegisteredUsers,
-    activeCommentChapterKey, setActiveCommentChapterKey, scrollToCommentId, setScrollToCommentId, relationships, setRelationships,
-    MUTUALS, hasAdminClaim, setHasAdminClaim, isAdmin, userIsUnder16, reports,
-    setReports, notifications, setNotifications, allAvatarConfigs, setAllAvatarConfigs, avatarConfig,
-    setAvatarConfig, allUnlockedItems, setAllUnlockedItems, unlockedAvatarItems, setUnlockedAvatarItems, blockedUsers,
-    setBlockedUsers, readingActivity, setReadingActivity, itemPriceOverrides, setItemPriceOverrides, getItemCost,
-    handleUpdateItemPrice, allComments, setAllComments, lastClaimedPoints, setLastClaimedPoints, rewardedItems,
-    setRewardedItems, coupons, setCoupons, cart, setCart, userBookData,
-    setUserBookData, userBookDataRef, getTotalLikes, getChapterLikes, getUserOwnedBookIds, isBookFavorited,
-    getUserBookProgress, setUserOwnsBook, setUserBookProgress, persistTimerRef, pendingAdmireRef, currentPublishingContent,
-    setCurrentPublishingContent, currentPublishingTitle, setCurrentPublishingTitle, currentPublishingChapterTitle, setCurrentPublishingChapterTitle, currentPublishingId,
-    setCurrentPublishingId, currentPublishingChapterIndex, setCurrentPublishingChapterIndex, publishingInitialData, setPublishingInitialData, lastSelectedBookId,
-    setLastSelectedBookId, lastSelectedChapterIndex, setLastSelectedChapterIndex, spotlightInit, setSpotlightInit, addNotification,
-    handleUnpublishChapter, handleDeleteChapter, handleLogout, handleNotificationClick, handleLogin, handleSignup,
-    handleSendMessage, handleLike, handleAdmire, handleReport, handleRemoveBook, handleRemoveComment,
-    handleAddStrike, handleRemoveStrike, handleBanUser, handleDismissReport, handleBlockUser, handleUnblockUser,
-    handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, handleToggleFavorite, handleAddToCart, awardPoints,
-    awardMembershipBonus, handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
-    handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,
-    handleShareBook,
+    view, setView, toast, showToast, confirmModal, setConfirmModal,
+    showConfirm, user, setUser, firebaseUid, userDataLoaded, books,
+    setBooks, globalSpotlightBookId, selectedBook, setSelectedBook, readingChapterIndex, setReadingChapterIndex,
+    selectedProfileUser, setSelectedProfileUser, selectedChatUser, setSelectedChatUser, chatMessages, readerSettings,
+    setReaderSettings, likedBooks, registeredUsers, scrollToCommentId, setScrollToCommentId, relationships,
+    MUTUALS, isAdmin, userIsUnder16, reports, setNotifications, allAvatarConfigs,
+    avatarConfig, setAvatarConfig, unlockedAvatarItems, setUnlockedAvatarItems, blockedUsers, readingActivity,
+    setReadingActivity, getItemCost, handleUpdateItemPrice, allComments, coupons, setCoupons,
+    cart, setCart, setUserBookData, userBookDataRef, getUserOwnedBookIds, isBookFavorited,
+    getUserBookProgress, setCurrentPublishingContent, setCurrentPublishingTitle, setCurrentPublishingChapterTitle, currentPublishingId, setCurrentPublishingId,
+    setCurrentPublishingChapterIndex, publishingInitialData, setPublishingInitialData, lastSelectedBookId, setLastSelectedBookId, lastSelectedChapterIndex,
+    setLastSelectedChapterIndex, handleUnpublishChapter, handleDeleteChapter, handleLogout, handleSendMessage, handleLike,
+    handleAdmire, handleReport, handleRemoveBook, handleRemoveComment, handleAddStrike, handleRemoveStrike,
+    handleBanUser, handleDismissReport, handleBlockUser, handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary,
+    handleToggleFavorite, handleAddToCart, handlePublish, handleUnpublish, handleDeleteBook, handleMarkCompleted,
+    handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate, handleShareBook
   } = useApp()
 
   const renderView = () => {
