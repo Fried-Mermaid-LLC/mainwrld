@@ -39,7 +39,6 @@ import {
   MAX_DAILY_CHAPTERS,
   MAX_WORD_COUNT,
   GENRE_LIST,
-  ADMIN_USERNAMES,
   containsBadWord,
   SKIN_TONE_COLORS
 } from '@/config/constants'
@@ -98,6 +97,7 @@ import { ChatConversationView } from '@/views/ChatConversationView'
 import { WriteView } from '@/views/WriteView'
 import { AppContext } from './AppContext'
 import { useUI } from './hooks/useUI'
+import { useAuth } from './hooks/useAuth'
 import { useRewards } from './hooks/useRewards'
 import { useAvatar } from './hooks/useAvatar'
 import { useNotifications } from './hooks/useNotifications'
@@ -139,22 +139,29 @@ export function useAppValue() {
     scrollToCommentId,
     setScrollToCommentId
   } = ui
-  const BLANK_USER: User = {
-    username: '',
-    displayName: '',
-    isOnline: false,
-    activity: 'Idle',
-    position: [0, 0, 0],
-    isMutual: false,
-    points: 0,
-    admirersCount: 0,
-    mutualsCount: 0,
-    strikes: 0
-  }
-  const [user, setUser] = useState<User>(BLANK_USER)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [firebaseUid, setFirebaseUid] = useState<string | null>(null)
-  const [userDataLoaded, setUserDataLoaded] = useState(false) // Guard for persist effects
+  // Auth identity/session state lives in useAuth (Phase B). Placed right after
+  // useUI so its onIdTokenChanged effect registers in the same order as before.
+  const authState = useAuth()
+  const {
+    BLANK_USER,
+    user,
+    setUser,
+    authLoading,
+    setAuthLoading,
+    firebaseUid,
+    setFirebaseUid,
+    userDataLoaded,
+    setUserDataLoaded,
+    signUpForm,
+    setSignUpForm,
+    loginForm,
+    setLoginForm,
+    authError,
+    setAuthError,
+    hasAdminClaim,
+    setHasAdminClaim,
+    isAdmin
+  } = authState
   const [books, setBooks] = useState<Book[]>([])
   const [globalSpotlightBookId, setGlobalSpotlightBookId] = useState<
     string | null
@@ -164,15 +171,6 @@ export function useAppValue() {
   const [likedBooks, setLikedBooks] = useState<Set<string>>(new Set())
   const [favoriteBookIds, setFavoriteBookIds] = useState<Set<string>>(new Set())
   const likedBooksInteracted = useRef(false)
-  const [signUpForm, setSignUpForm] = useState({
-    email: '',
-    birthDate: '',
-    displayName: '',
-    username: '',
-    password: ''
-  })
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' })
-  const [authError, setAuthError] = useState<string | null>(null)
 
   // Users loaded from Firestore
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([])
@@ -207,33 +205,6 @@ export function useAppValue() {
       }))
   }, [user.username, relationships, registeredUsers])
 
-  // Admin authority lives in the Firebase Auth custom claim `admin`,
-  // set by the setAdmin Cloud Function (Stage 2c). The Firestore Rules
-  // enforce this server-side; this client state is just for UI.
-  // ADMIN_USERNAMES.includes(...) is kept as a TEMPORARY fallback so
-  // existing admins keep working until the bootstrap setAdmin call is
-  // run for them — it should be removed once all admins have the claim.
-  const [hasAdminClaim, setHasAdminClaim] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    const unsubscribe = auth.onIdTokenChanged(async (fbUser) => {
-      if (!fbUser) {
-        if (!cancelled) setHasAdminClaim(false)
-        return
-      }
-      try {
-        const tokenResult = await fbUser.getIdTokenResult()
-        if (!cancelled) setHasAdminClaim(tokenResult.claims.admin === true)
-      } catch {
-        if (!cancelled) setHasAdminClaim(false)
-      }
-    })
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [])
-  const isAdmin = hasAdminClaim || ADMIN_USERNAMES.includes(user.username)
 
   // Check if current user is under 16 (for explicit content filtering)
   const userIsUnder16 = useMemo(() => {
