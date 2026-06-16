@@ -1,4 +1,4 @@
-# HANDOFF — App.tsx decomposition (Phase B DONE → Phase C next)
+# HANDOFF — App.tsx decomposition (Phase B + C + D DONE)
 
 > For the next fresh Claude Code session. Read this fully before touching `src/state/` or `src/views/`.
 > Working dir: `/Users/iamursky/mainwlrd`. Language with the user: **Russian**.
@@ -8,18 +8,20 @@
 The app was one 9861-line `App.tsx`. Three refactors:
 
 - **Round 1 (DONE, on prod):** moved all frontend into `src/` (config/types/lib/services/data/utils/components/views), extracted 14 view screens, switched to `@/` alias, build output `docs → dist`.
-- **Round 2 / Phase B (DONE, NOT yet pushed):** deep decomposition of the monolithic `useAppValue` into **16 domain hooks**. `App` is `<AppProvider><AppShell/></AppProvider>`; `AppProvider` composes the hooks; `AppShell` consumes everything via `useApp()`.
-- **Phase C (NEXT):** extract the remaining inline-JSX screens out of `AppShell.renderView()` into `src/views/` components that consume `useApp()` directly.
+- **Round 2 / Phase B (DONE, NOT yet pushed):** deep decomposition of the monolithic `useAppValue` into **16 domain hooks**. `App` is `<AppProvider><AppShell/></AppProvider>`; `AppProvider` composes the hooks.
+- **Phase C (DONE, NOT yet pushed):** extracted the 11 remaining inline-JSX screens out of `AppShell.renderView()` into `src/views/` components that consume `useApp()` directly.
+- **Phase D (DONE, NOT yet pushed):** migrated the 16 Round-1 prop-drilling views (`CartView`, `ExploreView`, `WriteView`, …) onto `useApp()` too. AppShell no longer forwards props — its `useApp()` destructure shrank from 96 fields to **8** and the file is now **249 lines** (was 2203 pre-Phase-C). The whole `src/views/` layer is now consistent: every view consumes context directly.
 
-**Hard rule (still applies to Phase C): every extraction is BEHAVIOR-PRESERVING** — a verbatim code move. Bodies, `useEffect` dependency arrays, and JSX are byte-identical; values are read from the same context fields.
+**Hard rule (apply to any further extraction): every extraction is BEHAVIOR-PRESERVING** — a verbatim code move. Bodies, `useEffect` dependency arrays, and JSX are byte-identical; values are read from the same context fields.
 
 ## 2. Architecture now in place (Phase A + B DONE)
 
 - `src/App.tsx` — thin: `<AppProvider><AppShell/></AppProvider>`.
 - `src/state/AppContext.ts` — `createContext` + `useApp()`; `AppContextValue = ReturnType<typeof useAppValue>` (inferred — do not hand-type it).
 - `src/state/AppProvider.tsx` — **now 465 lines** (was 9861). `useAppValue()` is a thin composition of 16 hooks + the two late-bound bridges + the giant context-value `return {...}` (untouched). `AppProvider` wraps it.
-- `src/views/AppShell.tsx` — `useApp()` destructure + `renderView()` + shell return. **This is what Phase C decomposes.**
+- `src/views/AppShell.tsx` — **now 249 lines** (was 2203). A thin render-switch: every `renderView()` case is a bare `<XxxView/>` (null-guarded cases use `guard ? <View/> : null`; `reading` keeps its `userDataLoaded` loading guard). Its `useApp()` destructure is just **8 fields** (`view`, `setView`, `toast`, `confirmModal`, `setConfirmModal`, `userDataLoaded`, `selectedBook`, `selectedProfileUser`) — the switch + bottom nav + toast/confirm overlays + render guards.
 - `src/state/hooks/` — 16 domain hooks (see §3).
+- `src/views/` — **all ~30 view components consume `useApp()` directly** (no more prop-drilling). Phase C screens (`SplashView`, `LandingView`, `LoginView`, `SignupView`, `HomeView`, `DailyRewardsView`, `LibraryView`, `SelfProfileView`, `NotificationsView`, `NotificationSettingsView`, `BlockedUsersView`) + the migrated Round-1 views (`CartView`, `ExploreView`, `WriteView`, `PublishingView`, `MonetizationRequestView`, `CustomizationView`, `OtherProfileView`, `PublicBookDetailPage`, `ReadingView`, `CommentsView`, `ChatListView`, `ChatConversationView`, `AdminDashboard`, `SettingsView`, `ForgotPasswordView`, `LegalView`). Each view calls `useApp()` and re-creates its former props as local consts (closures/computed values moved in verbatim).
 
 ## 3. Phase B result (verify with `git log` / `tsc`)
 
@@ -60,8 +62,16 @@ The plan in `/Users/iamursky/.claude/plans/groovy-cuddling-quill.md` and the ori
 - **Can:** `npx tsc --noEmit`, `npm run build`, `npm run dev` (:3000), the adversarial-verification Workflow.
 - **Can't headless:** real browser smoke (login cascade, persist debounce in Firestore, navigation, 3D world). The user runtime-tests, or it's verified once on prod after a push.
 
-## 9. Phase C — the remaining work (NEXT)
-Extract the ~11 remaining inline-JSX screens from `src/views/AppShell.tsx` `renderView()` into `src/views/` components that consume `useApp()` directly: home / 3D-world, daily-rewards (~478 lines), self-profile, library, notifications, notification-settings, blocked-users, and the auth screens (splash / landing / login / signup). Verbatim JSX; data from the same `useApp()` fields. Same recipe (§4), same verbatim/verify discipline. Start by reading `AppShell.tsx` and grepping `renderView` for the `case`/branch boundaries.
+## 9. Phase C — DONE (adversarially verified)
+All 11 inline screens extracted into `useApp()`-consuming components (§2). JSX moved verbatim, only de-indented by 6 spaces (whitespace-only, behavior-neutral — confirmed no multi-line string content was affected). 5-agent verification: every screen byte-identical modulo dedent, fields correct, `renderView` case-set/order unchanged, delegating cases + shell return byte-identical. `tsc` 0 / build green / `tsc --noUnusedLocals` 0-unused in AppShell.
+- One verification note: `DailyRewardsView` shows `$34.99/year` while the pre-Phase-C AppShell showed `$30` — that delta is the **user's** premium-price edit made mid-session (carried verbatim into the component), NOT a refactor change. Desired/correct.
+
+## 9b. Phase D — DONE (adversarially verified)
+All 16 Round-1 prop-drilling views migrated to `useApp()`. Each view's former prop values (context-field aliases, computed exprs, and inline closures — incl. CartView's library-sync `onOwnedUpdate`, WriteView's full `onPublish`, the book-detail `onRead` reading-activity writer) moved into the component as local consts; the render bodies are unchanged. Null-guarded cases (`profile`, `book-detail`) keep their guard as `guard ? <View/> : null` and bind the value with `!`; `reading` keeps its loading guard. 5-agent verification: locals verbatim, fields correct, bodies unchanged, delegation/guards correct, shell return byte-identical. A handful of props that were untyped via `: any` got minimal loosening to stay behavior-neutral: optional `email?` on the `User` type (backs the Change-Email feature), and `bookProgress:any` / `initialExactPosition:any` / `onSave|onRemove(_id?)` in views. `tsc` 0 / build green / `tsc --noUnusedLocals` 0-unused in AppShell.
+
+### Remaining (independent of the refactor)
+- The pre-existing issues in §7 (unfiltered notification/chat subscriptions, animated-model size, undeployed functions) — none are touched by Phases B/C/D.
+- Nothing else outstanding in the decomposition: `App.tsx` is fully decomposed (`AppProvider` = 16 hooks, `AppShell` = thin switch, all views on `useApp()`).
 
 ## 10. Don'ts
 - Don't push to `main` without the user's explicit OK (it deploys to prod).
