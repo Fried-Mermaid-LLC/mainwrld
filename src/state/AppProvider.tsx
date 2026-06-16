@@ -98,6 +98,7 @@ import { ChatConversationView } from '@/views/ChatConversationView'
 import { WriteView } from '@/views/WriteView'
 import { AppContext } from './AppContext'
 import { useUI } from './hooks/useUI'
+import { useRewards } from './hooks/useRewards'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -323,14 +324,22 @@ export function useAppValue() {
   // Comments state (Firestore real-time)
   const [allComments, setAllComments] = useState<Comment[]>([])
 
-  // Rewards and Cart State
-  const [lastClaimedPoints, setLastClaimedPoints] = useState<number | null>(
-    null
-  )
-  const [rewardedItems, setRewardedItems] = useState<Set<string>>(new Set())
-
-  // Coupons (loaded from Firestore user doc)
-  const [coupons, setCoupons] = useState<Coupon[]>([])
+  // Rewards state/logic lives in useRewards (Phase B), placed before the
+  // handlers (handleLike/handleLikeComment) and the persist effect that consume
+  // awardPoints / rewardedItems / lastClaimedPoints.
+  const rewards = useRewards({ user, setUser, showToast, showConfirm })
+  const {
+    lastClaimedPoints,
+    setLastClaimedPoints,
+    rewardedItems,
+    setRewardedItems,
+    coupons,
+    setCoupons,
+    awardPoints,
+    awardMembershipBonus,
+    handleClaimPoints,
+    handleSpinWheel
+  } = rewards
 
   // Cart (loaded from Firestore user doc)
   const [cart, setCart] = useState<Book[]>([])
@@ -2009,152 +2018,7 @@ export function useAppValue() {
     setCart([...cart, book])
     showToast('Book added to cart!', 'shopping_cart')
   }
-
-  const awardPoints = (amount: number, reason: string) => {
-    const now = Date.now()
-    const isNewDay =
-      !user.lastPointsReset ||
-      now - (user.lastPointsReset || 0) > 24 * 60 * 60 * 1000
-    const currentDaily = isNewDay ? 0 : user.dailyEarnedPoints || 0
-    if (currentDaily >= MAX_DAILY_EARNED_POINTS) return
-    const finalAmount = Math.min(amount, MAX_DAILY_EARNED_POINTS - currentDaily)
-    if (finalAmount <= 0) return
-    setUser(prev => {
-      const isStillNewDay =
-        !prev.lastPointsReset ||
-        now - (prev.lastPointsReset || 0) > 24 * 60 * 60 * 1000
-      const prevDaily = isStillNewDay ? 0 : prev.dailyEarnedPoints || 0
-      return {
-        ...prev,
-        points: prev.points + finalAmount,
-        dailyEarnedPoints: prevDaily + finalAmount,
-        lastPointsReset: isStillNewDay ? now : prev.lastPointsReset
-      }
-    })
-    showToast(`+${finalAmount} points — ${reason}`, 'emoji_events')
-  }
-
-  const awardMembershipBonus = (
-    amount: number,
-    reason: string,
-    rewardedAt: number
-  ) => {
-    if (amount <= 0) return
-    setUser(prev => ({
-      ...prev,
-      points: prev.points + amount,
-      lastMembershipRewardDate: rewardedAt
-    }))
-    showToast(`+${amount} points — ${reason}`, 'emoji_events')
-  }
-
-  const handleClaimPoints = () => {
-    const now = Date.now()
-    if (lastClaimedPoints && now - lastClaimedPoints < 24 * 60 * 60 * 1000) {
-      const nextAvailable = new Date(lastClaimedPoints + 24 * 60 * 60 * 1000)
-      showToast(
-        `You can claim points again at ${nextAvailable.toLocaleTimeString()}`,
-        'schedule'
-      )
-      return
-    }
-    const pts = user.isPremium ? 6 : 3
-    awardPoints(
-      pts,
-      user.isPremium ? 'Daily claim (2x Premium bonus)' : 'Daily claim'
-    )
-    setLastClaimedPoints(now)
-  }
-
-  const handleSpinWheel = () => {
-    if (user.points < 150) {
-      showToast('You need 150 points to win a coupon', 'info')
-      return
-    }
-
-    const unusedCoupons = coupons.filter((c: Coupon) => !c.used)
-
-    const proceedWithSpin = () => {
-      // Deduct points
-      setUser(prev => ({
-        ...prev,
-        points: prev.points - 150
-      }))
-
-      // Random Chancing
-      const rand = Math.random() * 100
-      let winValue = 1
-      if (rand < 84) {
-        winValue = 1
-      } else if (rand < 93) {
-        winValue = 3
-      } else if (rand < 98) {
-        winValue = 5
-      } else {
-        winValue = 10
-      }
-
-      const newCoupon: Coupon = {
-        id: Math.random().toString(36).substr(2, 9),
-        value: winValue,
-        used: false
-      }
-
-      setCoupons(prev => {
-        const unusedOnly = prev.filter((c: Coupon) => !c.used)
-
-        if (unusedOnly.length >= 3) {
-          unusedOnly.shift() // Remove oldest unused (FIFO)
-        }
-
-        return [...unusedOnly, newCoupon]
-      })
-
-      showToast(`You won a $${winValue} coupon!`, 'confirmation_number')
-    }
-
-    // If slots full → ask confirmation and STOP execution
-    if (unusedCoupons.length >= 3) {
-      const oldestUnused = unusedCoupons[0]
-
-      showConfirm({
-        title: 'Your coupon slots are full (3/3)',
-        message: `Winning a new coupon will permanently eliminate your oldest ticket ($${oldestUnused.value}). Do you wish to proceed?`,
-        confirmLabel: 'Yes',
-        cancelLabel: 'No',
-        icon: 'check_circle',
-        onConfirm: proceedWithSpin,
-        onCancel: () => {}
-      })
-
-      return // stop execution here
-    }
-
-    // If slots not full then proceed immediately
-    proceedWithSpin()
-  }
-
-  // Membership reward: 200 pts after 25hrs of premium, then annually
-  useEffect(() => {
-    if (!user.isPremium || !user.membershipStartDate) return
-    const checkMembershipReward = () => {
-      const now = Date.now()
-      const msInYear = 365 * 24 * 60 * 60 * 1000
-      const msIn25Hours = 25 * 60 * 60 * 1000
-      if (!user.lastMembershipRewardDate) {
-        if (now - user.membershipStartDate >= msIn25Hours) {
-          awardMembershipBonus(200, 'Membership Reward', now)
-        }
-      } else {
-        if (now - user.lastMembershipRewardDate >= msInYear) {
-          awardMembershipBonus(200, 'Annual Membership Reward', now)
-        }
-      }
-    }
-    const interval = setInterval(checkMembershipReward, 60000)
-    checkMembershipReward()
-    return () => clearInterval(interval)
-  }, [user.isPremium, user.membershipStartDate, user.lastMembershipRewardDate])
+  // Rewards logic (awardPoints/handleClaimPoints/handleSpinWheel/membership) -> useRewards (Phase B)
 
   const handlePublish = async (data: any) => {
     try {
