@@ -66,13 +66,11 @@ import {
   UserRecord,
   NotificationItem,
   ChatMessage,
-  Relationship,
   Comment,
   Coupon,
   Report,
   AvatarGender,
   AvatarCategory,
-  AvatarConfig,
   AvatarItem,
   Chapter,
   Book,
@@ -94,6 +92,7 @@ import { CommentsView } from '@/views/CommentsView'
 import { ChatListView } from '@/views/ChatListView'
 import { ChatConversationView } from '@/views/ChatConversationView'
 import { WriteView } from '@/views/WriteView'
+import type { Dispatch, SetStateAction } from 'react'
 import { AppContext } from './AppContext'
 import { useUI } from './hooks/useUI'
 import { useAuth } from './hooks/useAuth'
@@ -104,6 +103,7 @@ import { useComments } from './hooks/useComments'
 import { useChat } from './hooks/useChat'
 import { useCart } from './hooks/useCart'
 import { useBooks } from './hooks/useBooks'
+import { useSocial } from './hooks/useSocial'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -119,6 +119,11 @@ type AddNotification = (
   targetChapterIndex?: number,
   commentId?: string
 ) => void
+
+type ReadingActivityMap = Record<
+  string,
+  { bookId: string; progress: number; lastRead: string }[]
+>
 
 export function useAppValue() {
   // UI / navigation / selection state lives in useUI (Phase B). Called first so
@@ -182,6 +187,17 @@ export function useAppValue() {
     (...args) => addNotificationRef.current(...args),
     []
   )
+  // Late-bound bridge for setReadingActivity: readingActivity is owned in the
+  // body below (→ useReading later), but useSocial's subscribeToUsers effect
+  // writes it. setReadingActivityRef.current is wired right after the
+  // readingActivity state is declared.
+  const setReadingActivityRef = useRef<Dispatch<SetStateAction<ReadingActivityMap>>>(
+    () => {}
+  )
+  const setReadingActivityLB = useCallback<Dispatch<SetStateAction<ReadingActivityMap>>>(
+    value => setReadingActivityRef.current(value),
+    []
+  )
   // Points / coupons / membership rewards live in useRewards (Phase B). Placed
   // early so awardPoints + rewardedItems are direct refs for handleLike /
   // handleLikeComment, and lastClaimedPoints/coupons for the persist effect.
@@ -238,55 +254,50 @@ export function useAppValue() {
     handleShareBook
   } = booksState
 
-  // Users loaded from Firestore
-  const [registeredUsers, setRegisteredUsers] = useState<any[]>([])
 
-  // Relationships state (Firestore real-time)
-  const [relationships, setRelationships] = useState<Relationship[]>([])
-
-  // Compute mutuals from relationships and registeredUsers
-  const MUTUALS = useMemo(() => {
-    if (!user.username) return []
-    const myAdmiring = relationships
-      .filter(r => r.admirer === user.username)
-      .map(r => r.target)
-    const admiringMe = relationships
-      .filter(r => r.target === user.username)
-      .map(r => r.admirer)
-    const mutualUsernames = myAdmiring.filter(username =>
-      admiringMe.includes(username)
-    )
-    return registeredUsers
-      .filter(u => mutualUsernames.includes(u.username))
-      .map(u => ({
-        ...u,
-        isMutual: true,
-        isOnline: u.isOnline || false,
-        activity: u.activity || ('Idle' as const),
-        position: u.position || ([0, 0, 0] as [number, number, number]),
-        points: u.points || 0,
-        admirersCount: u.admirersCount || 0,
-        mutualsCount: u.mutualsCount || 0,
-        strikes: u.strikes || 0
-      }))
-  }, [user.username, relationships, registeredUsers])
-
-
-  // Check if current user is under 16 (for explicit content filtering)
-  const userIsUnder16 = useMemo(() => {
-    if (!user.username) return false
-    const userRecord = registeredUsers.find(
-      u => u.username === user.username
-    ) as any
-    if (!userRecord?.birthDate) return false
-    const birth = new Date(userRecord.birthDate)
-    const today = new Date()
-    let age = today.getFullYear() - birth.getFullYear()
-    const m = today.getMonth() - birth.getMonth()
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
-    return age < 16
-  }, [registeredUsers, user.username])
-
+  // Avatar config / unlocked items live in useAvatar (Phase B). Moved ahead of
+  // useSocial because subscribeToUsers writes setAllAvatarConfigs /
+  // setAllUnlockedItems, which must be direct refs.
+  const avatar = useAvatar({ user, selectedProfileUser })
+  const {
+    allAvatarConfigs,
+    setAllAvatarConfigs,
+    avatarConfig,
+    setAvatarConfig,
+    allUnlockedItems,
+    setAllUnlockedItems,
+    unlockedAvatarItems,
+    setUnlockedAvatarItems
+  } = avatar
+  // Social graph lives in useSocial (Phase B). Placed before useNotifications
+  // (which reads MUTUALS/registeredUsers) and after useAvatar. It reaches
+  // addNotification via addNotificationLB and setReadingActivity via
+  // setReadingActivityLB, since both owners run later in this hook.
+  const social = useSocial({
+    user,
+    firebaseUid,
+    setView,
+    showToast,
+    showConfirm,
+    addNotification: addNotificationLB,
+    setAllAvatarConfigs,
+    setAllUnlockedItems,
+    setReadingActivity: setReadingActivityLB
+  })
+  const {
+    registeredUsers,
+    setRegisteredUsers,
+    relationships,
+    setRelationships,
+    MUTUALS,
+    userIsUnder16,
+    blockedUsers,
+    setBlockedUsers,
+    pendingAdmireRef,
+    handleAdmire,
+    handleBlockUser,
+    handleUnblockUser
+  } = social
   // Reports state (Firestore real-time)
   const [reports, setReports] = useState<Report[]>([])
 
@@ -311,26 +322,12 @@ export function useAppValue() {
   const { notifications, setNotifications, addNotification, handleNotificationClick } = notif
   addNotificationRef.current = addNotification
 
-  // Avatar config / unlocked items live in useAvatar (Phase B).
-  const avatar = useAvatar({ user, selectedProfileUser })
-  const {
-    allAvatarConfigs,
-    setAllAvatarConfigs,
-    avatarConfig,
-    setAvatarConfig,
-    allUnlockedItems,
-    setAllUnlockedItems,
-    unlockedAvatarItems,
-    setUnlockedAvatarItems
-  } = avatar
-
-  // Blocked users state (loaded from Firestore user doc)
-  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
 
   // Reading activity (loaded from Firestore user doc)
   const [readingActivity, setReadingActivity] = useState<
     Record<string, { bookId: string; progress: number; lastRead: string }[]>
   >({})
+  setReadingActivityRef.current = setReadingActivity
 
   // Item price overrides (loaded from Firestore user doc, admin only)
   const [itemPriceOverrides, setItemPriceOverrides] = useState<
@@ -490,7 +487,6 @@ export function useAppValue() {
 
   // Debounce ref for batched Firestore writes
   const persistTimerRef = useRef<any>(null)
-  const pendingAdmireRef = useRef<Set<string>>(new Set())
 
   // Single debounced persist effect — batches ALL user data into one Firestore write
   // This replaces 8 separate persist effects, reducing writes by ~8x
@@ -699,53 +695,6 @@ export function useAppValue() {
   const [lastSelectedBookId, setLastSelectedBookId] = useState<string>('new')
   const [lastSelectedChapterIndex, setLastSelectedChapterIndex] =
     useState<string>('new')
-
-
-  // Subscribe to all registered users in real-time for online status and reading activity
-  useEffect(() => {
-    if (!firebaseUid) return
-    const unsubscribe = fbService.subscribeToUsers((users: any[]) => {
-      setRegisteredUsers(users)
-      // Pre-populate avatar configs for all users so profile views show avatars
-      const configs: Record<string, AvatarConfig> = {}
-      const unlocked: Record<string, string[]> = {}
-      const readingAct: Record<string, any[]> = {}
-      users.forEach((u: any) => {
-        if (u.avatarConfig && u.username) configs[u.username] = u.avatarConfig
-        if (u.unlockedItems && u.username)
-          unlocked[u.username] = u.unlockedItems
-        if (u.readingActivity && u.username)
-          readingAct[u.username] = u.readingActivity
-      })
-      if (Object.keys(configs).length > 0) {
-        setAllAvatarConfigs(prev => ({ ...prev, ...configs }))
-      }
-      if (Object.keys(unlocked).length > 0) {
-        setAllUnlockedItems(prev => ({ ...prev, ...unlocked }))
-      }
-      if (Object.keys(readingAct).length > 0) {
-        setReadingActivity(prev => ({ ...prev, ...readingAct }))
-      }
-    })
-    return () => unsubscribe()
-  }, [firebaseUid])
-
-  // ===== FIRESTORE REAL-TIME SUBSCRIPTIONS =====
-
-  // Subscribe to relationships
-  useEffect(() => {
-    if (!firebaseUid) return
-    const unsub = fbService.subscribeToRelationships((rels: any[]) => {
-      setRelationships(
-        rels.map(r => ({
-          admirer: r.admirer,
-          target: r.target,
-          timestamp: r.timestamp
-        }))
-      )
-    })
-    return () => unsub()
-  }, [firebaseUid])
 
 
   // Update user activity based on current view
@@ -1278,135 +1227,6 @@ export function useAppValue() {
   }
 
 
-  const handleAdmire = (targetUser: User) => {
-    const admireKey = `${user.username}->${targetUser.username}`
-
-    // Prevent rapid double-clicks while Firestore is updating
-    if (pendingAdmireRef.current.has(admireKey)) return
-
-    const alreadyAdmiring = relationships.some(
-      r => r.admirer === user.username && r.target === targetUser.username
-    )
-
-    if (alreadyAdmiring) {
-      // Check if they are mutuals before un-admiring
-      const isMutual = relationships.some(
-        r => r.admirer === targetUser.username && r.target === user.username
-      )
-      if (isMutual) {
-        showConfirm({
-          title: 'Stop being mutuals?',
-          message: `You and ${targetUser.displayName} will no longer be mutuals. Chat will be disabled but previous messages will be saved as read-only.`,
-          confirmLabel: 'Yes, stop admiring',
-          cancelLabel: 'Cancel',
-          icon: 'people_outline',
-          onConfirm: () => {
-            pendingAdmireRef.current.add(admireKey)
-            // Optimistic local update: remove relationship
-            setRelationships(prev =>
-              prev.filter(
-                r =>
-                  !(
-                    r.admirer === user.username &&
-                    r.target === targetUser.username
-                  )
-              )
-            )
-            fbService
-              .removeRelationship(user.username, targetUser.username)
-              .catch(console.error)
-              .finally(() => pendingAdmireRef.current.delete(admireKey))
-            showToast('You are no longer mutuals', 'people_outline')
-          },
-          onCancel: () => {}
-        })
-      } else {
-        // Not mutuals, just un-admire silently
-        pendingAdmireRef.current.add(admireKey)
-        setRelationships(prev =>
-          prev.filter(
-            r =>
-              !(r.admirer === user.username && r.target === targetUser.username)
-          )
-        )
-        fbService
-          .removeRelationship(user.username, targetUser.username)
-          .catch(console.error)
-          .finally(() => pendingAdmireRef.current.delete(admireKey))
-        showToast('Stopped admiring', 'person_remove')
-      }
-      return
-    }
-
-    // Lock to prevent duplicate clicks
-    pendingAdmireRef.current.add(admireKey)
-
-    // Optimistic local update: add relationship immediately
-    setRelationships(prev => [
-      ...prev,
-      {
-        admirer: user.username,
-        target: targetUser.username,
-        timestamp: new Date().toISOString()
-      }
-    ])
-
-    // Add admire relationship to Firestore
-    fbService
-      .addRelationship(user.username, targetUser.username)
-      .catch(console.error)
-      .finally(() => pendingAdmireRef.current.delete(admireKey))
-
-    // Notify the target user they have a new admirer
-    addNotification(
-      'New Admirer',
-      `${user.displayName} is now admiring you!`,
-      'person_add',
-      targetUser.username
-    )
-
-    // Check if this creates a mutual (target already admires current user)
-    // Use local state first, then fall back to Firestore query for reliability
-    const targetAdmiresLocal = relationships.some(
-      r => r.admirer === targetUser.username && r.target === user.username
-    )
-    if (targetAdmiresLocal) {
-      addNotification(
-        'Mutual Connection!',
-        `You and ${targetUser.displayName} are now mutuals!`,
-        'people',
-        user.username
-      )
-      addNotification(
-        'Mutual Connection!',
-        `You and ${user.displayName} are now mutuals!`,
-        'people',
-        targetUser.username
-      )
-    } else {
-      // Firestore fallback: local relationships state might not have the reverse relationship yet
-      fbService
-        .checkRelationshipExists(targetUser.username, user.username)
-        .then(exists => {
-          if (exists) {
-            addNotification(
-              'Mutual Connection!',
-              `You and ${targetUser.displayName} are now mutuals!`,
-              'people',
-              user.username
-            )
-            addNotification(
-              'Mutual Connection!',
-              `You and ${user.displayName} are now mutuals!`,
-              'people',
-              targetUser.username
-            )
-          }
-        })
-        .catch(console.error)
-    }
-  }
-
   const handleReport = (
     type: 'Book' | 'Comment' | 'User',
     targetId: string
@@ -1511,28 +1331,6 @@ export function useAppValue() {
     fbService.updateReportStatus(reportId, 'dismissed').catch(console.error)
   }
 
-  const handleBlockUser = (targetUsername: string) => {
-    if (targetUsername === user.username) return // Can't block yourself
-    setBlockedUsers(prev => new Set([...prev, targetUsername]))
-    // Remove any admire relationships in both directions via Firestore
-    fbService
-      .removeRelationshipsBetween(user.username, targetUsername)
-      .catch(console.error)
-    addNotification(
-      'User Blocked',
-      `You blocked @${targetUsername}. You will no longer see their content.`,
-      'block'
-    )
-    setView('home')
-  }
-
-  const handleUnblockUser = (targetUsername: string) => {
-    setBlockedUsers(prev => {
-      const next = new Set(prev)
-      next.delete(targetUsername)
-      return next
-    })
-  }
 
   const handleSaveToLibrary = (bookId: string) => {
     setBooks(prev => {
