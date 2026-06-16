@@ -4,87 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MainWRLD</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              accent: '#eb6871',
-            },
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              display: ['Fredoka One', 'cursive'],
-              telegraf: ['Telegraf', 'Inter', 'sans-serif'],
-            },
-          },
-        },
-      }
-    </script>
-    <style>
-        @font-face {
-            font-family: 'Telegraf';
-            src: local('Arial'); /* Placeholder for specific system fonts */
-        }
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .reader-content, .select-none {
-            -webkit-user-select: none;
-            user-select: none;
-        }
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-        .reader-content {
-          font-family: 'Telegraf', 'Inter', sans-serif;
-        }
-        /* Page Flipping Mode Styles */
-        .page-flip-container {
-            display: flex;
-            overflow-x: scroll;
-            scroll-snap-type: x mandatory;
-            height: calc(100vh - 200px);
-            width: 100%;
-        }
-        .page-flip-content {
-            column-width: calc(100vw - 64px);
-            column-gap: 64px;
-            height: 100%;
-            padding: 0 32px;
-            transition: all 0.3s ease;
-        }
-        .page-item {
-            scroll-snap-align: start;
-            flex-shrink: 0;
-            width: 100%;
-        }
-        /* Rich editor list styles (Tailwind preflight removes defaults) */
-        .rich-editor ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
-        .rich-editor ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
-        .rich-editor li { margin: 0.25em 0; }
-        /* Reader content list styles */
-        .reader-content ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
-        .reader-content ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
-        .reader-content li { margin: 0.25em 0; }
-    </style>
-    <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-    <!-- Import map removed - Vite handles module resolution from node_modules -->
-<!-- <link rel="stylesheet" href="index.css"> -->
 </head>
 <body class="bg-white dark:bg-black transition-colors duration-300">
     <div id="root"></div>
-<script type="module" src="./index.tsx"></script>
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>

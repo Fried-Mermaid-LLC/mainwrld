@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "relationships",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "admirer", "order": "ASCENDING" },
+        { "fieldPath": "target", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chatMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "from", "order": "ASCENDING" },
+        { "fieldPath": "to", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

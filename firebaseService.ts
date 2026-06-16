@@ -1,4 +1,5 @@
 import { auth, db } from './firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -64,6 +65,18 @@ export const signUp = async (
 
   // 3. Create username lookup document for uniqueness checking + login
   await setDoc(doc(db, 'usernames', username.toLowerCase()), { uid, email });
+
+  // 4. The setUsernameClaim Cloud Function (Stage 2c) fires on the
+  // users/{uid} create above and stamps the username into the auth
+  // token's custom claims. The current ID token was minted *before*
+  // that claim existed, so force a refresh now. Otherwise firestore.
+  // rules that check `request.auth.token.username` reject this user's
+  // first session — particularly chat, relationships, notifications.
+  try {
+    await credential.user.getIdToken(true);
+  } catch {
+    // Non-fatal: claim will land on next token rotation.
+  }
 
   return { uid, username, displayName, email, birthDate };
 };
@@ -155,6 +168,49 @@ export const changePassword = async (newPassword: string) => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
   await updatePassword(user, newPassword);
+};
+
+// Calls the `deleteAccount` Cloud Function (Stage 2b). The function
+// scrubs the user's data from Firestore and deletes the Auth record,
+// satisfying App Store guideline 5.1.1(v). After this returns the
+// client's ID token is invalid, so we sign out unconditionally.
+export const deleteCurrentAccount = async () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const functions = getFunctions();
+  const deleteAccountFn = httpsCallable<void, { deletedUid: string }>(
+    functions,
+    'deleteAccount'
+  );
+  try {
+    await deleteAccountFn();
+  } finally {
+    // Even if the function partly failed, the auth record may already
+    // be gone — sign out so the UI does not try to act as the user.
+    await signOut(auth).catch(() => {});
+  }
+};
+
+// Calls the `verifyAppleReceipt` Cloud Function (Stage 3c). The
+// function verifies the receipt with Apple's App Store Server API,
+// credits points (or extends the premium subscription) inside a
+// Firestore transaction, and returns the new balance. We pass the
+// full base64 receipt rather than the transactionId alone because
+// the App Store Server API supports both StoreKit 1 and 2 via
+// receipts.
+export const verifyAppleReceipt = async (params: {
+  productId: string;
+  transactionId: string;
+  appStoreReceipt: string;
+}): Promise<{ credited: boolean; pointsAdded?: number; isPremium?: boolean }> => {
+  if (!auth.currentUser) throw new Error('Not authenticated');
+  const functions = getFunctions();
+  const verify = httpsCallable<
+    typeof params,
+    { credited: boolean; pointsAdded?: number; isPremium?: boolean }
+  >(functions, 'verifyAppleReceipt');
+  const res = await verify(params);
+  return res.data;
 };
 
 // ==================== USER QUERY FUNCTIONS ====================

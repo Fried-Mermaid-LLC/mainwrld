@@ -1,0 +1,202 @@
+rules_version = '2';
+
+// MainWRLD Firestore Security Rules
+//
+// Replaces the previous client-side ADMIN_USERNAMES check in App.tsx:249
+// with server-side authorization via Firebase custom claims. The admin
+// claim is granted from the `setAdmin` Cloud Function (see functions/).
+//
+// Read access defaults to "must be signed in" for everything except the
+// usernames lookup (needed before sign-in to resolve username → email)
+// and the public app config (spotlight book of the week).
+//
+// IMPORTANT — `request.auth.token.username` custom claim:
+// Several rules below check `request.auth.token.username` because the
+// existing data model (chatMessages.from/to, relationships.admirer/target,
+// notifications.recipient) uses USERNAMES, not uids. The custom claim is
+// set by the `onUserCreate` Cloud Function (see functions/) the first
+// time a user document lands in Firestore. After signup the client must
+// call `await user.getIdToken(true)` once to refresh the token and pick
+// up the new claim. Existing users will get the claim on their next
+// login automatically because the token rotates.
+//
+// If a user reaches the rules without the username claim (mid-migration,
+// races on signup), reads of THEIR chats/notifications will fail.
+// Acceptable failure mode: client retries after a token refresh.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // ---- users ----
+    // Profile docs. Anyone signed in can read profiles (the app shows
+    // them in lists, the 3D world, comments). Only the owner can write,
+    // except admins who can update any profile (e.g. strikes, ban).
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isUser(uid);
+      allow update: if isUser(uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---- usernames ----
+    // Public lookup table used by logIn() to resolve username → email
+    // *before* the user is authenticated. Stored doc only contains
+    // { uid, email } — no PII beyond what the user typed.
+    match /usernames/{username} {
+      allow read: if true;
+      // Only the user themselves can claim/release their username.
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+      // Username records are immutable once claimed (no change of email).
+      allow update: if false;
+    }
+
+    // ---- books ----
+    // Published books are readable by any signed-in user. Drafts only by
+    // their author. Anyone signed in can create a book in their name.
+    // Updates restricted to author or admin (for take-downs).
+    match /books/{bookId} {
+      allow read: if isSignedIn()
+        && (resource.data.isDraft != true || resource.data.authorUsername == request.auth.token.username || isAdmin());
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid;
+      allow update: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isAdmin());
+    }
+
+    // ---- comments ----
+    // Any signed-in user can read comments. Only the author can create
+    // (with their own uid in authorUid). Updates limited to like-count
+    // bumps by other users, or content edits by the author. Deletes by
+    // author or admin.
+    match /comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.authorUid == request.auth.uid;
+      allow update: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn()
+        && (resource.data.authorUid == request.auth.uid || isAdmin());
+    }
+
+    // ---- chatMessages ----
+    // Private DMs. Read/write restricted to the two participants
+    // (`from` and `to` fields are usernames per the current schema).
+    // We index by username because that's what the app stores. When
+    // username changes become possible this needs revisiting.
+    match /chatMessages/{msgId} {
+      allow read: if isSignedIn() && (
+        resource.data.from == request.auth.token.username
+        || resource.data.to == request.auth.token.username
+        || isAdmin()
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.from == request.auth.token.username;
+      // Updates limited to marking read by the recipient.
+      allow update: if isSignedIn()
+        && resource.data.to == request.auth.token.username
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['read']);
+      allow delete: if isSignedIn() && (
+        resource.data.from == request.auth.token.username
+        || resource.data.to == request.auth.token.username
+        || isAdmin()
+      );
+    }
+
+    // ---- relationships (admire / follow) ----
+    // The doc records `admirer` and `target` usernames. Anyone signed
+    // in can read (the app uses these to compute mutual lists). Only
+    // the admirer can create or delete their own relationship.
+    match /relationships/{relId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.admirer == request.auth.token.username;
+      allow update: if false;
+      allow delete: if isSignedIn() && (
+        resource.data.admirer == request.auth.token.username
+        || isAdmin()
+      );
+    }
+
+    // ---- notifications ----
+    // Only the recipient can read their own notifications. Any signed-
+    // in user can create a notification addressed to another user (the
+    // app does this client-side on likes/comments/follows). The read
+    // flag is the only legitimate update; recipient flips it on read.
+    match /notifications/{notifId} {
+      allow read: if isSignedIn() && (
+        resource.data.recipient == request.auth.token.username
+        || isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn()
+        && resource.data.recipient == request.auth.token.username
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['read']);
+      allow delete: if isSignedIn() && (
+        resource.data.recipient == request.auth.token.username
+        || isAdmin()
+      );
+    }
+
+    // ---- reports (UGC moderation queue) ----
+    // App Store guideline 1.2 requires a reporting mechanism. Any
+    // signed-in user can file a report; only admins can read or
+    // change status.
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.reportedBy == request.auth.token.username;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---- iapTransactions ----
+    // Audit trail of verified Apple IAP transactions, written by the
+    // verifyAppleReceipt Cloud Function (Stage 3c). Used for replay
+    // protection (transactionId is the doc key — duplicates are
+    // ignored, restoring a purchase does not re-credit).
+    //
+    // Users can read their own entries (so the client can prove a
+    // purchase was credited). No client writes — only the function,
+    // which runs with admin privileges and bypasses these rules.
+    match /iapTransactions/{transactionId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    // ---- appConfig ----
+    // Global config (spotlight book of the week). Public read so the
+    // home screen can show it before sign-in if desired. Writes go
+    // through the ensureGlobalSpotlight transaction client-side, but
+    // they should really be a Cloud Function in a follow-up — leaving
+    // signed-in write for now to keep the existing flow working.
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
