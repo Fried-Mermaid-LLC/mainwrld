@@ -43,11 +43,19 @@ export const AvatarModel: React.FC<{
   avatarConfig,
   isMoving = false
 }) => {
-  const modelPath = avatarConfig
-    ? `../CharactersAnimated/AnimatedModels/${
-        avatarConfig.gender === 'male' ? 'ManAnimated.glb' : 'WomanAnimated.glb'
-      }`
-    : `${BASE}avatar.glb`
+  // TEMP: the animated avatar models live in the gitignored CharactersAnimated/
+  // folder and are not deployed, so requesting them returns the SPA index.html
+  // (404 fallback) which GLTFLoader cannot parse -> "Unexpected token '<'" and
+  // a lost WebGL context. Until the .glb files are shipped (e.g. into
+  // public/CharactersAnimated/AnimatedModels/), load the bundled static avatar.
+  // Flip USE_ANIMATED_MODELS back to true once the models are deployed.
+  const USE_ANIMATED_MODELS = false
+  const modelPath =
+    USE_ANIMATED_MODELS && avatarConfig
+      ? `${BASE}CharactersAnimated/AnimatedModels/${
+          avatarConfig.gender === 'male' ? 'ManAnimated.glb' : 'WomanAnimated.glb'
+        }`
+      : `${BASE}avatar.glb`
 
   const avatarGLTF = useGLTF(modelPath)
   const avatarRef = useRef<THREE.Group>(null)
@@ -69,7 +77,7 @@ export const AvatarModel: React.FC<{
   // APPLY AVATAR CONFIG (IMPORTANT FIX)
   // -----------------------------
   useEffect(() => {
-    if (!scene || !avatarConfig) return
+    if (!scene || !avatarConfig || !USE_ANIMATED_MODELS) return
 
     const activeIds = Object.values(avatarConfig).filter(
       v =>
@@ -130,8 +138,6 @@ export const AvatarModel: React.FC<{
     }
   }, [actions, isMoving])
 
-  console.log(name + " : " + online)
-
   return (
     <group
       onClick={e => {
@@ -178,7 +184,6 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({
   const waitTimer = useRef(0)
   const [isMoving, setIsMoving] = useState(false)
 
-  console.log(user.displayName + " : " + user.isOnline)
   const getNewTarget = () =>
     new THREE.Vector3(
       (Math.random() - 0.5) * WORLD_RADIUS * 0.8,
