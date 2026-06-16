@@ -99,6 +99,7 @@ import { useSocial } from './hooks/useSocial'
 import { useReading } from './hooks/useReading'
 import { useAdmin } from './hooks/useAdmin'
 import { useAuthActions } from './hooks/useAuthActions'
+import { useUserDataLoader } from './hooks/useUserDataLoader'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -648,101 +649,28 @@ export function useAppValue() {
   }, [view, firebaseUid, user.username])
 
 
-  // Load user-specific data from Firestore when user logs in
-  useEffect(() => {
-    if (!firebaseUid || !user.username) return
-    fbService
-      .getUserProfile(firebaseUid)
-      .then((profile: any) => {
-        if (!profile) return
-        // Load likedBooks
-        if (profile.likedBooks) setLikedBooks(new Set(profile.likedBooks))
-        else setLikedBooks(new Set())
-        if (profile.favoriteBookIds)
-          setFavoriteBookIds(new Set(profile.favoriteBookIds))
-        else setFavoriteBookIds(new Set())
-        likedBooksInteracted.current = false
-        // Load blocked users
-        if (profile.blockedUsers) setBlockedUsers(new Set(profile.blockedUsers))
-        // Load avatar config
-        if (profile.avatarConfig)
-          setAllAvatarConfigs(prev => ({
-            ...prev,
-            [user.username]: profile.avatarConfig
-          }))
-        // Load unlocked items
-        if (profile.unlockedItems)
-          setAllUnlockedItems(prev => ({
-            ...prev,
-            [user.username]: profile.unlockedItems
-          }))
-        // Load user book data
-        if (
-          profile.ownedBookIds ||
-          profile.bookProgress ||
-          profile.purchasedBookIds
-        ) {
-          setUserBookData(prev => ({
-            ...prev,
-            [user.username]: {
-              ownedBookIds: profile.ownedBookIds || [],
-              purchasedBookIds: profile.purchasedBookIds || [],
-              bookProgress: profile.bookProgress || {}
-            }
-          }))
-        }
-        // Load reading activity
-        if (profile.readingActivity)
-          setReadingActivity(prev => ({
-            ...prev,
-            [user.username]: profile.readingActivity
-          }))
-        // Load coupons
-        if (profile.coupons) setCoupons(profile.coupons)
-        // Load cart (stored as full book objects)
-        if (profile.cart) setCart(profile.cart)
-        // Load item price overrides
-        if (profile.itemPriceOverrides)
-          setItemPriceOverrides(profile.itemPriceOverrides)
-        // Load earned points tracking + membership + chapter limits
-        if (
-          profile.dailyEarnedPoints !== undefined ||
-          profile.lastPointsReset !== undefined ||
-          profile.membershipStartDate !== undefined ||
-          profile.lastMembershipRewardDate !== undefined ||
-          profile.dailyChaptersPublished !== undefined
-        ) {
-          setUser(prev => ({
-            ...prev,
-            dailyEarnedPoints: profile.dailyEarnedPoints || 0,
-            lastPointsReset: profile.lastPointsReset || null,
-            membershipStartDate: profile.membershipStartDate || null,
-            lastMembershipRewardDate: profile.lastMembershipRewardDate || null,
-            dailyChaptersPublished: profile.dailyChaptersPublished || 0,
-            lastChapterPublishReset: profile.lastChapterPublishReset || 0
-          }))
-        }
-        if (profile.isPremium && !profile.membershipStartDate) {
-          const membershipStartNow = Date.now()
-          setUser(prev => ({
-            ...prev,
-            membershipStartDate: prev.membershipStartDate || membershipStartNow
-          }))
-          fbService
-            .updateUserProfile(firebaseUid, {
-              membershipStartDate: membershipStartNow
-            })
-            .catch(console.error)
-        }
-        // Load last claimed points timestamp
-        if (profile.lastClaimedPoints)
-          setLastClaimedPoints(profile.lastClaimedPoints)
-        // Mark user data as loaded so persist effects can start saving
-        setUserDataLoaded(true)
-      })
-      .catch(console.error)
-  }, [firebaseUid, user.username])
-
+  // User-data loader lives in useUserDataLoader (Phase B). Runs the post-login
+  // getUserProfile cascade and flips userDataLoaded true. Placed here (after the
+  // persist effect, before the payment effects) so its effect registers in the
+  // same order; every setter is a direct ref.
+  useUserDataLoader({
+    firebaseUid,
+    user,
+    setLikedBooks,
+    setFavoriteBookIds,
+    likedBooksInteracted,
+    setBlockedUsers,
+    setAllAvatarConfigs,
+    setAllUnlockedItems,
+    setUserBookData,
+    setReadingActivity,
+    setCoupons,
+    setCart,
+    setItemPriceOverrides,
+    setUser,
+    setLastClaimedPoints,
+    setUserDataLoaded
+  })
 
   // NOTE: Individual persist effects removed — all user data is now batched
   // into a single debounced write (see persistTimerRef effect above)
