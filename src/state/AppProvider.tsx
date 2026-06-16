@@ -45,7 +45,6 @@ import {
   getFacePosition,
   getAvatarItemPath,
   AvatarLayers,
-  AVATAR_ITEMS,
   HAIR_POSITIONS,
   FACE_POSITIONS
 } from '@/components/avatar'
@@ -67,7 +66,6 @@ import {
   ChatMessage,
   Comment,
   Coupon,
-  Report,
   AvatarGender,
   AvatarCategory,
   AvatarItem,
@@ -103,6 +101,7 @@ import { useCart } from './hooks/useCart'
 import { useBooks } from './hooks/useBooks'
 import { useSocial } from './hooks/useSocial'
 import { useReading } from './hooks/useReading'
+import { useAdmin } from './hooks/useAdmin'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -297,8 +296,6 @@ export function useAppValue() {
     handleBlockUser,
     handleUnblockUser
   } = social
-  // Reports state (Firestore real-time)
-  const [reports, setReports] = useState<Report[]>([])
 
   // Notifications state (Firestore real-time)
   // Notifications domain lives in useNotifications (Phase B), placed after
@@ -377,25 +374,6 @@ export function useAppValue() {
     handleBookProgressUpdate
   } = reading
   setReadingActivityRef.current = setReadingActivity
-  // Item price overrides (loaded from Firestore user doc, admin only)
-  const [itemPriceOverrides, setItemPriceOverrides] = useState<
-    Record<string, number>
-  >({})
-
-  const getItemCost = (itemId: string): number => {
-    if (itemId in itemPriceOverrides) return itemPriceOverrides[itemId]
-    const item = AVATAR_ITEMS.find(i => i.id === itemId)
-    return item?.cost ?? 0
-  }
-
-  const handleUpdateItemPrice = (itemId: string, price: number) => {
-    const updated = { ...itemPriceOverrides, [itemId]: price }
-    setItemPriceOverrides(updated)
-    if (firebaseUid)
-      fbService
-        .updateUserProfile(firebaseUid, { itemPriceOverrides: updated })
-        .catch(console.error)
-  }
 
   // Comments domain lives in useComments (Phase B), placed after useRewards
   // so handleLikeComment can use awardPoints/rewardedItems.
@@ -428,6 +406,34 @@ export function useAppValue() {
 
   const cart_ = useCart({ showToast })
   const { cart, setCart, handleAddToCart } = cart_
+  // Moderation / admin domain lives in useAdmin (Phase B). Placed after
+  // useNotifications/useSocial/useBooks so addNotification, registeredUsers and
+  // books are direct refs; subscribeToReports is gated on firebaseUid && isAdmin.
+  const admin = useAdmin({
+    user,
+    firebaseUid,
+    isAdmin,
+    showToast,
+    addNotification,
+    registeredUsers,
+    setRegisteredUsers,
+    books
+  })
+  const {
+    reports,
+    setReports,
+    itemPriceOverrides,
+    setItemPriceOverrides,
+    getItemCost,
+    handleUpdateItemPrice,
+    handleReport,
+    handleRemoveBook,
+    handleRemoveComment,
+    handleAddStrike,
+    handleRemoveStrike,
+    handleBanUser,
+    handleDismissReport
+  } = admin
 
 
   // Debounce ref for batched Firestore writes
@@ -644,23 +650,6 @@ export function useAppValue() {
     }
   }, [view, firebaseUid, user.username])
 
-  // Subscribe to reports
-  useEffect(() => {
-    if (!firebaseUid || !isAdmin) return
-    const unsub = fbService.subscribeToReports((reps: any[]) => {
-      setReports(
-        reps.map(r => ({
-          id: r.id,
-          type: r.type,
-          targetId: r.targetId,
-          reportedBy: r.reportedBy,
-          timestamp: r.timestamp,
-          status: r.status
-        }))
-      )
-    })
-    return () => unsub()
-  }, [firebaseUid, isAdmin])
 
   // Load user-specific data from Firestore when user logs in
   useEffect(() => {
@@ -1102,111 +1091,6 @@ export function useAppValue() {
         setAuthError(err.message || 'Signup failed. Please try again.')
       }
     }
-  }
-
-
-  const handleReport = (
-    type: 'Book' | 'Comment' | 'User',
-    targetId: string
-  ) => {
-    const newReport = {
-      id: Math.random().toString(36).substr(2, 9),
-      type,
-      targetId,
-      reportedBy: user.username,
-      timestamp: new Date().toISOString(),
-      status: 'pending'
-    }
-    fbService.addReportDoc(newReport).catch(console.error)
-    addNotification(
-      'Report Filed',
-      `Your report for ${type.toLowerCase()} has been submitted.`,
-      'flag'
-    )
-    showToast(`${type} reported successfully!`, 'flag')
-  }
-
-  const handleRemoveBook = (bookId: string) => {
-    fbService.deleteBook(bookId).catch(console.error)
-    reports
-      .filter(r => r.targetId === bookId && r.type === 'Book')
-      .forEach(r => {
-        fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
-      })
-  }
-
-  const handleRemoveComment = (commentId: string) => {
-    fbService.removeCommentDoc(commentId).catch(console.error)
-    // Resolve any reports for this comment
-    reports
-      .filter(r => r.targetId === commentId && r.type === 'Comment')
-      .forEach(r => {
-        fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
-      })
-  }
-
-  const handleAddStrike = (username: string) => {
-    const targetUser = registeredUsers.find(u => u.username === username)
-    if (targetUser?.uid) {
-      fbService
-        .updateUserProfile(targetUser.uid, {
-          strikes: (targetUser.strikes || 0) + 1
-        })
-        .catch(console.error)
-    }
-    setRegisteredUsers(prev =>
-      prev.map(u =>
-        u.username === username ? { ...u, strikes: (u.strikes || 0) + 1 } : u
-      )
-    )
-  }
-
-  const handleRemoveStrike = (username: string) => {
-    const targetUser = registeredUsers.find(u => u.username === username)
-    if (targetUser?.uid && targetUser.strikes > 0) {
-      fbService
-        .updateUserProfile(targetUser.uid, { strikes: targetUser.strikes - 1 })
-        .catch(console.error)
-    }
-    setRegisteredUsers(prev =>
-      prev.map(u =>
-        u.username === username && u.strikes > 0
-          ? { ...u, strikes: u.strikes - 1 }
-          : u
-      )
-    )
-  }
-
-  const handleBanUser = (username: string) => {
-    // Remove user's comments from Firestore
-    fbService.removeCommentsByAuthor(username).catch(console.error)
-    // Remove user's relationships from Firestore
-    fbService.removeAllRelationshipsForUser(username).catch(console.error)
-    // Resolve reports for this user
-    reports
-      .filter(r => r.targetId === username && r.type === 'User')
-      .forEach(r => {
-        fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
-      })
-    // Delete user's books from Firestore
-    books
-      .filter(b => b.author.username === username)
-      .forEach(b => {
-        fbService.deleteBook(b.id).catch(console.error)
-      })
-    // Note: User account deletion from Firebase Auth would require admin SDK
-    // For now, just update their profile with a banned flag
-    const bannedUser = registeredUsers.find(u => u.username === username)
-    if (bannedUser?.uid) {
-      fbService
-        .updateUserProfile(bannedUser.uid, { isBanned: true })
-        .catch(console.error)
-    }
-    setRegisteredUsers(prev => prev.filter(u => u.username !== username))
-  }
-
-  const handleDismissReport = (reportId: string) => {
-    fbService.updateReportStatus(reportId, 'dismissed').catch(console.error)
   }
 
 
