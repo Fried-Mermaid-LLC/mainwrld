@@ -22,7 +22,7 @@ export const IAP_PRODUCTS = {
   points_300: { id: 'mainwrld.points_300', kind: 'consumable', points: 300 },
   points_500: { id: 'mainwrld.points_500', kind: 'consumable', points: 500 },
   points_1000: { id: 'mainwrld.points_1000', kind: 'consumable', points: 1000 },
-  premium_monthly: { id: 'mainwrld.premium_monthly', kind: 'subscription' },
+  premium_yearly: { id: 'mainwrld.premium_yearly', kind: 'subscription' },
 } as const
 
 export type IapSku = keyof typeof IAP_PRODUCTS
@@ -65,7 +65,7 @@ const ensureStore = async (): Promise<any | null> => {
       { id: IAP_PRODUCTS.points_500.id, type: types.CONSUMABLE, platform },
       { id: IAP_PRODUCTS.points_1000.id, type: types.CONSUMABLE, platform },
       {
-        id: IAP_PRODUCTS.premium_monthly.id,
+        id: IAP_PRODUCTS.premium_yearly.id,
         type: types.PAID_SUBSCRIPTION,
         platform,
       },

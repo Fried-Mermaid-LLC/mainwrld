@@ -935,7 +935,7 @@ export const AppShell: React.FC = () => {
                           // verifyAppleReceipt callback wired in App.
                           if (iap.isNativeIAPAvailable()) {
                             try {
-                              await iap.purchase('premium_monthly')
+                              await iap.purchase('premium_yearly')
                             } catch (err: any) {
                               console.error('[MainWRLD IAP] premium purchase failed:', err)
                               showToast(
