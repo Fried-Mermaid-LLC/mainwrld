@@ -54,8 +54,6 @@ import {
 } from './app/avatar'
 import { Button, Input, CoverImg } from './app/sharedComponents'
 import * as iap from './app/iap'
-import termsRaw from './legal/TERMS_OF_SERVICE.md?raw'
-import privacyRaw from './legal/PRIVACY_POLICY.md?raw'
 import {
   LOREM_CONTENT,
   CURRENT_USER_MOCK,
@@ -7614,103 +7612,10 @@ const PublishingView = ({ initialData, onPost, onBack, isNewBook }: any) => {
   )
 }
 
-// Renders a subset of Markdown (headings, bullet lists, **bold**, --- rules,
-// _italic_ lines, multi-line paragraphs) as styled JSX. Just enough to display
-// the EULA / Privacy Policy docs in-app without pulling in a markdown library.
-const renderLegalMarkdown = (md: string): React.ReactNode[] => {
-  const lines = md.split('\n')
-  const blocks: React.ReactNode[] = []
-  let para: string[] = []
-  let list: string[] = []
 
-  const renderInline = (text: string, keyBase: string) =>
-    text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-      part.startsWith('**') && part.endsWith('**') ? (
-        <strong key={`${keyBase}-${i}`} className='font-bold text-black'>
-          {part.slice(2, -2)}
-        </strong>
-      ) : (
-        <React.Fragment key={`${keyBase}-${i}`}>{part}</React.Fragment>
-      )
-    )
-
-  const flushPara = () => {
-    if (para.length) {
-      const key = `p-${blocks.length}`
-      blocks.push(
-        <p key={key} className='text-sm text-gray-600 leading-relaxed my-3'>
-          {renderInline(para.join(' '), key)}
-        </p>
-      )
-      para = []
-    }
-  }
-  const flushList = () => {
-    if (list.length) {
-      const key = `ul-${blocks.length}`
-      blocks.push(
-        <ul
-          key={key}
-          className='list-disc pl-5 space-y-1.5 my-3 text-sm text-gray-600 leading-relaxed'
-        >
-          {list.map((li, i) => (
-            <li key={`${key}-${i}`}>{renderInline(li, `${key}-${i}`)}</li>
-          ))}
-        </ul>
-      )
-      list = []
-    }
-  }
-
-  lines.forEach((line, idx) => {
-    const t = line.trim()
-    if (t === '') {
-      flushPara()
-      flushList()
-      return
-    }
-    if (t.startsWith('- ')) {
-      flushPara()
-      list.push(t.slice(2))
-      return
-    }
-    flushList()
-    if (t === '---') {
-      flushPara()
-      blocks.push(<hr key={idx} className='my-6 border-gray-100' />)
-    } else if (t.startsWith('## ')) {
-      flushPara()
-      blocks.push(
-        <h2 key={idx} className='text-base font-bold mt-7 mb-1'>
-          {renderInline(t.slice(3), `h2-${idx}`)}
-        </h2>
-      )
-    } else if (t.startsWith('# ')) {
-      flushPara()
-      blocks.push(
-        <h1 key={idx} className='text-2xl font-display mb-1'>
-          {t.slice(2)}
-        </h1>
-      )
-    } else if (t.startsWith('_') && t.endsWith('_')) {
-      flushPara()
-      blocks.push(
-        <p key={idx} className='text-xs text-gray-400 italic mb-4'>
-          {t.slice(1, -1)}
-        </p>
-      )
-    } else {
-      para.push(t)
-    }
-  })
-  flushPara()
-  flushList()
-  return blocks
-}
-
-const LEGAL_DOCS: Record<'terms' | 'privacy', { title: string; raw: string }> = {
-  terms: { title: 'Terms', raw: termsRaw },
-  privacy: { title: 'Privacy', raw: privacyRaw }
+const LEGAL_DOCS: Record<'terms' | 'privacy', { title: string; file: string }> = {
+  terms: { title: 'Terms', file: 'terms.html' },
+  privacy: { title: 'Privacy', file: 'privacy.html' }
 }
 
 const LegalView = ({ doc, onBack }: any) => (
@@ -7729,9 +7634,11 @@ const LegalView = ({ doc, onBack }: any) => (
         <h1 className='text-xl font-bold'>{doc.title}</h1>
       </div>
     </header>
-    <div className='flex-1 overflow-y-auto no-scrollbar px-6 py-6 pb-16'>
-      {renderLegalMarkdown(doc.raw)}
-    </div>
+    <iframe
+      src={`${BASE}${doc.file}`}
+      title={doc.title}
+      className='flex-1 w-full border-0'
+    />
   </div>
 )
 
