@@ -1,4 +1,4 @@
-import type { CapacitorConfig } from '@capacitor/cli'
+import type { CapacitorConfig } from "@capacitor/cli";
 
 // PLACEHOLDER bundle ID. Must be replaced with the real ID assigned in
 // App Store Connect before TestFlight upload. The choice affects the
@@ -7,19 +7,19 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // `npx cap add ios` requires re-initialising the iOS project, so this
 // must be confirmed with the client before Stage 8.
 const config: CapacitorConfig = {
-  appId: 'com.example.mainwrld',
-  appName: 'MainWRLD',
+  appId: "com.mainwrld",
+  appName: "MainWrld",
   // Vite outputs to dist/. Capacitor copies from this folder into
   // ios/App/App/public/ on `npx cap sync`.
-  webDir: 'dist',
+  webDir: "dist",
   ios: {
     // Lets web content extend under the notch / Dynamic Island; the
     // app uses CSS `env(safe-area-inset-*)` and `100dvh` to lay out
     // around it (added in Stage 5).
-    contentInset: 'never',
+    contentInset: "never",
     // White matches the existing splash logo and bg-white default.
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
   },
-}
+};
 
-export default config
+export default config;

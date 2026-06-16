@@ -172,7 +172,7 @@ node -e "
 | `mainwrld.points_300` | Consumable | 300 points за $2.99 |
 | `mainwrld.points_500` | Consumable | 500 points за $4.99 |
 | `mainwrld.points_1000` | Consumable | 1000 points за $9.99 |
-| `mainwrld.premium_monthly` | Auto-Renewable Subscription | MainWRLD+ |
+| `mainwrld.premium_yearly` | Auto-Renewable Subscription | MainWRLD+ за $34.99/year |
 
 Цены настраиваются в Apple's pricing tiers (точные доллары зависят от региона). Каждый продукт нужно подать на review вместе с приложением; до первого approve они в статусе «Waiting for Review».
 
@@ -421,7 +421,7 @@ Apple требует от UGC-приложений:
 5. Firestore indices для запросов вида `where('admirer', '==', x)`.
 
 ### Этап 3. Платежи через IAP (16-24 ч)
-1. Создать в App Store Connect IAP-продукты: `points_100`, `points_300`, `points_500`, `points_1000`, `premium_monthly`.
+1. Создать в App Store Connect IAP-продукты: `points_100`, `points_300`, `points_500`, `points_1000`, `premium_yearly`.
 2. Установить `@capacitor-community/in-app-purchases` (или RevenueCat для упрощения receipt validation).
 3. Заменить ветку оплаты points / premium на нативный IAP: при тапе вызывать `Purchases.purchase(productId)`, по успеху — Cloud Function `creditPoints` с верификацией receipt у Apple.
 4. На вебе оставить Stripe (через `Capacitor.getPlatform() === 'web'`).

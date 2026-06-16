@@ -48,7 +48,7 @@ const POINTS_BY_PRODUCT: Record<string, number> = {
   'mainwrld.points_1000': 1000,
 }
 
-const PREMIUM_PRODUCT_IDS = new Set(['mainwrld.premium_monthly'])
+const PREMIUM_PRODUCT_IDS = new Set(['mainwrld.premium_yearly'])
 
 type VerifyArgs = {
   productId: string
