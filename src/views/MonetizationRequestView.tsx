@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react'
 import { Button, CoverImg } from '@/components/sharedComponents'
 import type { Book } from '@/types'
+import { useApp } from '@/state/AppContext'
 
-export const MonetizationRequestView = ({
-  works,
-  onBack,
-  onRequest,
-  showToast
-}: any) => {
+export const MonetizationRequestView = () => {
+  const { books, user, handleRequestMonetization, setView, showToast } = useApp()
+  const works = books.filter(b => b.author.username === user.username)
+  const onRequest = handleRequestMonetization
+  const onBack = () => setView('write')
   const [selectedBook, setSelectedBook] = useState(works[0] || null)
   const [price, setPrice] = useState('9.99')
 

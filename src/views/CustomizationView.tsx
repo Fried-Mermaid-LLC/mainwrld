@@ -2,6 +2,7 @@ import React, { useState, useEffect, use } from 'react';
 import { BASE } from '@/config/config';
 import { AvatarLayers, AVATAR_ITEMS, getHairPosition, getFacePosition, HAIR_POSITIONS, FACE_POSITIONS } from '@/components/avatar';
 import { AvatarCategory, AvatarConfig, AvatarGender, AvatarItem, User } from '@/types';
+import { useApp } from '@/state/AppContext';
 
 interface CustomizationViewProps {
     user: User;
@@ -15,17 +16,19 @@ interface CustomizationViewProps {
     getItemCost: (itemId: string) => number;
 }
 
-export const CustomizationView: React.FC<CustomizationViewProps> = ({
-    user,
-    setUser,
-    onBack,
-    avatarConfig,
-    setAvatarConfig,
-    unlockedAvatarItems,
-    setUnlockedAvatarItems,
-    isAdmin,
-    getItemCost,
-}) => {
+export const CustomizationView = () => {
+    const {
+        user,
+        setUser,
+        avatarConfig,
+        setAvatarConfig,
+        unlockedAvatarItems,
+        setUnlockedAvatarItems,
+        isAdmin,
+        getItemCost,
+        setView,
+    } = useApp()
+    const onBack = () => setView('self-profile')
     const [activeCategory, setActiveCategory] = useState<AvatarCategory>('body');
     const [pendingUnlock, setPendingUnlock] = useState<{ id: string; cost: number } | null>(null);
     const [localConfig, setLocalConfig] = useState<AvatarConfig | null>(avatarConfig);

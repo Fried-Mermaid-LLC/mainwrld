@@ -1,8 +1,15 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { Button, Input } from '@/components/sharedComponents'
 import { GENRE_LIST } from '@/config/constants'
+import { useApp } from '@/state/AppContext'
 
-export const PublishingView = ({ initialData, onPost, onBack, isNewBook }: any) => {
+export const PublishingView = () => {
+  const { publishingInitialData, handlePublish, setView, currentPublishingId } =
+    useApp()
+  const initialData = publishingInitialData
+  const onPost = handlePublish
+  const onBack = () => setView('write')
+  const isNewBook = !currentPublishingId
   const [tagline, setTagline] = useState(initialData?.tagline || '')
   const [isExplicit, setIsExplicit] = useState(initialData?.isExplicit || false)
   const [commentsEnabled, setCommentsEnabled] = useState(

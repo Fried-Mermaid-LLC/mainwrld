@@ -84,9 +84,7 @@ export const AppShell: React.FC = () => {
 
       case 'terms':
       case 'privacy':
-        return (
-          <LegalView doc={LEGAL_DOCS[view]} onBack={() => setView('landing')} />
-        )
+        return <LegalView />
 
       case 'signup':
         return <SignupView />
@@ -314,43 +312,16 @@ export const AppShell: React.FC = () => {
         )
 
       case 'publishing':
-        return (
-          <PublishingView
-            initialData={publishingInitialData}
-            onPost={handlePublish}
-            onBack={() => setView('write')}
-            isNewBook={!currentPublishingId}
-          />
-        )
+        return <PublishingView />
 
       case 'monetization-request':
-        return (
-          <MonetizationRequestView
-            user={user}
-            works={books.filter(b => b.author.username === user.username)}
-            onRequest={handleRequestMonetization}
-            onBack={() => setView('write')}
-            showToast={showToast}
-          />
-        )
+        return <MonetizationRequestView />
 
       case 'self-profile':
         return <SelfProfileView />
 
       case 'customization':
-        return (
-          <CustomizationView
-            user={user}
-            setUser={setUser}
-            onBack={() => setView('self-profile')}
-            avatarConfig={avatarConfig}
-            setAvatarConfig={setAvatarConfig}
-            unlockedAvatarItems={unlockedAvatarItems}
-            setUnlockedAvatarItems={setUnlockedAvatarItems}
-            isAdmin={isAdmin}
-            getItemCost={getItemCost}
-          />
-        )
+        return <CustomizationView />
 
       case 'notifications':
         return <NotificationsView />
