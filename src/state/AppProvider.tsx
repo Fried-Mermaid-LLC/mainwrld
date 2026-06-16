@@ -103,6 +103,7 @@ import { useAvatar } from './hooks/useAvatar'
 import { useNotifications } from './hooks/useNotifications'
 import { useComments } from './hooks/useComments'
 import { useChat } from './hooks/useChat'
+import { useCart } from './hooks/useCart'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -361,8 +362,9 @@ export function useAppValue() {
   })
   const { chatMessages, setChatMessages, handleSendMessage } = chat
 
-  // Cart (loaded from Firestore user doc)
-  const [cart, setCart] = useState<Book[]>([])
+  const cart_ = useCart({ showToast })
+  const { cart, setCart, handleAddToCart } = cart_
+
 
   // Per-user book ownership and progress (loaded from Firestore user doc)
   const [userBookData, setUserBookData] = useState<
@@ -1807,14 +1809,6 @@ export function useAppValue() {
     }
   }
 
-  const handleAddToCart = (book: Book) => {
-    if (cart.find(item => item.id === book.id)) {
-      showToast('Book is already in your cart!', 'info')
-      return
-    }
-    setCart([...cart, book])
-    showToast('Book added to cart!', 'shopping_cart')
-  }
   // Rewards logic (awardPoints/handleClaimPoints/handleSpinWheel/membership) -> useRewards (Phase B)
 
   const handlePublish = async (data: any) => {
