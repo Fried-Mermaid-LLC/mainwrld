@@ -730,6 +730,7 @@ export function useAppValue() {
 
   // Subscribe to Firestore books in real-time
   useEffect(() => {
+    if (!firebaseUid) return
     const unsubscribe = fbService.subscribeToBooksChanges(
       (firestoreBooks: any[]) => {
         const converted = firestoreBooks.map((fb: any) => ({
@@ -756,7 +757,7 @@ export function useAppValue() {
       }
     )
     return () => unsubscribe()
-  }, [favoriteBookIds])
+  }, [favoriteBookIds, firebaseUid])
 
   useEffect(() => {
     const unsubscribe = fbService.subscribeToGlobalSpotlight(
@@ -797,6 +798,7 @@ export function useAppValue() {
 
   // Subscribe to all registered users in real-time for online status and reading activity
   useEffect(() => {
+    if (!firebaseUid) return
     const unsubscribe = fbService.subscribeToUsers((users: any[]) => {
       setRegisteredUsers(users)
       // Pre-populate avatar configs for all users so profile views show avatars
@@ -821,12 +823,13 @@ export function useAppValue() {
       }
     })
     return () => unsubscribe()
-  }, [])
+  }, [firebaseUid])
 
   // ===== FIRESTORE REAL-TIME SUBSCRIPTIONS =====
 
   // Subscribe to relationships
   useEffect(() => {
+    if (!firebaseUid) return
     const unsub = fbService.subscribeToRelationships((rels: any[]) => {
       setRelationships(
         rels.map(r => ({
@@ -837,10 +840,11 @@ export function useAppValue() {
       )
     })
     return () => unsub()
-  }, [])
+  }, [firebaseUid])
 
   // Subscribe to chat messages
   useEffect(() => {
+    if (!firebaseUid) return
     const unsub = fbService.subscribeToChatMessages((msgs: any[]) => {
       setChatMessages(
         msgs.map(m => ({
@@ -854,10 +858,11 @@ export function useAppValue() {
       )
     })
     return () => unsub()
-  }, [])
+  }, [firebaseUid])
 
   // Subscribe to notifications
   useEffect(() => {
+    if (!firebaseUid) return
     const unsub = fbService.subscribeToNotifications((notifs: any[]) => {
       setNotifications(
         notifs.map(n => ({
@@ -876,10 +881,11 @@ export function useAppValue() {
       )
     })
     return () => unsub()
-  }, [])
+  }, [firebaseUid])
 
   // Subscribe to comments
   useEffect(() => {
+    if (!firebaseUid) return
     const unsub = fbService.subscribeToComments((comments: any[]) => {
       setAllComments(
         comments.map(c => ({
@@ -896,7 +902,7 @@ export function useAppValue() {
       )
     })
     return () => unsub()
-  }, [])
+  }, [firebaseUid])
 
   // Update user activity based on current view
   useEffect(() => {
@@ -919,6 +925,7 @@ export function useAppValue() {
 
   // Subscribe to reports
   useEffect(() => {
+    if (!firebaseUid || !isAdmin) return
     const unsub = fbService.subscribeToReports((reps: any[]) => {
       setReports(
         reps.map(r => ({
@@ -932,7 +939,7 @@ export function useAppValue() {
       )
     })
     return () => unsub()
-  }, [])
+  }, [firebaseUid, isAdmin])
 
   // Load user-specific data from Firestore when user logs in
   useEffect(() => {
