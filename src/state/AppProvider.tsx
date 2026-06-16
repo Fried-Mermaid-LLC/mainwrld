@@ -35,7 +35,6 @@ import {
   MIN_WORD_COUNT,
   MAX_DAILY_EARNED_POINTS,
   COMMENT_LIKES_THRESHOLD,
-  CHAPTER_LIKES_THRESHOLD,
   MAX_DAILY_CHAPTERS,
   MAX_WORD_COUNT,
   GENRE_LIST,
@@ -104,11 +103,23 @@ import { useNotifications } from './hooks/useNotifications'
 import { useComments } from './hooks/useComments'
 import { useChat } from './hooks/useChat'
 import { useCart } from './hooks/useCart'
+import { useBooks } from './hooks/useBooks'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
 // behaviour is identical to the previous monolithic component. Phase B will
 // strangle individual domains out of this hook into dedicated hook files.
+type AddNotification = (
+  title: string,
+  message: string,
+  icon: string,
+  recipient?: string,
+  sender?: string,
+  targetId?: string,
+  targetChapterIndex?: number,
+  commentId?: string
+) => void
+
 export function useAppValue() {
   // UI / navigation / selection state lives in useUI (Phase B). Called first so
   // its effects (clipboard guard) register in the same order as before.
@@ -162,15 +173,70 @@ export function useAppValue() {
     setHasAdminClaim,
     isAdmin
   } = authState
-  const [books, setBooks] = useState<Book[]>([])
-  const [globalSpotlightBookId, setGlobalSpotlightBookId] = useState<
-    string | null
-  >(null)
-  // Chat messages (Firestore real-time)
-
-  const [likedBooks, setLikedBooks] = useState<Set<string>>(new Set())
-  const [favoriteBookIds, setFavoriteBookIds] = useState<Set<string>>(new Set())
-  const likedBooksInteracted = useRef(false)
+  // Late-bound bridge for addNotification: useNotifications is called below
+  // (it consumes MUTUALS/registeredUsers/books). Hooks that run earlier
+  // (useBooks/useSocial) reach notifications through this stable wrapper;
+  // addNotificationRef.current is wired the moment useNotifications returns.
+  const addNotificationRef = useRef<AddNotification>(() => {})
+  const addNotificationLB = useCallback<AddNotification>(
+    (...args) => addNotificationRef.current(...args),
+    []
+  )
+  // Points / coupons / membership rewards live in useRewards (Phase B). Placed
+  // early so awardPoints + rewardedItems are direct refs for handleLike /
+  // handleLikeComment, and lastClaimedPoints/coupons for the persist effect.
+  const rewards = useRewards({ user, setUser, showToast, showConfirm })
+  const {
+    lastClaimedPoints,
+    setLastClaimedPoints,
+    rewardedItems,
+    setRewardedItems,
+    coupons,
+    setCoupons,
+    awardPoints,
+    awardMembershipBonus,
+    handleClaimPoints,
+    handleSpinWheel
+  } = rewards
+  // Books domain lives in useBooks (Phase B). Placed before useNotifications
+  // (which reads books) and after useRewards (handleLike awards points). It
+  // reaches notifications through addNotificationLB since useNotifications runs
+  // later in this hook.
+  const booksState = useBooks({
+    user,
+    firebaseUid,
+    selectedBook,
+    setSelectedBook,
+    setView,
+    showToast,
+    showConfirm,
+    addNotification: addNotificationLB,
+    awardPoints,
+    rewardedItems,
+    setRewardedItems
+  })
+  const {
+    books,
+    setBooks,
+    globalSpotlightBookId,
+    setGlobalSpotlightBookId,
+    likedBooks,
+    setLikedBooks,
+    favoriteBookIds,
+    setFavoriteBookIds,
+    likedBooksInteracted,
+    spotlightInit,
+    setSpotlightInit,
+    getTotalLikes,
+    getChapterLikes,
+    isBookFavorited,
+    handleLike,
+    handleToggleFavorite,
+    handleUnpublish,
+    handleDeleteBook,
+    handleMarkCompleted,
+    handleShareBook
+  } = booksState
 
   // Users loaded from Firestore
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([])
@@ -243,6 +309,7 @@ export function useAppValue() {
     setSelectedChatUser
   })
   const { notifications, setNotifications, addNotification, handleNotificationClick } = notif
+  addNotificationRef.current = addNotification
 
   // Avatar config / unlocked items live in useAvatar (Phase B).
   const avatar = useAvatar({ user, selectedProfileUser })
@@ -284,25 +351,6 @@ export function useAppValue() {
         .updateUserProfile(firebaseUid, { itemPriceOverrides: updated })
         .catch(console.error)
   }
-
-  // Comments state (Firestore real-time)
-
-  // Rewards state/logic lives in useRewards (Phase B), placed before the
-  // handlers (handleLike/handleLikeComment) and the persist effect that consume
-  // awardPoints / rewardedItems / lastClaimedPoints.
-  const rewards = useRewards({ user, setUser, showToast, showConfirm })
-  const {
-    lastClaimedPoints,
-    setLastClaimedPoints,
-    rewardedItems,
-    setRewardedItems,
-    coupons,
-    setCoupons,
-    awardPoints,
-    awardMembershipBonus,
-    handleClaimPoints,
-    handleSpinWheel
-  } = rewards
 
   // Comments domain lives in useComments (Phase B), placed after useRewards
   // so handleLikeComment can use awardPoints/rewardedItems.
@@ -352,28 +400,6 @@ export function useAppValue() {
   const userBookDataRef = useRef(userBookData)
   userBookDataRef.current = userBookData
 
-  // Helper to get total likes for a book (handles both old number and new number[] format)
-  const getTotalLikes = (likes: number | number[]): number => {
-    if (Array.isArray(likes)) return likes.reduce((a, b) => a + b, 0)
-    return likes || 0
-  }
-
-  // Helper to get chapter likes for a book (ensures array format)
-  const getChapterLikes = (
-    likes: number | number[],
-    chapterCount: number
-  ): number[] => {
-    if (Array.isArray(likes)) {
-      // Extend array if needed for new chapters
-      const arr = [...likes]
-      while (arr.length < chapterCount) arr.push(0)
-      return arr
-    }
-    // Migrate old format: distribute total evenly or put all on first chapter
-    const arr = new Array(Math.max(chapterCount, 1)).fill(0)
-    arr[0] = likes || 0
-    return arr
-  }
 
   // Helper to get current user's owned book IDs
   const getUserOwnedBookIds = useCallback(() => {
@@ -382,12 +408,6 @@ export function useAppValue() {
     return new Set([...owned, ...purchased])
   }, [userBookData, user.username])
 
-  const isBookFavorited = useCallback(
-    (bookId: string): boolean => {
-      return favoriteBookIds.has(bookId)
-    },
-    [favoriteBookIds]
-  )
 
   // Helper to get current user's progress for a book
   const getUserBookProgress = useCallback(
@@ -680,73 +700,6 @@ export function useAppValue() {
   const [lastSelectedChapterIndex, setLastSelectedChapterIndex] =
     useState<string>('new')
 
-  // Subscribe to Firestore books in real-time
-  useEffect(() => {
-    if (!firebaseUid) return
-    const unsubscribe = fbService.subscribeToBooksChanges(
-      (firestoreBooks: any[]) => {
-        const converted = firestoreBooks.map((fb: any) => ({
-          ...fb,
-          author: {
-            username: fb.authorUsername || fb.author?.username || 'unknown',
-            displayName:
-              fb.authorDisplayName || fb.author?.displayName || 'Unknown',
-            isOnline: false,
-            activity: 'Idle' as const,
-            position: [0, 0, 0] as [number, number, number],
-            isMutual: false,
-            points: 0,
-            admirersCount: 0,
-            mutualsCount: 0,
-            strikes: 0
-          },
-          // Ensure likes is always an array
-          likes: Array.isArray(fb.likes) ? fb.likes : [fb.likes || 0],
-          isFavorite: favoriteBookIds.has(fb.id),
-          price: fb.price ?? 0
-        }))
-        setBooks(converted)
-      }
-    )
-    return () => unsubscribe()
-  }, [favoriteBookIds, firebaseUid])
-
-  useEffect(() => {
-    const unsubscribe = fbService.subscribeToGlobalSpotlight(
-      (spotlight: any) => {
-        setGlobalSpotlightBookId(spotlight?.spotlightBookId || null)
-      }
-    )
-    return () => unsubscribe()
-  }, [])
-
-  const [spotlightInit, setSpotlightInit] = useState(false)
-
-  useEffect(() => {
-    if (books.length === 0 || spotlightInit) return
-    setSpotlightInit(true)
-    fbService.ensureGlobalSpotlight(books).catch((err: any) => {
-      console.warn('[MainWRLD] Spotlight disabled:', err?.message || err)
-    })
-  }, [books, spotlightInit])
-
-  useEffect(() => {
-    setBooks(prev =>
-      prev.map(book => {
-        const nextIsFavorite = favoriteBookIds.has(book.id)
-        return book.isFavorite === nextIsFavorite
-          ? book
-          : { ...book, isFavorite: nextIsFavorite }
-      })
-    )
-    setSelectedBook(prev => {
-      if (!prev) return prev
-      const nextIsFavorite = favoriteBookIds.has(prev.id)
-      return prev.isFavorite === nextIsFavorite
-        ? prev
-        : { ...prev, isFavorite: nextIsFavorite }
-    })
-  }, [favoriteBookIds])
 
   // Subscribe to all registered users in real-time for online status and reading activity
   useEffect(() => {
@@ -793,8 +746,6 @@ export function useAppValue() {
     })
     return () => unsub()
   }, [firebaseUid])
-
-
 
 
   // Update user activity based on current view
@@ -928,17 +879,6 @@ export function useAppValue() {
       })
       .catch(console.error)
   }, [firebaseUid, user.username])
-
-
-  // Save likedBooks to Firestore after user interaction
-  useEffect(() => {
-    if (likedBooksInteracted.current && firebaseUid) {
-      fbService
-        .updateUserProfile(firebaseUid, { likedBooks: Array.from(likedBooks) })
-        .catch(console.error)
-    }
-  }, [likedBooks])
-
 
 
   // NOTE: Individual persist effects removed — all user data is now batched
@@ -1338,72 +1278,6 @@ export function useAppValue() {
   }
 
 
-  const handleLike = async (bookId: string, chapterIndex: number = 0) => {
-    likedBooksInteracted.current = true
-    const likeKey = `${bookId}:${chapterIndex}`
-    const isLiked = likedBooks.has(likeKey)
-
-    const targetBook = books.find(b => b.id === bookId)
-    if (!targetBook) return
-
-    const chLikes = getChapterLikes(
-      targetBook.likes,
-      targetBook.chapters?.length || 1
-    )
-
-    if (isLiked) {
-      const next = new Set(likedBooks)
-      next.delete(likeKey)
-      setLikedBooks(next)
-      chLikes[chapterIndex] = Math.max(0, (chLikes[chapterIndex] || 0) - 1)
-    } else {
-      const next = new Set(likedBooks)
-      next.add(likeKey)
-      setLikedBooks(next)
-      chLikes[chapterIndex] = (chLikes[chapterIndex] || 0) + 1
-      const chapterTitle =
-        targetBook.chapters?.[chapterIndex]?.title ||
-        `Chapter ${chapterIndex + 1}`
-      const authorUsername =
-        (targetBook as any).authorUsername || targetBook.author.username
-      addNotification(
-        'Chapter Liked',
-        `${user?.displayName} liked ${chapterTitle} from "${targetBook.title}"`,
-        'favorite',
-        authorUsername,
-        user.username,
-        targetBook.id,
-        chapterIndex
-      )
-
-      // Earned points: award book author 2 pts when chapter hits like threshold
-      const rewardKey = `chapter:${bookId}:${chapterIndex}:${Math.floor(
-        chLikes[chapterIndex] / CHAPTER_LIKES_THRESHOLD
-      )}`
-      if (
-        chLikes[chapterIndex] % CHAPTER_LIKES_THRESHOLD === 0 &&
-        !rewardedItems.has(rewardKey) &&
-        targetBook.author.username === user.username
-      ) {
-        setRewardedItems(prev => new Set(prev).add(rewardKey))
-        awardPoints(2, `${chapterTitle} hit ${chLikes[chapterIndex]} likes!`)
-      }
-    }
-
-    // Update locally for immediate UI feedback
-    setBooks(prev =>
-      prev.map(b => {
-        if (b.id !== bookId) return b
-        const updated = { ...b, likes: [...chLikes] }
-        if (selectedBook && selectedBook.id === bookId) setSelectedBook(updated)
-        return updated
-      })
-    )
-
-    // Persist to Firestore
-    fbService.updateBook(bookId, { likes: chLikes }).catch(console.error)
-  }
-
   const handleAdmire = (targetUser: User) => {
     const admireKey = `${user.username}->${targetUser.username}`
 
@@ -1751,34 +1625,6 @@ export function useAppValue() {
     [userBookData, user.username]
   )
 
-  const handleToggleFavorite = (bookId: string) => {
-    const nextFavoriteBookIds = new Set(favoriteBookIds)
-    const isFavorited = nextFavoriteBookIds.has(bookId)
-
-    if (isFavorited) nextFavoriteBookIds.delete(bookId)
-    else nextFavoriteBookIds.add(bookId)
-
-    setFavoriteBookIds(nextFavoriteBookIds)
-
-    setBooks(prev =>
-      prev.map(book =>
-        book.id === bookId ? { ...book, isFavorite: !isFavorited } : book
-      )
-    )
-
-    setSelectedBook(prev => {
-      if (!prev || prev.id !== bookId) return prev
-      return { ...prev, isFavorite: !isFavorited }
-    })
-
-    if (firebaseUid) {
-      fbService
-        .updateUserProfile(firebaseUid, {
-          favoriteBookIds: Array.from(nextFavoriteBookIds)
-        })
-        .catch(console.error)
-    }
-  }
 
   // Rewards logic (awardPoints/handleClaimPoints/handleSpinWheel/membership) -> useRewards (Phase B)
 
@@ -1976,105 +1822,6 @@ export function useAppValue() {
     }
   }
 
-  const handleUnpublish = async (bookId: string) => {
-    const book = books.find(b => b.id === bookId)
-    const wasMonetized = book?.isMonetized
-    await fbService.updateBook(bookId, {
-      isDraft: true,
-      isMonetized: false,
-      wasMonetizedBefore: wasMonetized || book?.wasMonetizedBefore || false
-    })
-    showToast('Book unpublished and moved to drafts.', 'visibility_off')
-  }
-
-  const handleDeleteBook = (bookId: string) => {
-    showConfirm({
-      title: 'This action cannot be undone.',
-      message: `Are you sure you want to permanently delete this book?`,
-      confirmLabel: 'Yes',
-      cancelLabel: 'No',
-      icon: 'check_circle',
-      onConfirm: async () => {
-        await fbService.deleteBook(bookId)
-        setView('self-profile')
-        showToast(`You successfully deleted your book`)
-      },
-      onCancel: () => {}
-    })
-  }
-
-  const handleMarkCompleted = (bookId: string) => {
-    const book = books.find(b => b.id === bookId)
-    if (!book) return
-
-    if (book.isCompleted) {
-      if (book.isMonetized) {
-        showConfirm({
-          title: 'Warning: Demonetization',
-          message:
-            'This book is currently monetized. Marking it as uncomplete will permanently demonetize it and it cannot be monetized again. Are you sure?',
-          confirmLabel: 'Yes, demonetize and reopen',
-          cancelLabel: 'Cancel',
-          icon: 'money_off',
-          onConfirm: async () => {
-            const updates = {
-              isCompleted: false,
-              wasCompleted: true,
-              isMonetized: false,
-              wasMonetizedBefore: true,
-              isFree: true,
-              price: 0
-            }
-            await fbService.updateBook(bookId, updates)
-            if (selectedBook?.id === bookId)
-              setSelectedBook((prev: any) =>
-                prev ? { ...prev, ...updates } : prev
-              )
-            showToast('Book demonetized and reopened', 'money_off')
-          },
-          onCancel: () => {}
-        })
-      } else {
-        showConfirm({
-          title: 'Reopen this work?',
-          message:
-            'This will remove the completed status. The book will become editable again.',
-          confirmLabel: 'Reopen',
-          cancelLabel: 'Cancel',
-          icon: 'undo',
-          onConfirm: async () => {
-            const updates = { isCompleted: false, wasCompleted: true }
-            await fbService.updateBook(bookId, updates)
-            if (selectedBook?.id === bookId)
-              setSelectedBook((prev: any) =>
-                prev ? { ...prev, ...updates } : prev
-              )
-            showToast('Completed status removed', 'undo')
-          },
-          onCancel: () => {}
-        })
-      }
-    } else {
-      showConfirm({
-        title: 'Mark as Completed?',
-        message:
-          'Once marked completed, this book will become un-editable. Are you sure?',
-        confirmLabel: 'Yes, Complete',
-        cancelLabel: 'Cancel',
-        icon: 'check_circle',
-        onConfirm: async () => {
-          const updates = { isCompleted: true, wasCompleted: true }
-          await fbService.updateBook(bookId, updates)
-          if (selectedBook?.id === bookId)
-            setSelectedBook((prev: any) =>
-              prev ? { ...prev, ...updates } : prev
-            )
-          showToast('Book marked as completed!', 'check_circle')
-        },
-        onCancel: () => {}
-      })
-    }
-  }
 
   const handleRequestMonetization = async (bookId: string) => {
     const book = books.find(b => b.id === bookId)
@@ -2185,7 +1932,6 @@ export function useAppValue() {
   }
 
 
-
   const handleBookProgressUpdate = (
     bookId: string,
     scrollProgress: number,
@@ -2221,27 +1967,6 @@ export function useAppValue() {
           .updateUserProfile(firebaseUid, { activity: 'Reading' })
           .catch(console.error)
       }
-    }
-  }
-
-  const handleShareBook = async (book: Book) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: book.title,
-          text: book.tagline,
-          url: window.location.href
-        })
-      } catch (err) {
-        console.log('Share failed', err)
-      }
-    } else {
-      navigator.clipboard.writeText(window.location.href)
-      addNotification(
-        'Link Copied',
-        'Link copied to clipboard!',
-        'content_copy'
-      )
     }
   }
 
