@@ -101,6 +101,7 @@ import { useUI } from './hooks/useUI'
 import { useRewards } from './hooks/useRewards'
 import { useAvatar } from './hooks/useAvatar'
 import { useNotifications } from './hooks/useNotifications'
+import { useComments } from './hooks/useComments'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -313,7 +314,6 @@ export function useAppValue() {
   }
 
   // Comments state (Firestore real-time)
-  const [allComments, setAllComments] = useState<Comment[]>([])
 
   // Rewards state/logic lives in useRewards (Phase B), placed before the
   // handlers (handleLike/handleLikeComment) and the persist effect that consume
@@ -331,6 +331,21 @@ export function useAppValue() {
     handleClaimPoints,
     handleSpinWheel
   } = rewards
+
+  // Comments domain lives in useComments (Phase B), placed after useRewards
+  // so handleLikeComment can use awardPoints/rewardedItems.
+  const comments = useComments({
+    user,
+    firebaseUid,
+    selectedBook,
+    registeredUsers,
+    showToast,
+    addNotification,
+    awardPoints,
+    rewardedItems,
+    setRewardedItems
+  })
+  const { allComments, setAllComments, postComment, handleLikeComment } = comments
 
   // Cart (loaded from Firestore user doc)
   const [cart, setCart] = useState<Book[]>([])
@@ -811,26 +826,6 @@ export function useAppValue() {
   }, [firebaseUid])
 
 
-  // Subscribe to comments
-  useEffect(() => {
-    if (!firebaseUid) return
-    const unsub = fbService.subscribeToComments((comments: any[]) => {
-      setAllComments(
-        comments.map(c => ({
-          id: c.id || c.commentId || c.docId,
-          bookId: c.bookId,
-          chapterIndex: c.chapterIndex,
-          author: c.author,
-          authorUsername: c.authorUsername,
-          text: c.text,
-          likes: c.likes || 0,
-          likedBy: c.likedBy || [],
-          timestamp: c.timestamp || 'Now'
-        }))
-      )
-    })
-    return () => unsub()
-  }, [firebaseUid])
 
   // Update user activity based on current view
   useEffect(() => {
@@ -2269,120 +2264,7 @@ export function useAppValue() {
     return newBookId
   }
 
-  const postComment = async (text: string, chapterIndex?: number) => {
-    if (selectedBook?.commentsEnabled === false) {
-      showToast('Comments Disabled')
-      return
-    }
-    if (!selectedBook?.id) {
-      showToast('No book selected for comment.', 'error')
-      return
-    }
-    if (containsBadWord(text)) {
-      showToast('Your comment contains inappropriate language.', 'warning')
-      return
-    }
 
-    const newComment = {
-      id: Math.random().toString(36).substr(2, 9),
-      bookId: selectedBook.id,
-      chapterIndex,
-      author: user.displayName,
-      authorUsername: user.username,
-      text,
-      likes: 0,
-      likedBy: [] as string[],
-      timestamp: new Date().toISOString()
-    }
-
-    try {
-      setAllComments(prev => [...prev, newComment as any])
-      const createdCommentId = await fbService.addCommentDoc(newComment)
-
-      const chapterName =
-        chapterIndex !== undefined && selectedBook.chapters?.[chapterIndex]
-          ? ` (${selectedBook.chapters[chapterIndex].title})`
-          : ''
-      addNotification(
-        'New Comment',
-        `${user.displayName} commented on "${selectedBook.title}"${chapterName}`,
-        'chat_bubble',
-        selectedBook.author.username,
-        user.username,
-        selectedBook.id,
-        chapterIndex,
-        createdCommentId || newComment.id
-      )
-
-      showToast('Your comment has been successfully added.')
-    } catch (error) {
-      setAllComments(prev => prev.filter(c => c.id !== newComment.id))
-      console.error(error)
-      showToast('Failed to post comment. Please try again.', 'error')
-    }
-  }
-
-  const handleLikeComment = async (commentId: string) => {
-    const comment = allComments.find(c => c.id === commentId)
-    if (!comment) return
-    const likedBy = comment.likedBy || []
-    if (likedBy.includes(user.username)) return // Already liked
-    const newLikes = comment.likes + 1
-    const updatedLikedBy = [...likedBy, user.username]
-    setAllComments(prev =>
-      prev.map(c =>
-        c.id === commentId
-          ? { ...c, likes: newLikes, likedBy: updatedLikedBy }
-          : c
-      )
-    )
-    try {
-      await fbService.updateComment(commentId, {
-        likes: newLikes,
-        likedBy: updatedLikedBy
-      })
-    } catch (error) {
-      setAllComments(prev =>
-        prev.map(c =>
-          c.id === commentId ? { ...c, likes: comment.likes, likedBy } : c
-        )
-      )
-      console.error(error)
-      showToast('Failed to like comment. Please try again.', 'error')
-      return
-    }
-    const recipientUsername =
-      (comment as any).authorUsername ||
-      registeredUsers.find((u: any) => u.displayName === comment.author)
-        ?.username ||
-      comment.author
-    addNotification(
-      'Comment Liked',
-      `${user.displayName} liked your comment: "${comment.text.substring(
-        0,
-        20
-      )}..."`,
-      'favorite_border',
-      recipientUsername,
-      user.username,
-      comment.bookId,
-      comment.chapterIndex,
-      comment.id
-    )
-
-    // Earned points: award comment author 1 pt when comment hits like threshold
-    const rewardKey = `comment:${commentId}:${Math.floor(
-      newLikes / COMMENT_LIKES_THRESHOLD
-    )}`
-    if (
-      newLikes % COMMENT_LIKES_THRESHOLD === 0 &&
-      !rewardedItems.has(rewardKey) &&
-      recipientUsername === user.username
-    ) {
-      setRewardedItems(prev => new Set(prev).add(rewardKey))
-      awardPoints(1, `Your comment hit ${newLikes} likes!`)
-    }
-  }
 
   const handleBookProgressUpdate = (
     bookId: string,
