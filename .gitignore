@@ -15,9 +15,8 @@ docs/
 .env.local
 .env.*.local
 
-# Asset working files (not shipped)
+# Asset working files
 MochaMattel3Dassets/
-CharactersAnimated/
 
 # Capacitor / iOS
 ios/App/Pods/

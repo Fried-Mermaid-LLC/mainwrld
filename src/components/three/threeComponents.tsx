@@ -43,19 +43,14 @@ export const AvatarModel: React.FC<{
   avatarConfig,
   isMoving = false
 }) => {
-  // TEMP: the animated avatar models live in the gitignored CharactersAnimated/
-  // folder and are not deployed, so requesting them returns the SPA index.html
-  // (404 fallback) which GLTFLoader cannot parse -> "Unexpected token '<'" and
-  // a lost WebGL context. Until the .glb files are shipped (e.g. into
-  // public/CharactersAnimated/AnimatedModels/), load the bundled static avatar.
-  // Flip USE_ANIMATED_MODELS back to true once the models are deployed.
-  const USE_ANIMATED_MODELS = false
-  const modelPath =
-    USE_ANIMATED_MODELS && avatarConfig
-      ? `${BASE}CharactersAnimated/AnimatedModels/${
-          avatarConfig.gender === 'male' ? 'ManAnimated.glb' : 'WomanAnimated.glb'
-        }`
-      : `${BASE}avatar.glb`
+  // Animated avatar models are served from public/characters_animated/. useGLTF
+  // caches by URL, so the ~58MB man / ~11MB woman models load once and are
+  // shared across every avatar in the 3D world.
+  const modelPath = avatarConfig
+    ? `${BASE}characters_animated/animated_models/${
+        avatarConfig.gender === 'male' ? 'man_animated.glb' : 'woman_animated.glb'
+      }`
+    : `${BASE}avatar.glb`
 
   const avatarGLTF = useGLTF(modelPath)
   const avatarRef = useRef<THREE.Group>(null)
@@ -77,7 +72,7 @@ export const AvatarModel: React.FC<{
   // APPLY AVATAR CONFIG (IMPORTANT FIX)
   // -----------------------------
   useEffect(() => {
-    if (!scene || !avatarConfig || !USE_ANIMATED_MODELS) return
+    if (!scene || !avatarConfig) return
 
     const activeIds = Object.values(avatarConfig).filter(
       v =>
