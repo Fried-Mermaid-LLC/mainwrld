@@ -99,6 +99,7 @@ import { WriteView } from '@/views/WriteView'
 import { AppContext } from './AppContext'
 import { useUI } from './hooks/useUI'
 import { useRewards } from './hooks/useRewards'
+import { useAvatar } from './hooks/useAvatar'
 
 // The entire former App body lifted verbatim into a single hook. Hook-call
 // order and every effect dependency array are preserved exactly, so runtime
@@ -252,46 +253,18 @@ export function useAppValue() {
   // Notifications state (Firestore real-time)
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
 
-  // Avatar customization state (loaded from Firestore user doc)
-  const [allAvatarConfigs, setAllAvatarConfigs] = useState<
-    Record<string, AvatarConfig>
-  >({})
-
-  const avatarConfig = allAvatarConfigs[user.username] || null
-  const setAvatarConfig = useCallback(
-    (config: AvatarConfig | null) => {
-      setAllAvatarConfigs(prev => {
-        if (!config) {
-          const next = { ...prev }
-          ;-delete next[user.username]
-          return next
-        }
-        return { ...prev, [user.username]: config }
-      })
-    },
-    [user.username]
-  )
-
-  // Unlocked avatar items (loaded from Firestore user doc)
-  const [allUnlockedItems, setAllUnlockedItems] = useState<
-    Record<string, string[]>
-  >({})
-
-  const unlockedAvatarItems = useMemo(
-    () => new Set(allUnlockedItems[user.username] || []),
-    [allUnlockedItems, user.username]
-  )
-  const setUnlockedAvatarItems = useCallback(
-    (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
-      setAllUnlockedItems(prev => {
-        const currentSet = new Set(prev[user.username] || [])
-        const newSet =
-          typeof updater === 'function' ? updater(currentSet) : updater
-        return { ...prev, [user.username]: [...newSet] }
-      })
-    },
-    [user.username]
-  )
+  // Avatar config / unlocked items live in useAvatar (Phase B).
+  const avatar = useAvatar({ user, selectedProfileUser })
+  const {
+    allAvatarConfigs,
+    setAllAvatarConfigs,
+    avatarConfig,
+    setAvatarConfig,
+    allUnlockedItems,
+    setAllUnlockedItems,
+    unlockedAvatarItems,
+    setUnlockedAvatarItems
+  } = avatar
 
   // Blocked users state (loaded from Firestore user doc)
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
@@ -995,23 +968,6 @@ export function useAppValue() {
       .catch(console.error)
   }, [firebaseUid, user.username])
 
-  // Load avatar config for other users when viewing their profile
-  useEffect(() => {
-    if (!selectedProfileUser || selectedProfileUser.username === user.username)
-      return
-    if (allAvatarConfigs[selectedProfileUser.username]) return // already loaded
-    fbService
-      .getUserByUsername(selectedProfileUser.username)
-      .then((profile: any) => {
-        if (profile?.avatarConfig) {
-          setAllAvatarConfigs(prev => ({
-            ...prev,
-            [selectedProfileUser.username]: profile.avatarConfig
-          }))
-        }
-      })
-      .catch(console.error)
-  }, [selectedProfileUser])
 
   // Save likedBooks to Firestore after user interaction
   useEffect(() => {
