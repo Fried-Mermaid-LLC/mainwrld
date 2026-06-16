@@ -314,6 +314,14 @@ export const ReadingView = ({
     }
   }, [])
 
+  // Keep the latest onProgressUpdate in a ref so the sync effect below does not
+  // depend on the callback's identity. The parent passes a fresh inline function
+  // every render; including it in the dep array caused an infinite update loop
+  // (effect -> setReadingChapterIndex in parent -> new callback -> effect -> ...),
+  // which also forced repeated re-renders that lost the WebGL context.
+  const onProgressUpdateRef = useRef(onProgressUpdate)
+  onProgressUpdateRef.current = onProgressUpdate
+
   // Sync progress back to main state when it changes significantly (save both scroll and chapter)
   useEffect(() => {
     if (suppressSaveRef.current) return
@@ -329,8 +337,8 @@ export const ReadingView = ({
       exact.clientWidthPx = pageFlipRef.current.clientWidth
     }
 
-    onProgressUpdate(localScrollProgress, currentChapterIdx, exact)
-  }, [localScrollProgress, currentChapterIdx, onProgressUpdate])
+    onProgressUpdateRef.current(localScrollProgress, currentChapterIdx, exact)
+  }, [localScrollProgress, currentChapterIdx])
 
   // Scroll to top when chapter changes (skip initial mount to allow restore)
   const chapterChangeRef = useRef(false)

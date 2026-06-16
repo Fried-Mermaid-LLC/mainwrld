@@ -191,12 +191,20 @@ export const AvatarLayers = ({
   const faceStyle = faceStyleOverride ?? getFacePosition(avatarConfig.faceId, faceShrink);
   const hairStyle = hairStyleOverride ?? getHairPosition(avatarConfig.hairId, hairShrink, hairShift);
 
+  // Resolve item image paths up-front and only render an <img> when the path is
+  // non-empty — passing src="" makes the browser re-download the whole page and
+  // spams the console with empty-src warnings.
+  const bodySrc = getAvatarItemPath('body', avatarConfig.bodyId);
+  const faceSrc = getAvatarItemPath('face', avatarConfig.faceId);
+  const outfitSrc = getAvatarItemPath('outfit', avatarConfig.outfitId);
+  const hairSrc = getAvatarItemPath('hair', avatarConfig.hairId);
+
   return (
     <div className={containerClassName} style={containerStyle}>
-      <img src={getAvatarItemPath('body', avatarConfig.bodyId)} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 1 }} />
-      {avatarConfig.faceId !== 'no_face' && <img src={getAvatarItemPath('face', avatarConfig.faceId)} className="absolute" style={{ zIndex: 2, ...faceStyle}} />}
-      <img src={getAvatarItemPath('outfit', avatarConfig.outfitId)} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 3 }} />
-      {avatarConfig.hairId !== 'none' && <img src={getAvatarItemPath('hair', avatarConfig.hairId)} className="absolute" style={{ zIndex: 4, ...hairStyle}} />}
+      {bodySrc && <img src={bodySrc} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 1 }} />}
+      {avatarConfig.faceId !== 'no_face' && faceSrc && <img src={faceSrc} className="absolute" style={{ zIndex: 2, ...faceStyle}} />}
+      {outfitSrc && <img src={outfitSrc} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 3 }} />}
+      {avatarConfig.hairId !== 'none' && hairSrc && <img src={hairSrc} className="absolute" style={{ zIndex: 4, ...hairStyle}} />}
     </div>
   );
 };
