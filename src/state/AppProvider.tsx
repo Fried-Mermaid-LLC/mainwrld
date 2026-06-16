@@ -1,78 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-  Suspense
-} from 'react'
-import * as THREE from 'three'
-import { Canvas, useFrame } from '@react-three/fiber'
-import {
-  Html,
-  Environment,
-  PerspectiveCamera,
-  useGLTF
-} from '@react-three/drei'
-import * as fbService from '@/services/firebaseService'
-import {
-  ACCENT_COLOR,
-  WORLD_RADIUS,
-  MAX_LIBRARY_SIZE,
-  MIN_WORD_COUNT,
-  MAX_DAILY_EARNED_POINTS,
-  COMMENT_LIKES_THRESHOLD,
-  MAX_WORD_COUNT,
-  GENRE_LIST,
-  SKIN_TONE_COLORS
-} from '@/config/constants'
-import {
-  getHairPosition,
-  getFacePosition,
-  getAvatarItemPath,
-  AvatarLayers,
-  HAIR_POSITIONS,
-  FACE_POSITIONS
-} from '@/components/avatar'
-import { Button, Input, CoverImg } from '@/components/sharedComponents'
-import {
-  LOREM_CONTENT,
-  CURRENT_USER_MOCK,
-  MOCK_USERS,
-  INITIAL_BOOKS
-} from '@/data/mockData'
-import { AvatarModel, MovingAvatar, Player } from '@/components/three/threeComponents'
-import { CustomizationView } from '@/views/CustomizationView'
-import {
-  View,
-  User,
-  UserRecord,
-  NotificationItem,
-  ChatMessage,
-  Comment,
-  Coupon,
-  AvatarGender,
-  AvatarCategory,
-  AvatarItem,
-  Chapter,
-  Book
-} from '@/types'
-
-import { ExploreView } from '@/views/ExploreView'
-import { OtherProfileView } from '@/views/OtherProfileView'
-import { PublicBookDetailPage } from '@/views/PublicBookDetailPage'
-import { CartView } from '@/views/CartView'
-import { ReadingView } from '@/views/ReadingView'
-import { MonetizationRequestView } from '@/views/MonetizationRequestView'
-import { PublishingView } from '@/views/PublishingView'
-import { LegalView, LEGAL_DOCS } from '@/views/LegalView'
-import { ForgotPasswordView } from '@/views/ForgotPasswordView'
-import { SettingsView } from '@/views/SettingsView'
-import { AdminDashboard } from '@/views/AdminDashboard'
-import { CommentsView } from '@/views/CommentsView'
-import { ChatListView } from '@/views/ChatListView'
-import { ChatConversationView } from '@/views/ChatConversationView'
-import { WriteView } from '@/views/WriteView'
+import React, { useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { AppContext } from './AppContext'
 import { useUI } from './hooks/useUI'
@@ -92,10 +18,13 @@ import { useUserDataLoader } from './hooks/useUserDataLoader'
 import { usePayments } from './hooks/usePayments'
 import { usePersist } from './hooks/usePersist'
 
-// The entire former App body lifted verbatim into a single hook. Hook-call
-// order and every effect dependency array are preserved exactly, so runtime
-// behaviour is identical to the previous monolithic component. Phase B will
-// strangle individual domains out of this hook into dedicated hook files.
+// useAppValue composes the app's domain hooks (Phase B complete). Each hook owns
+// one slice of state / effects / handlers; this function only wires them together.
+// The hook-call order and every effect's dependency array preserve the exact
+// runtime behaviour of the original monolithic App component. Two late-bound
+// bridges (addNotification / setReadingActivity) let hooks that run early call
+// into owners that run later. The big returned object is the context value
+// consumed throughout the app via useApp().
 type AddNotification = (
   title: string,
   message: string,
