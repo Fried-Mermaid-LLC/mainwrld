@@ -1,4 +1,5 @@
 import { loadStripe, type Stripe } from '@stripe/stripe-js'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 
 export const BASE = import.meta.env.BASE_URL
 
@@ -36,23 +37,26 @@ export const STRIPE_PREMIUM_PAYMENT_LINK = 'https://buy.stripe.com/test_premium'
 export const STRIPE_PREMIUM_PRICE_ID = ''
 export const STRIPE_BOOK_PRICE_ID = ''
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 export const RESEND_FROM_EMAIL = 'welcome@mainwrld.com'
 export const RESEND_SUBJECT = 'Welcome to MainWRLD!'
 
+// Sends the post-signup welcome email via the `sendWelcomeEmail` callable
+// Cloud Function (Resend lives server-side). Migrated off the old Express
+// server (server.js) so it no longer needs a separately-hosted backend or
+// VITE_API_BASE_URL. Best-effort: failures are logged, never thrown, so a
+// mail hiccup never blocks sign-up. The recipient is taken from the caller's
+// auth token server-side; `email` is sent only as a fallback.
 export const sendWelcomeEmail = async (
   email: string,
   displayName: string,
   username: string
 ) => {
   try {
-    const res = await fetch(`${API_BASE_URL}/send-welcome-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, displayName, username })
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error)
+    const fn = httpsCallable<
+      { email: string; displayName: string; username: string },
+      { success: boolean }
+    >(getFunctions(), 'sendWelcomeEmail')
+    await fn({ email, displayName, username })
     console.log('[MainWRLD] Welcome email sent')
   } catch (err) {
     console.error('[MainWRLD] Welcome email failed:', err)
