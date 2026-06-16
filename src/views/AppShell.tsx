@@ -96,6 +96,10 @@ import { CommentsView } from '@/views/CommentsView'
 import { ChatListView } from '@/views/ChatListView'
 import { ChatConversationView } from '@/views/ChatConversationView'
 import { WriteView } from '@/views/WriteView'
+import { SplashView } from '@/views/SplashView'
+import { LandingView } from '@/views/LandingView'
+import { LoginView } from '@/views/LoginView'
+import { SignupView } from '@/views/SignupView'
 import { useApp } from '@/state/AppContext'
 
 // Presentation shell: the former App return + renderView, now reading all
@@ -135,192 +139,13 @@ export const AppShell: React.FC = () => {
   const renderView = () => {
     switch (view) {
       case 'splash':
-        return (
-          <div className='fixed inset-0 bg-white flex flex-col items-center justify-center animate-in fade-in duration-700'>
-            <img
-              src={`${BASE}logo.png`}
-              alt='MainWRLD'
-              className='w-24 h-24 mb-4'
-            />
-            <img src={`${BASE}wordlogo.png`} alt='MainWRLD' className='h-8' />
-          </div>
-        )
+        return <SplashView />
 
       case 'landing':
-        return (
-          <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in fade-in duration-700'>
-            <div className='min-h-dvh flex flex-col px-8 pt-safe-top pb-safe-bottom'>
-              {/* Hero */}
-              <div className='flex-1 flex flex-col items-center justify-center text-center py-16'>
-                <img
-                  src={`${BASE}logo.png`}
-                  alt='MainWRLD'
-                  className='w-24 h-24 mb-6 drop-shadow-xl'
-                />
-                <img
-                  src={`${BASE}wordlogo.png`}
-                  alt='MainWRLD'
-                  className='h-7 mb-8'
-                />
-                <h1 className='text-4xl font-display leading-tight mb-4'>
-                  Where stories
-                  <br />
-                  come to life.
-                </h1>
-                <p className='text-sm text-gray-400 font-medium max-w-xs leading-relaxed'>
-                  Read, write and share stories in a living 3D world. Meet
-                  authors, build your audience and earn as you create.
-                </p>
-              </div>
-
-              {/* Feature highlights */}
-              <div className='space-y-3 mb-10'>
-                {[
-                  {
-                    icon: 'auto_stories',
-                    title: 'Read & write freely',
-                    desc: 'Discover endless stories or publish your own in seconds.'
-                  },
-                  {
-                    icon: 'public',
-                    title: 'A living 3D world',
-                    desc: 'Walk in, meet readers and authors as 3D avatars.'
-                  },
-                  {
-                    icon: 'workspace_premium',
-                    title: 'Earn & go premium',
-                    desc: 'Collect points, grow your audience and unlock more.'
-                  }
-                ].map(f => (
-                  <div
-                    key={f.title}
-                    className='flex items-center gap-4 bg-gray-50 rounded-2xl p-4'
-                  >
-                    <div className='w-11 h-11 shrink-0 rounded-xl bg-accent/10 flex items-center justify-center text-accent'>
-                      <span className='material-icons-round text-[22px]'>
-                        {f.icon}
-                      </span>
-                    </div>
-                    <div className='text-left'>
-                      <p className='text-sm font-bold leading-tight'>
-                        {f.title}
-                      </p>
-                      <p className='text-[11px] text-gray-400 font-medium leading-snug mt-0.5'>
-                        {f.desc}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* CTAs */}
-              <div className='space-y-3 pb-8'>
-                <Button
-                  className='w-full'
-                  onClick={() => {
-                    setAuthError(null)
-                    setView('signup')
-                  }}
-                >
-                  Get Started
-                </Button>
-                <button
-                  onClick={() => {
-                    setAuthError(null)
-                    setView('login')
-                  }}
-                  className='w-full text-xs font-bold text-gray-400 uppercase tracking-widest py-3'
-                >
-                  I already have an account
-                </button>
-              </div>
-
-              {/* Footer */}
-              <footer className='flex items-center justify-center gap-4 pb-6 text-center'>
-                <span className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
-                  © Fried Mermaid LLC
-                </span>
-                <span className='w-px h-3 bg-gray-200' />
-                <button
-                  onClick={() => setView('terms')}
-                  className='text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-accent transition-colors'
-                >
-                  Terms
-                </button>
-                <span className='w-px h-3 bg-gray-200' />
-                <button
-                  onClick={() => setView('privacy')}
-                  className='text-[10px] font-bold text-gray-400 uppercase tracking-widest hover:text-accent transition-colors'
-                >
-                  Privacy
-                </button>
-              </footer>
-            </div>
-          </div>
-        )
+        return <LandingView />
 
       case 'login':
-        return (
-          <div className='fixed inset-0 bg-white p-8 flex flex-col items-center justify-center animate-in fade-in duration-500'>
-            <button
-              onClick={() => {
-                setAuthError(null)
-                setView('landing')
-              }}
-              className='absolute top-safe-top left-8 mt-4 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
-            >
-              <span className='material-icons-round'>arrow_back</span>
-            </button>
-            <img
-              src={`${BASE}logo.png`}
-              alt='MainWRLD'
-              className='w-20 h-20 mb-4'
-            />
-            <h1 className='text-3xl font-display mb-12'>Log In</h1>
-            <div className='w-full max-w-sm space-y-4 mb-4'>
-              <Input
-                label='Username or Email'
-                placeholder='Enter username or email...'
-                value={loginForm.username}
-                onChange={(val: string) =>
-                  setLoginForm({ ...loginForm, username: val })
-                }
-              />
-              <Input
-                label='Password'
-                type='password'
-                placeholder='••••••••••••'
-                value={loginForm.password}
-                onChange={(val: string) =>
-                  setLoginForm({ ...loginForm, password: val })
-                }
-              />
-              <button
-                onClick={() => setView('forgot-password')}
-                className='text-[10px] font-bold text-accent uppercase tracking-widest text-right w-full py-1'
-              >
-                Forgot Password?
-              </button>
-            </div>
-            {authError && (
-              <p className='text-[10px] text-red-500 font-bold mb-4 uppercase tracking-widest'>
-                {authError}
-              </p>
-            )}
-            <Button className='w-full max-w-sm' onClick={handleLogin}>
-              Continue
-            </Button>
-            <button
-              onClick={() => {
-                setAuthError(null)
-                setView('signup')
-              }}
-              className='mt-8 text-xs font-bold text-gray-400 uppercase tracking-widest py-2'
-            >
-              Create Account
-            </button>
-          </div>
-        )
+        return <LoginView />
 
       case 'forgot-password':
         return (
@@ -344,85 +169,7 @@ export const AppShell: React.FC = () => {
         )
 
       case 'signup':
-        return (
-          <div className='fixed inset-0 bg-white p-8 overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500'>
-            <header className='flex items-center gap-4 mb-10'>
-              <button
-                onClick={() => {
-                  setAuthError(null)
-                  setView('login')
-                }}
-                className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
-              >
-                <span className='material-icons-round'>arrow_back</span>
-              </button>
-              <h1 className='text-2xl font-bold'>Sign Up</h1>
-            </header>
-            <div className='space-y-6'>
-              <Input
-                label='Email Address'
-                value={signUpForm.email}
-                onChange={(val: string) =>
-                  setSignUpForm({ ...signUpForm, email: val })
-                }
-              />
-              <Input
-                label='Birth Date'
-                type='date'
-                value={signUpForm.birthDate}
-                onChange={(val: string) =>
-                  setSignUpForm({ ...signUpForm, birthDate: val })
-                }
-              />
-              <Input
-                label='Display Name'
-                description='5-25 characters'
-                value={signUpForm.displayName}
-                onChange={(val: string) =>
-                  setSignUpForm({ ...signUpForm, displayName: val })
-                }
-              />
-              <Input
-                label='Username'
-                description='5-25 chars, lowercase, no caps'
-                value={signUpForm.username}
-                onChange={(val: string) =>
-                  setSignUpForm({
-                    ...signUpForm,
-                    username: val.toLowerCase().replace(/\s/g, '')
-                  })
-                }
-              />
-              <Input
-                label='Password'
-                type='password'
-                description='Minimum 12 characters'
-                value={signUpForm.password}
-                onChange={(val: string) =>
-                  setSignUpForm({ ...signUpForm, password: val })
-                }
-              />
-              <div className='space-y-1.5'>
-                <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
-                  Location
-                </label>
-                <select className='w-full bg-gray-50 rounded-2xl px-6 py-4 text-sm font-medium outline-none appearance-none'>
-                  <option>United States</option>
-                  <option>United Kingdom</option>
-                  <option>Canada</option>
-                </select>
-              </div>
-              {authError && (
-                <p className='text-[10px] text-red-500 font-bold uppercase tracking-widest px-2'>
-                  {authError}
-                </p>
-              )}
-              <Button className='w-full' onClick={handleSignup}>
-                Join MainWRLD
-              </Button>
-            </div>
-          </div>
-        )
+        return <SignupView />
 
       case 'home':
         return (
@@ -825,7 +572,7 @@ export const AppShell: React.FC = () => {
                       MainWRLD+
                     </h3>
                     <p className='text-[10px] text-amber-600 font-bold uppercase tracking-widest'>
-                      {user.isPremium ? 'Active Subscription' : '$30 a year'}
+                      {user.isPremium ? 'Active Subscription' : '$34.99 a year'}
                     </p>
                   </div>
 
@@ -959,7 +706,7 @@ export const AppShell: React.FC = () => {
                           } else {
                             showConfirm({
                               title: 'Upgrade to Premium',
-                              message: 'Subscribe to MainWRLD+ for $30/year?',
+                              message: 'Subscribe to MainWRLD+ for $34.99/year?',
                               confirmLabel: 'Subscribe',
                               cancelLabel: 'Maybe Later',
                               icon: 'workspace_premium',
@@ -979,7 +726,7 @@ export const AppShell: React.FC = () => {
                           }
                         }}
                       >
-                        Subscribe — $30/yr
+                        Subscribe — $34.99/yr
                       </Button>
                       <p className='text-[8px] text-amber-400 text-center font-bold uppercase tracking-widest flex items-center justify-center gap-1'>
                         <span className='material-icons-round text-[10px]'>
