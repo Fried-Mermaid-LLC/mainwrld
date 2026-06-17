@@ -83,9 +83,19 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$DIST_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          # No -t cert: that filters the .p12 down to the certificate only and
+          # drops the private key, which then breaks codesigning. Let security
+          # import both the cert and key from the pkcs12 bundle.
+          security import "$CERT_PATH" -P "$DIST_CERT_PASSWORD" -A -f pkcs12 -k "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+
+          # Fail loudly here (not deep in xcodebuild) if no signing identity landed.
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -q 'Apple Distribution'; then
+            echo "::error::No Apple Distribution codesigning identity in keychain after import"
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+            exit 1
+          fi
 
           # Place the profile where Xcode expects to find it.
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
