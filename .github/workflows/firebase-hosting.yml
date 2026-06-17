@@ -22,6 +22,10 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # FirebaseExtended/action-hosting-deploy@v0 has no Node 24 release yet;
+    # force it onto the Node 24 runtime (GitHub makes this the default anyway).
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
