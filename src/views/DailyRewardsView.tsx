@@ -187,10 +187,6 @@ export const DailyRewardsView = () => {
                 </button>
               ))}
             </div>
-            <p className='text-[8px] text-gray-400 text-center font-bold uppercase tracking-widest flex items-center justify-center gap-1 mt-2'>
-              <span className='material-icons-round text-[10px]'>lock</span>{' '}
-              Secured checkout
-            </p>
           </div>
 
           {/* Purchase Points Section */}
@@ -266,12 +262,6 @@ export const DailyRewardsView = () => {
                 </button>
               ))}
             </div>
-            <p className='text-[8px] text-gray-400 text-center font-bold uppercase tracking-widest flex items-center justify-center gap-1 mt-2'>
-              <span className='material-icons-round text-[10px]'>
-                lock
-              </span>{' '}
-              Secured by Stripe
-            </p>
           </div>
         </div>
 
@@ -426,11 +416,8 @@ export const DailyRewardsView = () => {
                 >
                   Subscribe — $34.99/yr
                 </Button>
-                <p className='text-[8px] text-amber-400 text-center font-bold uppercase tracking-widest flex items-center justify-center gap-1'>
-                  <span className='material-icons-round text-[10px]'>
-                    lock
-                  </span>{' '}
-                  Secured by Stripe • Cancel anytime
+                <p className='text-[8px] text-amber-400 text-center font-bold uppercase tracking-widest'>
+                  Cancel anytime
                 </p>
               </>
             )}
