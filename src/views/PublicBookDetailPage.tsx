@@ -251,7 +251,7 @@ export const PublicBookDetailPage = () => {
                 <span className='material-icons-round text-sm'>
                   add_shopping_cart
                 </span>{' '}
-                Add to Cart (${(book.price || 9.99).toFixed(2)})
+                Add to Cart ({Math.round((book.price || 9.99) * 100)} pts)
               </Button>
             </div>
           )}

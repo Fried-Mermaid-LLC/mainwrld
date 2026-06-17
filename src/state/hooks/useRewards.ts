@@ -132,7 +132,7 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
         return [...unusedOnly, newCoupon]
       })
 
-      showToast(`You won a $${winValue} coupon!`, 'confirmation_number')
+      showToast(`You won a ${winValue * 100}-point coupon!`, 'confirmation_number')
     }
 
     // If slots full → ask confirmation and STOP execution
@@ -141,7 +141,7 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
 
       showConfirm({
         title: 'Your coupon slots are full (3/3)',
-        message: `Winning a new coupon will permanently eliminate your oldest ticket ($${oldestUnused.value}). Do you wish to proceed?`,
+        message: `Winning a new coupon will permanently eliminate your oldest ticket (${oldestUnused.value * 100} pts). Do you wish to proceed?`,
         confirmLabel: 'Yes',
         cancelLabel: 'No',
         icon: 'check_circle',

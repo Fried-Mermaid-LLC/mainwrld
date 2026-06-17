@@ -6,130 +6,102 @@ import type { User, View } from '@/types'
 
 interface PaymentsDeps {
   view: View
+  user: User
+  firebaseUid: string | null
   setUser: Dispatch<SetStateAction<User>>
   showToast: (message: string, icon?: string) => void
-  showConfirm: (opts: {
-    title: string
-    message: string
-    confirmLabel?: string
-    cancelLabel?: string
-    icon?: string
-    iconBg?: string
-    onConfirm: () => void
-    onCancel?: () => void
-  }) => void
 }
 
-// Payments domain (Phase B). The Stripe web-redirect handler (points/premium
-// success + cancel + pending-purchase reconciliation, keyed on view) and the
-// native StoreKit IAP verify-callback setup. Owns no state — credits points /
-// premium straight onto setUser. Placed after the user-data loader and before
-// useAuthActions so the [view] and [] effects register in the same order as the
-// monolith. Bodies + dependency arrays verbatim.
-export function usePayments({ view, setUser, showToast, showConfirm }: PaymentsDeps) {
-  // Handle Stripe payment redirects and pending purchases - only after user is loaded
+// Payments domain. The Stripe web flow's source of truth is the
+// stripeWebhook Cloud Function: it verifies the Stripe signature,
+// dedupes by event.id, and credits Firestore atomically. After the
+// browser is redirected back with ?points_success / ?premium_success
+// we no longer credit locally — a forged URL would otherwise grant
+// free points. Instead we poll the user doc until the webhook lands
+// (typically <2s) and copy the fresh values into local state. iOS
+// IAP still routes through the onApproved → verifyAppleReceipt
+// callable, unchanged.
+export function usePayments({
+  view,
+  user,
+  firebaseUid,
+  setUser,
+  showToast,
+}: PaymentsDeps) {
   useEffect(() => {
-    if (view === 'splash' || view === 'landing' || view === 'login' || view === 'signup') return
+    if (
+      view === 'splash' ||
+      view === 'landing' ||
+      view === 'login' ||
+      view === 'signup'
+    )
+      return
     const urlParams = new URLSearchParams(window.location.search)
-    // Handle redirect with ?points_success=true
-    if (urlParams.get('points_success') === 'true') {
-      const pendingPoints = JSON.parse(
-        localStorage.getItem('mainwrld_pending_points') || 'null'
-      )
-      if (pendingPoints) {
-        setUser(prev => ({ ...prev, points: prev.points + pendingPoints.pts }))
-        showToast(
-          `${pendingPoints.pts} points added to your account!`,
-          'check_circle'
-        )
-        localStorage.removeItem('mainwrld_pending_points')
-      }
-      window.history.replaceState({}, '', window.location.pathname)
-      return
-    }
-    // Handle premium subscription success
-    if (urlParams.get('premium_success') === 'true') {
-      setUser(prev => ({
-        ...prev,
-        isPremium: true,
-        premiumSince: new Date().toISOString(),
-        membershipStartDate: Date.now()
-      }))
-      showToast('Welcome to MainWRLD+!', 'workspace_premium')
-      localStorage.removeItem('mainwrld_pending_premium')
-      window.history.replaceState({}, '', window.location.pathname)
-      return
-    }
-    if (urlParams.get('payment_cancelled') === 'true') {
+    const pointsRedirect = urlParams.get('points_success') === 'true'
+    const premiumRedirect = urlParams.get('premium_success') === 'true'
+    const cancelRedirect = urlParams.get('payment_cancelled') === 'true'
+    if (cancelRedirect) {
       showToast('Payment cancelled.', 'info')
-      localStorage.removeItem('mainwrld_pending_purchase')
-      localStorage.removeItem('mainwrld_pending_coupon')
       localStorage.removeItem('mainwrld_pending_points')
       localStorage.removeItem('mainwrld_pending_premium')
       window.history.replaceState({}, '', window.location.pathname)
       return
     }
-    // Auto-detect pending purchase when user returns to app (no redirect needed)
-    const pendingPoints = JSON.parse(
-      localStorage.getItem('mainwrld_pending_points') || 'null'
-    )
-    if (pendingPoints) {
-      // Check if enough time passed (user was likely on Stripe checkout)
-      const timeSinceSet = Date.now() - (pendingPoints.timestamp || 0)
-      if (timeSinceSet > 5000) {
-        showConfirm({
-          title: 'Purchase Complete?',
-          message: `Did you complete the purchase of ${pendingPoints.pts} points for $${pendingPoints.usd}?`,
-          confirmLabel: 'Yes, Add Points',
-          cancelLabel: 'No',
-          icon: 'check_circle',
-          onConfirm: () => {
-            setUser(prev => ({
+    if (!pointsRedirect && !premiumRedirect) return
+    if (!firebaseUid) return
+
+    localStorage.removeItem('mainwrld_pending_points')
+    localStorage.removeItem('mainwrld_pending_premium')
+    window.history.replaceState({}, '', window.location.pathname)
+    showToast('Verifying purchase…', 'sync')
+
+    // Webhook usually lands before the user finishes redirecting, but
+    // network variance can flip the order. Poll a few seconds before
+    // giving up; if we miss it here, the next sign-in re-loads the
+    // user doc and the credit shows up then.
+    const startingPoints = user.points
+    const startingPremium = user.isPremium
+    ;(async () => {
+      for (let i = 0; i < 6; i++) {
+        const fresh = (await fbService
+          .getUserProfile(firebaseUid)
+          .catch(() => null)) as User | null
+        if (fresh) {
+          const pointsCredited = (fresh.points || 0) > startingPoints
+          const premiumCredited = !!fresh.isPremium && !startingPremium
+          if (
+            (pointsRedirect && pointsCredited) ||
+            (premiumRedirect && premiumCredited)
+          ) {
+            setUser((prev) => ({
               ...prev,
-              points: prev.points + pendingPoints.pts
+              points: fresh.points ?? prev.points,
+              isPremium: fresh.isPremium ?? prev.isPremium,
+              premiumSince: fresh.premiumSince ?? prev.premiumSince,
+              membershipStartDate:
+                fresh.membershipStartDate ?? prev.membershipStartDate,
             }))
             showToast(
-              `${pendingPoints.pts} points added to your account!`,
-              'check_circle'
+              pointsRedirect
+                ? `${(fresh.points || 0) - startingPoints} points added!`
+                : 'Welcome to MainWRLD+!',
+              pointsRedirect ? 'check_circle' : 'workspace_premium'
             )
-            localStorage.removeItem('mainwrld_pending_points')
-          },
-          onCancel: () => {
-            localStorage.removeItem('mainwrld_pending_points')
+            return
           }
-        })
+        }
+        await new Promise((r) => setTimeout(r, 1000))
       }
-    }
-    // Auto-detect pending premium subscription
-    const pendingPremium = JSON.parse(
-      localStorage.getItem('mainwrld_pending_premium') || 'null'
-    )
-    if (pendingPremium) {
-      const timeSinceSet = Date.now() - (pendingPremium.timestamp || 0)
-      if (timeSinceSet > 5000) {
-        showConfirm({
-          title: 'Subscription Complete?',
-          message: 'Did you complete the MainWRLD Premium subscription?',
-          confirmLabel: 'Yes, Activate',
-          cancelLabel: 'No',
-          icon: 'workspace_premium',
-          onConfirm: () => {
-            setUser(prev => ({
-              ...prev,
-              isPremium: true,
-              premiumSince: new Date().toISOString(),
-              membershipStartDate: Date.now()
-            }))
-            showToast('Welcome to MainWRLD+!', 'workspace_premium')
-            localStorage.removeItem('mainwrld_pending_premium')
-          },
-          onCancel: () => {
-            localStorage.removeItem('mainwrld_pending_premium')
-          }
-        })
-      }
-    }
-  }, [view])
+      showToast(
+        'Stripe confirmed your purchase. The balance will update shortly.',
+        'sync'
+      )
+    })()
+    // user.points / user.isPremium intentionally absent from deps —
+    // they change as the poll completes and we don't want to re-arm
+    // the effect mid-flight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, firebaseUid])
 
   // IAP setup (Stage 3b). On iOS, wire the verify callback so any
   // approved StoreKit transaction is sent to verifyAppleReceipt and

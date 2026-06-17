@@ -4,7 +4,9 @@ import { Capacitor } from '@capacitor/core'
 //
 // Replaces the web Stripe Payment Link flow on iOS. On Capacitor's
 // `web` platform the existing Stripe flow keeps working untouched
-// (cart checkout via @stripe/stripe-js, see app/config.ts). On `ios`
+// for points-pack purchases and the Premium subscription (Payment
+// Link redirects, see src/config/config.ts). The book cart charges
+// in-app points only and is not part of any Stripe flow. On `ios`
 // every paid path routes through Apple StoreKit via the
 // cordova-plugin-purchase bridge.
 //

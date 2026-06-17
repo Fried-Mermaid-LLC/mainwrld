@@ -1,9 +1,16 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/sharedComponents'
-import { getStripe, STRIPE_PUBLISHABLE_KEY, STRIPE_BOOK_PRICE_ID } from '@/config/config'
 import type { Coupon } from '@/types'
 import * as fbService from '@/services/firebaseService'
 import { useApp } from '@/state/AppContext'
+
+// Book USD price is stored on the book record; we charge the same in
+// in-app points at a fixed rate so the cost is identical on iOS and web.
+// $9.99 → 999 pts. Keeping the conversion centralised lets us tune the
+// rate later without touching every display site.
+const POINTS_PER_DOLLAR = 100
+const bookCost = (book: any): number =>
+  Math.round((book.price || 9.99) * POINTS_PER_DOLLAR)
 
 export const CartView = () => {
   const {
@@ -16,6 +23,7 @@ export const CartView = () => {
     setView,
     userBookDataRef,
     user,
+    setUser,
     setUserBookData,
     setBooks,
     selectedBook,
@@ -64,137 +72,65 @@ export const CartView = () => {
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const subtotal = cart.reduce(
-    (acc: number, item: any) => acc + (item.price || 9.99),
+  const subtotalPts = cart.reduce(
+    (acc: number, item: any) => acc + bookCost(item),
     0
   )
-  const discount = selectedCoupon ? selectedCoupon.value : 0
-  const total = Math.max(0, subtotal - discount)
+  // Coupon.value is stored as a USD-equivalent number (1/3/5/10) so the
+  // spin-wheel reward schema stays unchanged; convert at use-time.
+  const discountPts = selectedCoupon
+    ? selectedCoupon.value * POINTS_PER_DOLLAR
+    : 0
+  const totalPts = Math.max(0, subtotalPts - discountPts)
 
   const handleRemove = (bookId: string) => {
     setCart(cart.filter((b: any) => b.id !== bookId))
   }
 
-  // Listen for successful payment return from Stripe
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get('payment_success') === 'true') {
-      // Payment was successful - mark items as owned
-      const purchasedIds = JSON.parse(
-        localStorage.getItem('mainwrld_pending_purchase') || '[]'
-      )
-      const couponId = localStorage.getItem('mainwrld_pending_coupon')
-      purchasedIds.forEach((id: string) => onOwnedUpdate(id))
-      if (couponId) {
-        // Remove used coupon from array entirely
-        setCoupons((prev: any[]) => prev.filter((c: any) => c.id !== couponId))
-      }
-      localStorage.removeItem('mainwrld_pending_purchase')
-      localStorage.removeItem('mainwrld_pending_coupon')
-      setCart([])
-      showToast('Purchase complete! Books added to library.', 'check_circle')
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname)
+  const finalizePurchase = () => {
+    cart.forEach((b: any) => onOwnedUpdate(b.id))
+    if (selectedCoupon) {
+      setCoupons(coupons.filter((c: any) => c.id !== selectedCoupon.id))
     }
-  }, [])
+    setCart([])
+    showToast('Books added to library!', 'check_circle')
+    onBack()
+  }
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     if (cart.length === 0) return
 
-    if (total === 0) {
-      // Free checkout (fully covered by coupon)
-      cart.forEach((b: any) => onOwnedUpdate(b.id))
-      if (selectedCoupon) {
-        // Logic: Once used, remove the coupon ticket from its slot in the array.
-        setCoupons(coupons.filter((c: any) => c.id !== selectedCoupon.id))
-      }
-      setCart([])
-      showToast('Books added to library!', 'check_circle')
-      onBack()
+    // Coupon covers the full cart — no points charged.
+    if (totalPts === 0) {
+      finalizePurchase()
       return
     }
 
-    setIsProcessing(true)
-    try {
-      const stripe = await getStripe()
-      if (!stripe || STRIPE_PUBLISHABLE_KEY.includes('REPLACE')) {
-        // Stripe not configured yet - use in-app confirmation
-        showConfirm({
-          title: 'Complete Purchase',
-          message: `Buy ${cart.length} book(s) for $${total.toFixed(2)}?`,
-          confirmLabel: 'Purchase',
-          icon: 'shopping_cart',
-          onConfirm: () => {
-            cart.forEach((b: any) => onOwnedUpdate(b.id))
-            if (selectedCoupon) {
-              // Remove used coupon from array entirely
-              setCoupons(coupons.filter((c: any) => c.id !== selectedCoupon.id))
-            }
-            setCart([])
-            showToast(
-              'Purchase complete! Books added to library.',
-              'check_circle'
-            )
-            onBack()
-          }
-        })
-        setIsProcessing(false)
-        return
-      }
-
-      // Store pending purchase info for when user returns from Stripe
-      localStorage.setItem(
-        'mainwrld_pending_purchase',
-        JSON.stringify(cart.map((b: any) => b.id))
-      )
-      if (selectedCoupon) {
-        localStorage.setItem('mainwrld_pending_coupon', selectedCoupon.id)
-      }
-
-      // Use Stripe Checkout with Price ID if available, otherwise use line items
-      if (STRIPE_BOOK_PRICE_ID) {
-        // The line-items variant of redirectToCheckout is removed from
-        // @stripe/stripe-js types (deprecated by Stripe; only works with test
-        // keys). This whole branch is replaced by Apple IAP on iOS in Stage 3,
-        // and the web flow will move to a server-created Checkout Session.
-        // @ts-expect-error deprecated lineItems variant
-        const { error } = await stripe.redirectToCheckout({
-          lineItems: [{ price: STRIPE_BOOK_PRICE_ID, quantity: cart.length }],
-          mode: 'payment',
-          successUrl: `${window.location.origin}?payment_success=true`,
-          cancelUrl: `${window.location.origin}?payment_cancelled=true`
-        })
-        if (error) {
-          console.error('Stripe error:', error)
-          showToast('Payment failed. Please try again.', 'error')
-        }
-      } else {
-        // Fallback: use in-app confirmation
-        showConfirm({
-          title: 'Complete Purchase',
-          message: `Pay $${total.toFixed(2)} for ${cart.length} book(s)?`,
-          confirmLabel: 'Pay Now',
-          icon: 'shopping_cart',
-          onConfirm: () => {
-            cart.forEach((b: any) => onOwnedUpdate(b.id))
-            if (selectedCoupon) {
-              // Remove used coupon from array entirely
-              setCoupons(coupons.filter((c: any) => c.id !== selectedCoupon.id))
-            }
-            setCart([])
-            showToast(
-              'Purchase complete! Books added to library.',
-              'check_circle'
-            )
-            onBack()
-          }
-        })
-      }
-    } catch (err) {
-      console.error('Checkout error:', err)
-      showToast('Payment service unavailable. Please try again later.', 'error')
+    if (user.points < totalPts) {
+      const shortage = totalPts - user.points
+      showConfirm({
+        title: 'Not enough points',
+        message: `You need ${shortage} more point(s). Earn or buy more in Daily Rewards.`,
+        confirmLabel: 'Get Points',
+        cancelLabel: 'Cancel',
+        icon: 'auto_awesome',
+        onConfirm: () => setView('daily-rewards')
+      })
+      return
     }
-    setIsProcessing(false)
+
+    showConfirm({
+      title: 'Complete Purchase',
+      message: `Buy ${cart.length} book(s) for ${totalPts} pts?`,
+      confirmLabel: 'Purchase',
+      icon: 'shopping_cart',
+      onConfirm: () => {
+        setIsProcessing(true)
+        setUser(prev => ({ ...prev, points: prev.points - totalPts }))
+        finalizePurchase()
+        setIsProcessing(false)
+      }
+    })
   }
 
   return (
@@ -242,7 +178,7 @@ export const CartView = () => {
                     </div>
                     <div className='flex justify-between items-end'>
                       <p className='text-sm font-black text-accent'>
-                        ${(book.price || 9.99).toFixed(2)}
+                        {bookCost(book)} pts
                       </p>
                       <button
                         onClick={() => handleRemove(book.id)}
@@ -283,9 +219,11 @@ export const CartView = () => {
                         }`}
                       >
                         <div className='flex flex-col items-center'>
-                          <span className='text-xs font-black'>${c.value}</span>
+                          <span className='text-xs font-black'>
+                            {c.value * POINTS_PER_DOLLAR}
+                          </span>
                           <span className='text-[7px] font-bold uppercase'>
-                            Off
+                            Pts Off
                           </span>
                         </div>
                       </button>
@@ -297,15 +235,18 @@ export const CartView = () => {
             <div className='p-6 bg-gray-50 rounded-3xl space-y-3 border border-gray-100'>
               <div className='flex justify-between text-xs font-bold text-gray-400'>
                 <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{subtotalPts} pts</span>
               </div>
               <div className='flex justify-between text-xs font-bold text-accent'>
                 <span>Coupon Discount</span>
-                <span>-${discount.toFixed(2)}</span>
+                <span>-{discountPts} pts</span>
               </div>
               <div className='pt-3 border-t border-gray-200 flex justify-between text-lg font-black'>
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>{totalPts} pts</span>
+              </div>
+              <div className='pt-2 text-[9px] font-bold text-gray-400 uppercase tracking-widest text-right'>
+                Your balance: {user.points} pts
               </div>
             </div>
 
@@ -323,15 +264,13 @@ export const CartView = () => {
                 </span>
               ) : (
                 <span className='flex items-center gap-2'>
-                  <span className='material-icons-round text-sm'>lock</span>{' '}
-                  Checkout & Pay ${total.toFixed(2)}
+                  <span className='material-icons-round text-sm'>
+                    auto_awesome
+                  </span>{' '}
+                  Checkout · {totalPts} pts
                 </span>
               )}
             </Button>
-            <p className='text-[8px] text-gray-400 text-center font-bold uppercase tracking-widest flex items-center justify-center gap-1'>
-              <span className='material-icons-round text-[10px]'>lock</span>{' '}
-              Secured by Stripe
-            </p>
           </>
         )}
       </div>

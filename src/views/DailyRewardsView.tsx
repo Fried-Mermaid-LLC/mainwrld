@@ -9,9 +9,8 @@ export const DailyRewardsView = () => {
   const {
     setView,
     showToast,
-    showConfirm,
     user,
-    setUser,
+    firebaseUid,
     coupons,
     handleClaimPoints,
     handleSpinWheel
@@ -107,7 +106,7 @@ export const DailyRewardsView = () => {
               onClick={handleSpinWheel}
             >
               {' '}
-              Win a $1, $3, $5, or $10 Coupon
+              Win a 100, 300, 500, or 1000 Pts Coupon
             </Button>
             <p className='text-[8px] text-white/30 font-bold uppercase tracking-widest text-center mt-2'>
               Win coupons for your next book purchase
@@ -151,32 +150,16 @@ export const DailyRewardsView = () => {
                       return
                     }
 
-                    // Web path: Stripe Checkout link (unchanged).
-                    const paymentLink =
-                      STRIPE_PAYMENT_LINKS[`points_${pkg.pts}`]
-
-                    if (!paymentLink) {
-                      // Payment links not configured yet - use in-app confirmation
-                      showConfirm({
-                        title: `Purchase ${pkg.pts} Points`,
-                        message: `Buy ${pkg.pts} points for $${pkg.usd}?`,
-                        confirmLabel: 'Purchase',
-                        icon: 'auto_awesome',
-                        onConfirm: () => {
-                          setUser(prev => ({
-                            ...prev,
-                            points: prev.points + pkg.pts
-                          }))
-                          showToast(
-                            `${pkg.pts} points added!`,
-                            'check_circle'
-                          )
-                        }
-                      })
+                    // Web path: Stripe Checkout link. client_reference_id
+                    // carries the firebaseUid through to the webhook (the
+                    // server credit needs to know which user paid).
+                    if (!firebaseUid) {
+                      showToast(
+                        'Please sign in before purchasing.',
+                        'error'
+                      )
                       return
                     }
-
-                    // Store pending points purchase with timestamp for when user returns
                     localStorage.setItem(
                       'mainwrld_pending_points',
                       JSON.stringify({
@@ -185,8 +168,9 @@ export const DailyRewardsView = () => {
                         timestamp: Date.now()
                       })
                     )
-                    // Redirect to Stripe Payment Link
-                    window.location.href = paymentLink
+                    window.location.href =
+                      STRIPE_PAYMENT_LINKS[`points_${pkg.pts}`] +
+                      `?client_reference_id=${firebaseUid}`
                   }}
                   className='p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-accent transition-all flex flex-col items-center gap-1 group active:scale-95'
                 >
@@ -344,38 +328,20 @@ export const DailyRewardsView = () => {
                       }
                       return
                     }
-                    if (
-                      STRIPE_PREMIUM_PAYMENT_LINK &&
-                      !STRIPE_PREMIUM_PAYMENT_LINK.includes(
-                        'test_premium'
+                    if (!firebaseUid) {
+                      showToast(
+                        'Please sign in before subscribing.',
+                        'error'
                       )
-                    ) {
-                      localStorage.setItem(
-                        'mainwrld_pending_premium',
-                        JSON.stringify({ timestamp: Date.now() })
-                      )
-                      window.location.href = STRIPE_PREMIUM_PAYMENT_LINK
-                    } else {
-                      showConfirm({
-                        title: 'Upgrade to Premium',
-                        message: 'Subscribe to MainWRLD+ for $34.99/year?',
-                        confirmLabel: 'Subscribe',
-                        cancelLabel: 'Maybe Later',
-                        icon: 'workspace_premium',
-                        onConfirm: () => {
-                          setUser(prev => ({
-                            ...prev,
-                            isPremium: true,
-                            premiumSince: new Date().toISOString(),
-                            membershipStartDate: Date.now()
-                          }))
-                          showToast(
-                            'Welcome to MainWRLD+!',
-                            'workspace_premium'
-                          )
-                        }
-                      })
+                      return
                     }
+                    localStorage.setItem(
+                      'mainwrld_pending_premium',
+                      JSON.stringify({ timestamp: Date.now() })
+                    )
+                    window.location.href =
+                      STRIPE_PREMIUM_PAYMENT_LINK +
+                      `?client_reference_id=${firebaseUid}`
                   }}
                 >
                   Subscribe — $34.99/yr
@@ -424,7 +390,10 @@ export const DailyRewardsView = () => {
                         confirmation_number
                       </span>
                       <span className='text-lg font-black text-accent'>
-                        ${coupon.value}
+                        {coupon.value * 100}
+                      </span>
+                      <span className='text-[7px] font-bold text-accent/60 uppercase tracking-tighter'>
+                        Pts
                       </span>
                       <span className='text-[7px] font-bold text-accent/60 uppercase tracking-tighter'>
                         {slotIdx === 0
