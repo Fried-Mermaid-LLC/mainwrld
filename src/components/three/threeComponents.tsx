@@ -83,7 +83,7 @@ export const AvatarModel: React.FC<{
   // shared across every avatar in the 3D world.
   const modelPath = avatarConfig
     ? `${BASE}characters_animated/animated_models/${
-        avatarConfig.gender === 'male' ? 'man_animated.glb' : 'woman_animated.glb'
+        avatarConfig.gender === 'male' ? 'man_animated.glb' : 'woman_animated_v2.glb'
       }`
     : `${BASE}avatar.glb`
 
