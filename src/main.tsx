@@ -3,8 +3,31 @@ import ReactDOM from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
+import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics'
 import App from './App'
 import './index.css'
+
+// On Capacitor native, forward uncaught JS errors to Firebase Crashlytics
+// so they show up alongside native crashes. The plugin is a no-op on web,
+// and we wrap each call in a catch so a Crashlytics failure never cascades
+// into the error path it's reporting. Native crashes (memory, threading,
+// IAP/Firebase native code) are auto-collected by the SDK after
+// FirebaseApp.configure() in AppDelegate — this only adds the JS layer.
+if (Capacitor.isNativePlatform()) {
+  window.addEventListener('error', (event) => {
+    FirebaseCrashlytics.recordException({
+      message: event.message,
+      stacktrace: event.error?.stack ?? '',
+    }).catch(() => {})
+  })
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason
+    FirebaseCrashlytics.recordException({
+      message: `Unhandled promise rejection: ${reason?.message ?? String(reason)}`,
+      stacktrace: reason?.stack ?? '',
+    }).catch(() => {})
+  })
+}
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
