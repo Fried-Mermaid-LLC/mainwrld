@@ -11,13 +11,48 @@ import { SkeletonUtils } from 'three-stdlib'
 // Helpers
 // -----------------------------
 
-const applySkinTone = (scene: THREE.Object3D, color: string) => {
-  scene.traverse((child: any) => {
-    if (child.isMesh) {
-      child.material = child.material.clone()
-      child.material.color = new THREE.Color(color)
-    }
-  })
+// Avatar colour is supplied almost entirely by the embedded baseColorTexture
+// maps (every material ships baseColorFactor=white, metallicFactor=0). If a map
+// fails to decode / upload — which is what happens in the memory-constrained
+// iOS WKWebView — the mesh samples an empty texture and renders pure black,
+// while the desktop browser (more GPU/CPU memory) is fine. So for each material
+// we: (a) keep it cheap + non-metallic, (b) re-tag the map as sRGB, and (c) when
+// the map did not decode, drop it and fall back to a solid colour so the mesh
+// stays visible instead of collapsing into a black silhouette.
+const FALLBACK_COLOR = '#9ca3af'
+
+const prepMaterial = (mat: THREE.Material, tint?: string) => {
+  const m = mat.clone() as THREE.MeshStandardMaterial
+  if ('metalness' in m) m.metalness = 0
+  if ('roughness' in m) m.roughness = 0.85
+
+  const map = m.map
+  const decoded = !!(map && (map.image as any)?.width)
+  if (map) {
+    map.colorSpace = THREE.SRGBColorSpace
+    map.needsUpdate = true
+  }
+
+  if (tint) {
+    // Body (skin tone) + the untextured fallback model: always recolour. If the
+    // map failed, drop it so the tint shows instead of multiplying by black.
+    if (map && !decoded) m.map = null
+    if ('color' in m) m.color = new THREE.Color(tint)
+  } else if (map && !decoded) {
+    // Clothing / hair / eyes have no tint of their own — if their texture failed
+    // to upload, show a neutral colour rather than a black blob.
+    m.map = null
+    if ('color' in m) m.color = new THREE.Color(FALLBACK_COLOR)
+  }
+
+  m.needsUpdate = true
+  return m
+}
+
+const styleMesh = (child: any, tint?: string) => {
+  child.material = Array.isArray(child.material)
+    ? child.material.map((m: THREE.Material) => prepMaterial(m, tint))
+    : prepMaterial(child.material, tint)
 }
 
 // -----------------------------
@@ -72,7 +107,17 @@ export const AvatarModel: React.FC<{
   // APPLY AVATAR CONFIG (IMPORTANT FIX)
   // -----------------------------
   useEffect(() => {
-    if (!scene || !avatarConfig) return
+    if (!scene) return
+
+    // Generic avatar.glb (no per-user config): the only genuinely metallic,
+    // untextured model — give it the target colour so it reads as a character
+    // and not a flat blob once forced non-metallic.
+    if (!avatarConfig) {
+      scene.traverse((child: any) => {
+        if (child.isMesh) styleMesh(child, targetColor)
+      })
+      return
+    }
 
     const activeIds = Object.values(avatarConfig).filter(
       v =>
@@ -92,13 +137,14 @@ export const AvatarModel: React.FC<{
 
       if (child.name.includes(bodyNodeName)) {
         child.visible = true
-        applySkinTone(child, targetColor)
+        styleMesh(child, targetColor)
         return
       }
 
       for (let id of activeIds) {
         if (child.name.includes(id)) {
           child.visible = true
+          styleMesh(child)
           break
         }
       }

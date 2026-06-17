@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, PerspectiveCamera } from '@react-three/drei'
+import { Capacitor } from '@capacitor/core'
 import { WORLD_RADIUS } from '@/config/constants'
 import { BASE } from '@/config/config'
 import { MovingAvatar, Player } from '@/components/three/threeComponents'
@@ -27,8 +28,14 @@ export const HomeView = () => {
       <Canvas shadows>
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault position={[0, 5, 10]} fov={50} />
-          <ambientLight intensity={0.8} />
-          <pointLight position={[10, 10, 10]} intensity={1.5} />
+          {/* These direct lights are the SOLE light source on native (the HDR
+              environment is web-only — see below). Avatar materials are
+              non-metallic and textured, so ambient + hemisphere + directional
+              fully shade them without any environment map. */}
+          <ambientLight intensity={0.7} />
+          <hemisphereLight args={['#ffffff', '#d9d9d9', 0.8]} />
+          <directionalLight position={[5, 10, 7]} intensity={1.4} />
+          <pointLight position={[10, 10, 10]} intensity={1.0} />
           <mesh scale={[WORLD_RADIUS, WORLD_RADIUS, WORLD_RADIUS]}>
             <sphereGeometry args={[1, 64, 64]} />
             <meshStandardMaterial
@@ -108,13 +115,18 @@ export const HomeView = () => {
               ))
             // ONLY SHOW USERS WHO ARE ONLINE & MUTUAL
           })()}
-          {/* drei's preset='city' fetches from raw.githack.com which is
-              unreliable in the Capacitor WebView; characters render
-              black until the HDR is in. The same file is bundled at
-              public/hdr/city.hdr and referenced via BASE so it loads
-              from the iOS app bundle synchronously. */}
-          <Environment files={`${BASE}hdr/city.hdr`} />
         </Suspense>
+        {/* The HDR environment is a web-only nicety: avatar materials are
+            non-metallic and textured, so they are fully shaded by the direct
+            lights above and gain almost nothing from IBL. On native it is
+            skipped entirely — the RGBELoader half-float + PMREM path is memory
+            heavy in the iOS WKWebView, and keeping it out of the avatars'
+            Suspense means it can never blank the character subtree. */}
+        {!Capacitor.isNativePlatform() && (
+          <Suspense fallback={null}>
+            <Environment files={`${BASE}hdr/city.hdr`} />
+          </Suspense>
+        )}
       </Canvas>
       <div
         className='absolute left-6 pointer-events-none flex justify-between w-[calc(100%-48px)] items-start'
