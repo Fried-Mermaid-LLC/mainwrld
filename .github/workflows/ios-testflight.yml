@@ -82,16 +82,18 @@ jobs:
           echo "$PROVISION_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
           echo "openssl: $(openssl version) | decoded .p12: $(wc -c < "$CERT_PATH") bytes"
 
-          # Re-encode the .p12 to legacy PBE that macOS `security import` accepts.
-          # OpenSSL 3 / newer Keychain may write PBES2/AES bags whose private key
-          # macOS silently skips, leaving a key-less cert (set-key-partition-list
-          # then fails with SecItemCopyMatching).
+          # Re-encode the .p12 to legacy 3DES/SHA1 PBE that macOS `security import`
+          # accepts. OpenSSL 3 / newer Keychain write PBES2/AES bags whose private
+          # key macOS silently skips, leaving a key-less cert (set-key-partition-list
+          # then fails with SecItemCopyMatching). The legacy provider must be loaded
+          # explicitly on OpenSSL 3 (-provider legacy -provider default).
           openssl pkcs12 -in "$CERT_PATH" -nodes -passin pass:"$DIST_CERT_PASSWORD" -out "$RUNNER_TEMP/bundle.pem"
           echo "openssl read exit=$? | private keys: $(grep -c 'PRIVATE KEY' "$RUNNER_TEMP/bundle.pem" 2>/dev/null)"
-          openssl pkcs12 -export -in "$RUNNER_TEMP/bundle.pem" -passout pass:"$DIST_CERT_PASSWORD" -out "$NORM_P12" -legacy
-          [ -s "$NORM_P12" ] || openssl pkcs12 -export -in "$RUNNER_TEMP/bundle.pem" -passout pass:"$DIST_CERT_PASSWORD" -out "$NORM_P12"
+          openssl pkcs12 -export -in "$RUNNER_TEMP/bundle.pem" -passout pass:"$DIST_CERT_PASSWORD" -out "$NORM_P12" \
+            -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1 -provider legacy -provider default 2>&1
+          echo "legacy export exit=$? | norm size: $(wc -c < "$NORM_P12" 2>/dev/null || echo 0)"
           rm -f "$RUNNER_TEMP/bundle.pem"
-          [ -s "$NORM_P12" ] && CERT_PATH="$NORM_P12" && echo "using normalized .p12: $(wc -c < "$NORM_P12") bytes"
+          [ -s "$NORM_P12" ] && CERT_PATH="$NORM_P12" && echo "using normalized .p12"
 
           # Temporary keychain that holds only our distribution certificate.
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
