@@ -173,7 +173,10 @@ export const HomeView = () => {
         >
           <div />
           <button
-            onPointerDown={() => setMoveDir(new THREE.Vector3(0, 0, -1))}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              setMoveDir(new THREE.Vector3(0, 0, -1))
+            }}
             onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
             className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
             style={{
@@ -187,7 +190,10 @@ export const HomeView = () => {
           </button>
           <div />
           <button
-            onPointerDown={() => setMoveDir(new THREE.Vector3(-1, 0, 0))}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              setMoveDir(new THREE.Vector3(-1, 0, 0))
+            }}
             onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
             className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
             style={{
@@ -201,7 +207,10 @@ export const HomeView = () => {
           </button>
           <div />
           <button
-            onPointerDown={() => setMoveDir(new THREE.Vector3(1, 0, 0))}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              setMoveDir(new THREE.Vector3(1, 0, 0))
+            }}
             onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
             className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
             style={{
@@ -215,7 +224,10 @@ export const HomeView = () => {
           </button>
           <div />
           <button
-            onPointerDown={() => setMoveDir(new THREE.Vector3(0, 0, 1))}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              setMoveDir(new THREE.Vector3(0, 0, 1))
+            }}
             onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
             className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
             style={{
