@@ -123,10 +123,10 @@ export const DailyRewardsView = () => {
             </div>
             <div className='grid grid-cols-2 gap-4 w-full'>
               {[
-                { usd: 1, pts: 100 },
-                { usd: 3, pts: 300 },
-                { usd: 5, pts: 500 },
-                { usd: 10, pts: 1000 }
+                { usd: 0.99, pts: 100 },
+                { usd: 2.99, pts: 300 },
+                { usd: 4.99, pts: 500 },
+                { usd: 9.99, pts: 1000 }
               ].map(pkg => (
                 <button
                   key={pkg.pts}
