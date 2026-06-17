@@ -108,7 +108,12 @@ export const HomeView = () => {
               ))
             // ONLY SHOW USERS WHO ARE ONLINE & MUTUAL
           })()}
-          <Environment preset='city' />
+          {/* drei's preset='city' fetches from raw.githack.com which is
+              unreliable in the Capacitor WebView; characters render
+              black until the HDR is in. The same file is bundled at
+              public/hdr/city.hdr and referenced via BASE so it loads
+              from the iOS app bundle synchronously. */}
+          <Environment files={`${BASE}hdr/city.hdr`} />
         </Suspense>
       </Canvas>
       <div className='absolute top-3 left-6 pointer-events-none flex justify-between w-[calc(100%-48px)] items-start'>
