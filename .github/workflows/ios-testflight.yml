@@ -84,22 +84,29 @@ jobs:
           echo "openssl: $(openssl version) | decoded .p12: $(wc -c < "$CERT_PATH") bytes"
 
           # macOS `security import` can't decrypt the AES/PBES2-encrypted key inside
-          # an OpenSSL-3-written .p12 (it imports the cert but silently drops the
-          # key). Extract key + cert as unencrypted PEM — which security accepts —
-          # and import them separately instead of fighting the pkcs12 bag.
-          openssl pkcs12 -in "$CERT_PATH" -nodes -nocerts -passin pass:"$DIST_CERT_PASSWORD" -out "$KEY_PEM"
-          echo "key extract exit=$? | private keys: $(grep -c 'PRIVATE KEY' "$KEY_PEM" 2>/dev/null)"
-          openssl pkcs12 -in "$CERT_PATH" -clcerts -nokeys -passin pass:"$DIST_CERT_PASSWORD" -out "$CERT_PEM"
-          echo "cert extract exit=$? | certs: $(grep -c 'BEGIN CERTIFICATE' "$CERT_PEM" 2>/dev/null)"
+          # an OpenSSL-3-written .p12, so extract key + cert to unencrypted PEM and
+          # import them separately. (-nokeys, not -clcerts: take the cert even when
+          # it isn't tagged as a client cert.)
+          openssl pkcs12 -in "$CERT_PATH" -nodes -nocerts -passin pass:"$DIST_CERT_PASSWORD" -out "$KEY_PEM" 2>/dev/null
+          openssl pkcs12 -in "$CERT_PATH" -nokeys -passin pass:"$DIST_CERT_PASSWORD" -out "$CERT_PEM" 2>/dev/null
+          NKEYS=$(grep -c 'PRIVATE KEY' "$KEY_PEM" 2>/dev/null || echo 0)
+          NCERTS=$(grep -c 'BEGIN CERTIFICATE' "$CERT_PEM" 2>/dev/null || echo 0)
+          echo "extracted from .p12: keys(begin+end)=$NKEYS certs=$NCERTS"
+          if [ "$NCERTS" = "0" ]; then
+            echo "::error::The .p12 contains a private key but NO certificate. Re-export from Keychain Access: under 'My Certificates' right-click the CERTIFICATE row (the one with the key nested beneath it) and Export as .p12 — do not export the key alone."
+            exit 1
+          fi
+          # Traditional RSA PEM imports more reliably via `security` than PKCS#8.
+          openssl rsa -in "$KEY_PEM" -out "$RUNNER_TEMP/key_trad.pem" 2>/dev/null && mv "$RUNNER_TEMP/key_trad.pem" "$KEY_PEM"
 
           # Temporary keychain that holds only our distribution identity.
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$KEY_PEM" -A -f openssl -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
-          echo "key import exit=$?"
           security import "$CERT_PEM" -A -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
           echo "cert import exit=$?"
+          security import "$KEY_PEM" -A -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          echo "key import exit=$?"
           rm -f "$KEY_PEM" "$CERT_PEM"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
           echo "set-key-partition-list exit=$?"
