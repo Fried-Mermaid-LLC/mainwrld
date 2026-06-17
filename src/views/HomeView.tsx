@@ -116,7 +116,10 @@ export const HomeView = () => {
           <Environment files={`${BASE}hdr/city.hdr`} />
         </Suspense>
       </Canvas>
-      <div className='absolute top-3 left-6 pointer-events-none flex justify-between w-[calc(100%-48px)] items-start'>
+      <div
+        className='absolute left-6 pointer-events-none flex justify-between w-[calc(100%-48px)] items-start'
+        style={{ top: 'calc(0.75rem + env(safe-area-inset-top))' }}
+      >
         <div>
           <img
             src={`${BASE}wordlogo.png`}
