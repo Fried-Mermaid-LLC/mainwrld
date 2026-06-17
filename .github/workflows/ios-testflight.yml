@@ -87,13 +87,23 @@ jobs:
           # an OpenSSL-3-written .p12, so extract key + cert to unencrypted PEM and
           # import them separately. (-nokeys, not -clcerts: take the cert even when
           # it isn't tagged as a client cert.)
-          openssl pkcs12 -in "$CERT_PATH" -nodes -nocerts -passin pass:"$DIST_CERT_PASSWORD" -out "$KEY_PEM" 2>/dev/null
-          openssl pkcs12 -in "$CERT_PATH" -nokeys -passin pass:"$DIST_CERT_PASSWORD" -out "$CERT_PEM" 2>/dev/null
-          NKEYS=$(grep -c 'PRIVATE KEY' "$KEY_PEM" 2>/dev/null || echo 0)
-          NCERTS=$(grep -c 'BEGIN CERTIFICATE' "$CERT_PEM" 2>/dev/null || echo 0)
+          echo "--- extract key (openssl output) ---"
+          openssl pkcs12 -in "$CERT_PATH" -nodes -nocerts -passin pass:"$DIST_CERT_PASSWORD" -out "$KEY_PEM" 2>&1 | sed 's/^/  /'
+          echo "--- extract cert (openssl output) ---"
+          openssl pkcs12 -in "$CERT_PATH" -nokeys -passin pass:"$DIST_CERT_PASSWORD" -out "$CERT_PEM" 2>&1 | sed 's/^/  /'
+          NKEYS=$(grep -c 'PRIVATE KEY' "$KEY_PEM" 2>/dev/null); NKEYS=${NKEYS:-0}
+          NCERTS=$(grep -c 'BEGIN CERTIFICATE' "$CERT_PEM" 2>/dev/null); NCERTS=${NCERTS:-0}
           echo "extracted from .p12: keys(begin+end)=$NKEYS certs=$NCERTS"
+          if [ "$NKEYS" = "0" ] && [ "$NCERTS" = "0" ]; then
+            echo "::error::openssl extracted neither key nor cert from the .p12 — almost certainly IOS_DIST_CERT_PASSWORD does not match this .p12 (look for 'Mac verify error' above). Update the password secret to the password used when exporting."
+            exit 1
+          fi
           if [ "$NCERTS" = "0" ]; then
-            echo "::error::The .p12 contains a private key but NO certificate. Re-export from Keychain Access: under 'My Certificates' right-click the CERTIFICATE row (the one with the key nested beneath it) and Export as .p12 — do not export the key alone."
+            echo "::error::The .p12 has a private key but NO certificate. Re-export from Keychain Access: under 'My Certificates' right-click the CERTIFICATE row (key nested beneath it) and Export as .p12 — not the key alone."
+            exit 1
+          fi
+          if [ "$NKEYS" = "0" ]; then
+            echo "::error::The .p12 has a certificate but NO private key."
             exit 1
           fi
           # Traditional RSA PEM imports more reliably via `security` than PKCS#8.
