@@ -71,31 +71,46 @@ jobs:
           DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
         run: |
+          set +e  # run diagnostics through to the explicit gate below
           CERT_PATH="$RUNNER_TEMP/dist_cert.p12"
+          NORM_P12="$RUNNER_TEMP/dist_cert_norm.p12"
           PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 
           echo "$DIST_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
           echo "$PROVISION_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
+          echo "openssl: $(openssl version) | decoded .p12: $(wc -c < "$CERT_PATH") bytes"
+
+          # Re-encode the .p12 to legacy PBE that macOS `security import` accepts.
+          # OpenSSL 3 / newer Keychain may write PBES2/AES bags whose private key
+          # macOS silently skips, leaving a key-less cert (set-key-partition-list
+          # then fails with SecItemCopyMatching).
+          openssl pkcs12 -in "$CERT_PATH" -nodes -passin pass:"$DIST_CERT_PASSWORD" -out "$RUNNER_TEMP/bundle.pem"
+          echo "openssl read exit=$? | private keys: $(grep -c 'PRIVATE KEY' "$RUNNER_TEMP/bundle.pem" 2>/dev/null)"
+          openssl pkcs12 -export -in "$RUNNER_TEMP/bundle.pem" -passout pass:"$DIST_CERT_PASSWORD" -out "$NORM_P12" -legacy
+          [ -s "$NORM_P12" ] || openssl pkcs12 -export -in "$RUNNER_TEMP/bundle.pem" -passout pass:"$DIST_CERT_PASSWORD" -out "$NORM_P12"
+          rm -f "$RUNNER_TEMP/bundle.pem"
+          [ -s "$NORM_P12" ] && CERT_PATH="$NORM_P12" && echo "using normalized .p12: $(wc -c < "$NORM_P12") bytes"
 
           # Temporary keychain that holds only our distribution certificate.
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          # No -t cert: that filters the .p12 down to the certificate only and
-          # drops the private key, which then breaks codesigning. Let security
-          # import both the cert and key from the pkcs12 bundle.
-          security import "$CERT_PATH" -P "$DIST_CERT_PASSWORD" -A -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$DIST_CERT_PASSWORD" -A -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          echo "import exit=$?"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          echo "set-key-partition-list exit=$?"
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
 
+          echo "=== codesigning identities ==="
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
           # Fail loudly here (not deep in xcodebuild) if no signing identity landed.
           if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -q 'Apple Distribution'; then
             echo "::error::No Apple Distribution codesigning identity in keychain after import"
-            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
             exit 1
           fi
+          set -e
 
           # Place the profile where Xcode expects to find it.
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
