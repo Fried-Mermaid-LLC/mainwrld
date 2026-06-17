@@ -19,6 +19,12 @@ const config: CapacitorConfig = {
     contentInset: "never",
     // White matches the existing splash logo and bg-white default.
     backgroundColor: "#ffffff",
+    // Disable the WKWebView's own scrolling so the document doesn't
+    // bounce/overscroll like a webpage. html/body already use
+    // overflow:hidden + height:100dvh in src/index.css, and individual
+    // views opt into scrolling via their own overflow-y: auto containers,
+    // so this only kills the page-level drag, not in-view scroll.
+    scrollEnabled: false,
   },
 };
 
