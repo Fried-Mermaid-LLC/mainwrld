@@ -28,6 +28,7 @@ ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcuserstate
 *.p8
 *.p12
+*.mobileprovision
 
 # Capacitor sync output
 ios/App/App/public/
