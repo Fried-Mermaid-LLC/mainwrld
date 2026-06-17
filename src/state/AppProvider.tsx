@@ -403,7 +403,7 @@ export function useAppValue() {
   // Payments (Stripe web redirects + native IAP verify) live in usePayments
   // (Phase B). Placed after the user-data loader and before useAuthActions so its
   // [view] and [] effects register in the same order as the monolith.
-  usePayments({ view, user, firebaseUid, setUser, showToast })
+  usePayments({ view, user, firebaseUid, setUser, coupons, setCoupons, showToast })
 
   // Auth actions live in useAuthActions (Phase B). Placed at the tail so its
   // onAuthStateChanged listener registers LAST (after persist/loader/payment

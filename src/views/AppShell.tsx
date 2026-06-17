@@ -10,6 +10,7 @@ import { MonetizationRequestView } from '@/views/MonetizationRequestView'
 import { PublishingView } from '@/views/PublishingView'
 import { LegalView } from '@/views/LegalView'
 import { ForgotPasswordView } from '@/views/ForgotPasswordView'
+import { ResetPasswordView } from '@/views/ResetPasswordView'
 import { SettingsView } from '@/views/SettingsView'
 import { AdminDashboard } from '@/views/AdminDashboard'
 import { CommentsView } from '@/views/CommentsView'
@@ -53,6 +54,9 @@ export const AppShell: React.FC = () => {
 
       case 'forgot-password':
         return <ForgotPasswordView />
+
+      case 'reset-password':
+        return <ResetPasswordView />
 
       case 'terms':
       case 'privacy':

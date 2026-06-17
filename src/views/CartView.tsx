@@ -220,10 +220,10 @@ export const CartView = () => {
                       >
                         <div className='flex flex-col items-center'>
                           <span className='text-xs font-black'>
-                            {c.value * POINTS_PER_DOLLAR}
+                            ${c.value}
                           </span>
                           <span className='text-[7px] font-bold uppercase'>
-                            Pts Off
+                            Off
                           </span>
                         </div>
                       </button>

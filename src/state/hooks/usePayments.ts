@@ -2,13 +2,15 @@ import { useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as iap from '@/services/iap'
-import type { User, View } from '@/types'
+import type { User, View, Coupon } from '@/types'
 
 interface PaymentsDeps {
   view: View
   user: User
   firebaseUid: string | null
   setUser: Dispatch<SetStateAction<User>>
+  coupons: Coupon[]
+  setCoupons: Dispatch<SetStateAction<Coupon[]>>
   showToast: (message: string, icon?: string) => void
 }
 
@@ -26,6 +28,8 @@ export function usePayments({
   user,
   firebaseUid,
   setUser,
+  coupons,
+  setCoupons,
   showToast,
 }: PaymentsDeps) {
   useEffect(() => {
@@ -39,19 +43,22 @@ export function usePayments({
     const urlParams = new URLSearchParams(window.location.search)
     const pointsRedirect = urlParams.get('points_success') === 'true'
     const premiumRedirect = urlParams.get('premium_success') === 'true'
+    const couponRedirect = urlParams.get('coupon_success') === 'true'
     const cancelRedirect = urlParams.get('payment_cancelled') === 'true'
     if (cancelRedirect) {
       showToast('Payment cancelled.', 'info')
       localStorage.removeItem('mainwrld_pending_points')
       localStorage.removeItem('mainwrld_pending_premium')
+      localStorage.removeItem('mainwrld_pending_coupon')
       window.history.replaceState({}, '', window.location.pathname)
       return
     }
-    if (!pointsRedirect && !premiumRedirect) return
+    if (!pointsRedirect && !premiumRedirect && !couponRedirect) return
     if (!firebaseUid) return
 
     localStorage.removeItem('mainwrld_pending_points')
     localStorage.removeItem('mainwrld_pending_premium')
+    localStorage.removeItem('mainwrld_pending_coupon')
     window.history.replaceState({}, '', window.location.pathname)
     showToast('Verifying purchase…', 'sync')
 
@@ -61,18 +68,28 @@ export function usePayments({
     // user doc and the credit shows up then.
     const startingPoints = user.points
     const startingPremium = user.isPremium
+    const startingCouponCount = coupons.length
     ;(async () => {
       for (let i = 0; i < 6; i++) {
         const fresh = (await fbService
           .getUserProfile(firebaseUid)
           .catch(() => null)) as User | null
         if (fresh) {
+          const freshCoupons =
+            ((fresh as any).coupons as Coupon[] | undefined) || []
           const pointsCredited = (fresh.points || 0) > startingPoints
           const premiumCredited = !!fresh.isPremium && !startingPremium
+          const couponCredited = freshCoupons.length > startingCouponCount
           if (
             (pointsRedirect && pointsCredited) ||
-            (premiumRedirect && premiumCredited)
+            (premiumRedirect && premiumCredited) ||
+            (couponRedirect && couponCredited)
           ) {
+            if (couponRedirect && couponCredited) {
+              // Server owns the coupons array; adopt its copy so the next
+              // debounced persist doesn't clobber the freshly bought coupon.
+              setCoupons(freshCoupons)
+            }
             setUser((prev) => ({
               ...prev,
               points: fresh.points ?? prev.points,
@@ -82,10 +99,16 @@ export function usePayments({
                 fresh.membershipStartDate ?? prev.membershipStartDate,
             }))
             showToast(
-              pointsRedirect
+              couponRedirect
+                ? 'Coupon added to your account!'
+                : pointsRedirect
                 ? `${(fresh.points || 0) - startingPoints} points added!`
                 : 'Welcome to MainWRLD+!',
-              pointsRedirect ? 'check_circle' : 'workspace_premium'
+              couponRedirect
+                ? 'confirmation_number'
+                : pointsRedirect
+                ? 'check_circle'
+                : 'workspace_premium'
             )
             return
           }
@@ -127,6 +150,15 @@ export function usePayments({
             premiumSince: prev.premiumSince ?? new Date().toISOString(),
           }))
           showToast('Welcome to MainWRLD+!', 'workspace_premium')
+        }
+        if (result.couponAdded) {
+          // Append the exact object the server stored (same id), de-duped in
+          // case the approved handler fires twice for one transaction.
+          const granted = result.couponAdded
+          setCoupons((prev) =>
+            prev.some((c) => c.id === granted.id) ? prev : [...prev, granted]
+          )
+          showToast(`$${granted.value} coupon added!`, 'confirmation_number')
         }
         return true
       } catch (err) {

@@ -2,6 +2,20 @@ import { useState, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
 import type { View, Book, User } from '@/types'
 
+// Firebase appends the reset params to whatever action URL is configured in
+// the console (Authentication → Templates → Password reset), so a reset email
+// lands on the app as ?mode=resetPassword&oobCode=…. Resolve that into the
+// reset-password view before the first paint — otherwise the SPA shows the
+// splash → landing screen and the link appears to "lead nowhere".
+function resolveInitialView(): View {
+  if (typeof window === 'undefined') return 'splash'
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('mode') === 'resetPassword' && params.get('oobCode')) {
+    return 'reset-password'
+  }
+  return 'splash'
+}
+
 // UI / navigation / coordinating-selection state. Foundation hook with no
 // cross-domain dependencies: it owns `view` (navigation), the toast/confirm
 // primitives, the currently-selected book/profile/chat, reader settings, the
@@ -9,7 +23,7 @@ import type { View, Book, User } from '@/types'
 // the former App body (Phase B) — hook order and the clipboard effect's `[view]`
 // dependency are preserved, so runtime behaviour is unchanged.
 export function useUI() {
-  const [view, setView] = useState<View>('splash')
+  const [view, setView] = useState<View>(resolveInitialView)
   const [toast, setToast] = useState<{ message: string; icon: string } | null>(
     null
   )

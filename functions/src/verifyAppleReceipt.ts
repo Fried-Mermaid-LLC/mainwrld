@@ -50,6 +50,16 @@ const POINTS_BY_PRODUCT: Record<string, number> = {
 
 const PREMIUM_PRODUCT_IDS = new Set(['mainwrld.premium_yearly'])
 
+// Coupon shop. Maps the Apple product id to the coupon's USD face value;
+// buying one appends a Coupon {id,value,used} to the user's `coupons`
+// array. Keep in sync with iap.ts IAP_PRODUCTS and the stripeWebhook map.
+const COUPON_VALUE_BY_PRODUCT: Record<string, number> = {
+  'mainwrld.coupon_100': 1,
+  'mainwrld.coupon_300': 3,
+  'mainwrld.coupon_500': 5,
+  'mainwrld.coupon_1000': 10,
+}
+
 type VerifyArgs = {
   productId: string
   transactionId: string
@@ -60,6 +70,9 @@ type VerifyResult = {
   credited: boolean
   pointsAdded?: number
   isPremium?: boolean
+  // The coupon granted by a coupon purchase, echoed back so the client can
+  // drop it straight into local state (same object the server stored).
+  couponAdded?: { id: string; value: number; used: boolean }
 }
 
 export const verifyAppleReceipt = onCall<VerifyArgs, Promise<VerifyResult>>(
@@ -178,6 +191,7 @@ export const verifyAppleReceipt = onCall<VerifyArgs, Promise<VerifyResult>>(
 
       const points = POINTS_BY_PRODUCT[productId]
       const isPremiumProduct = PREMIUM_PRODUCT_IDS.has(productId)
+      const couponValue = COUPON_VALUE_BY_PRODUCT[productId]
       const result: VerifyResult = { credited: true }
 
       if (points) {
@@ -192,12 +206,24 @@ export const verifyAppleReceipt = onCall<VerifyArgs, Promise<VerifyResult>>(
         })
         result.isPremium = true
       }
+      if (couponValue) {
+        // Guarded by the iapTransactions/transactionId doc above, so a
+        // replay/restore returns early and never re-grants the coupon.
+        const coupon = {
+          id: `buy_${transactionId}`,
+          value: couponValue,
+          used: false,
+        }
+        t.update(userRef, { coupons: FieldValue.arrayUnion(coupon) })
+        result.couponAdded = coupon
+      }
       t.set(txRef, {
         uid,
         productId,
         transactionId,
         pointsAdded: result.pointsAdded ?? 0,
         isPremium: !!isPremiumProduct,
+        couponValue: couponValue ?? 0,
         createdAt: FieldValue.serverTimestamp(),
         env: envRaw,
       })

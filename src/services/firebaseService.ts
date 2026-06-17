@@ -6,6 +6,8 @@ import {
   signOut,
   onAuthStateChanged,
   updatePassword,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
   type User as FirebaseUser,
   type Unsubscribe
 } from 'firebase/auth';
@@ -170,6 +172,22 @@ export const changePassword = async (newPassword: string) => {
   await updatePassword(user, newPassword);
 };
 
+// Password-reset landing flow. The reset email lands on the app as
+// ?mode=resetPassword&oobCode=…; ResetPasswordView verifies the out-of-band
+// code first (this surfaces the target email and rejects expired/used links)
+// and then commits the new password. Unlike changePassword these work
+// pre-auth, off the oobCode rather than the current session.
+export const verifyResetCode = async (oobCode: string): Promise<string> => {
+  return verifyPasswordResetCode(auth, oobCode);
+};
+
+export const completePasswordReset = async (
+  oobCode: string,
+  newPassword: string
+): Promise<void> => {
+  await confirmPasswordReset(auth, oobCode, newPassword);
+};
+
 // Calls the `deleteAccount` Cloud Function (Stage 2b). The function
 // scrubs the user's data from Firestore and deletes the Auth record,
 // satisfying App Store guideline 5.1.1(v). After this returns the
@@ -202,12 +220,22 @@ export const verifyAppleReceipt = async (params: {
   productId: string;
   transactionId: string;
   appStoreReceipt: string;
-}): Promise<{ credited: boolean; pointsAdded?: number; isPremium?: boolean }> => {
+}): Promise<{
+  credited: boolean;
+  pointsAdded?: number;
+  isPremium?: boolean;
+  couponAdded?: { id: string; value: number; used: boolean };
+}> => {
   if (!auth.currentUser) throw new Error('Not authenticated');
   const functions = getFunctions();
   const verify = httpsCallable<
     typeof params,
-    { credited: boolean; pointsAdded?: number; isPremium?: boolean }
+    {
+      credited: boolean;
+      pointsAdded?: number;
+      isPremium?: boolean;
+      couponAdded?: { id: string; value: number; used: boolean };
+    }
   >(functions, 'verifyAppleReceipt');
   const res = await verify(params);
   return res.data;

@@ -43,6 +43,17 @@ const POINTS_BY_SKU: Record<string, number> = {
 
 const PREMIUM_SKUS = new Set(['premium_yearly'])
 
+// Coupon shop. Maps the Stripe sku to the coupon's USD face value; buying
+// one appends a Coupon {id,value,used} to the user's `coupons` array (same
+// shape the spin wheel grants). Keep in sync with COUPON_PRODUCTS in
+// src/config/config.ts and verifyAppleReceipt's COUPON_BY_PRODUCT.
+const COUPON_VALUE_BY_SKU: Record<string, number> = {
+  coupon_100: 1,
+  coupon_300: 3,
+  coupon_500: 5,
+  coupon_1000: 10,
+}
+
 export const stripeWebhook = onRequest(
   {
     region: 'us-central1',
@@ -120,7 +131,8 @@ export const stripeWebhook = onRequest(
 
     const points = POINTS_BY_SKU[sku] ?? 0
     const isPremium = PREMIUM_SKUS.has(sku)
-    if (!points && !isPremium) {
+    const couponValue = COUPON_VALUE_BY_SKU[sku] ?? 0
+    if (!points && !isPremium && !couponValue) {
       logger.warn('Unknown Stripe sku — no credit applied', {
         sku,
         sessionId: session.id,
@@ -161,6 +173,19 @@ export const stripeWebhook = onRequest(
             membershipStartDate: Date.now(),
           })
         }
+        if (couponValue) {
+          // Same shape the spin wheel produces. The whole block runs at
+          // most once (guarded by the stripeEvents/event.id doc above), so
+          // arrayUnion never double-grants; the sessionId keeps the id
+          // unique and stable on a Stripe redelivery.
+          t.update(userRef, {
+            coupons: FieldValue.arrayUnion({
+              id: `buy_${session.id}`,
+              value: couponValue,
+              used: false,
+            }),
+          })
+        }
         t.set(eventRef, {
           uid,
           sku,
@@ -168,6 +193,7 @@ export const stripeWebhook = onRequest(
           livemode: event!.livemode,
           pointsAdded: points,
           isPremium,
+          couponValue,
           processedAt: FieldValue.serverTimestamp(),
         })
       })
@@ -176,6 +202,7 @@ export const stripeWebhook = onRequest(
         sku,
         points,
         isPremium,
+        couponValue,
         eventId: event.id,
         livemode: event.livemode,
       })

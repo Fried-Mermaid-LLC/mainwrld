@@ -25,6 +25,13 @@ export const IAP_PRODUCTS = {
   points_500: { id: 'mainwrld.points_500', kind: 'consumable', points: 500 },
   points_1000: { id: 'mainwrld.points_1000', kind: 'consumable', points: 1000 },
   premium_yearly: { id: 'mainwrld.premium_yearly', kind: 'subscription' },
+  // Coupon shop. Consumables: buying one grants a discount coupon
+  // (couponValue = USD face, ×100 = points off). The server grant lives in
+  // verifyAppleReceipt's COUPON_BY_PRODUCT, keyed by these same ids.
+  coupon_100: { id: 'mainwrld.coupon_100', kind: 'consumable', couponValue: 1 },
+  coupon_300: { id: 'mainwrld.coupon_300', kind: 'consumable', couponValue: 3 },
+  coupon_500: { id: 'mainwrld.coupon_500', kind: 'consumable', couponValue: 5 },
+  coupon_1000: { id: 'mainwrld.coupon_1000', kind: 'consumable', couponValue: 10 },
 } as const
 
 export type IapSku = keyof typeof IAP_PRODUCTS
@@ -71,6 +78,10 @@ const ensureStore = async (): Promise<any | null> => {
         type: types.PAID_SUBSCRIPTION,
         platform,
       },
+      { id: IAP_PRODUCTS.coupon_100.id, type: types.CONSUMABLE, platform },
+      { id: IAP_PRODUCTS.coupon_300.id, type: types.CONSUMABLE, platform },
+      { id: IAP_PRODUCTS.coupon_500.id, type: types.CONSUMABLE, platform },
+      { id: IAP_PRODUCTS.coupon_1000.id, type: types.CONSUMABLE, platform },
     ])
 
     // Verification handler is wired by the caller via `onApproved`.

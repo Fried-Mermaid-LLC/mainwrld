@@ -94,7 +94,13 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
       return
     }
 
+    // Coupons bought for real money carry a `buy_` id (set server-side in
+    // stripeWebhook / verifyAppleReceipt); won coupons get a random base36 id
+    // that can never contain `_`. The wheel's 3-slot cap may only cycle out
+    // WON coupons — a purchased coupon must never be destroyed by a spin.
+    const isPurchased = (c: Coupon) => c.id.startsWith('buy_')
     const unusedCoupons = coupons.filter((c: Coupon) => !c.used)
+    const oldestWon = unusedCoupons.find((c: Coupon) => !isPurchased(c))
 
     const proceedWithSpin = () => {
       // Deduct points
@@ -123,25 +129,30 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
       }
 
       setCoupons(prev => {
-        const unusedOnly = prev.filter((c: Coupon) => !c.used)
-
-        if (unusedOnly.length >= 3) {
-          unusedOnly.shift() // Remove oldest unused (FIFO)
+        const unusedCount = prev.filter((c: Coupon) => !c.used).length
+        // At/over the cap, cycle out the oldest WON coupon to make room. If
+        // every slot is held by purchased coupons there is nothing to cycle,
+        // so the win simply stacks on top — paid coupons are never lost.
+        if (unusedCount >= 3) {
+          const evictId = prev.find(
+            (c: Coupon) => !c.used && !isPurchased(c)
+          )?.id
+          if (evictId) {
+            return [...prev.filter((c: Coupon) => c.id !== evictId), newCoupon]
+          }
         }
-
-        return [...unusedOnly, newCoupon]
+        return [...prev, newCoupon]
       })
 
-      showToast(`You won a ${winValue * 100}-point coupon!`, 'confirmation_number')
+      showToast(`You won a $${winValue} coupon!`, 'confirmation_number')
     }
 
-    // If slots full → ask confirmation and STOP execution
-    if (unusedCoupons.length >= 3) {
-      const oldestUnused = unusedCoupons[0]
-
+    // Only warn when a WON coupon is actually about to be cycled out. If the
+    // slots are full purely of purchased coupons, the spin just stacks.
+    if (unusedCoupons.length >= 3 && oldestWon) {
       showConfirm({
-        title: 'Your coupon slots are full (3/3)',
-        message: `Winning a new coupon will permanently eliminate your oldest ticket (${oldestUnused.value * 100} pts). Do you wish to proceed?`,
+        title: 'Your coupon slots are full',
+        message: `Winning a new coupon will cycle out your oldest won coupon ($${oldestWon.value}). Purchased coupons are always kept. Do you wish to proceed?`,
         confirmLabel: 'Yes',
         cancelLabel: 'No',
         icon: 'check_circle',
@@ -152,7 +163,7 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
       return // stop execution here
     }
 
-    // If slots not full then proceed immediately
+    // Not at the cap (or nothing winnable to cycle) → proceed immediately
     proceedWithSpin()
   }
 

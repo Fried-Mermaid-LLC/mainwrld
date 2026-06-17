@@ -57,6 +57,14 @@ export function useAuthActions({
   useEffect(() => {
     const timer = setTimeout(() => {
       const unsubscribe = onAuthStateChanged(auth, async firebaseUser => {
+        // A password-reset link opens the app unauthenticated. Without this
+        // guard the listener would bounce it to 'landing' ~1.5s after load and
+        // ResetPasswordView (opened by useUI on first paint) would be unmounted.
+        const params = new URLSearchParams(window.location.search)
+        const signedOutView: View =
+          params.get('mode') === 'resetPassword' && params.get('oobCode')
+            ? 'reset-password'
+            : 'landing'
         if (firebaseUser) {
           try {
             const profile = await fbService.getUserProfile(firebaseUser.uid)
@@ -87,15 +95,15 @@ export function useAuthActions({
                 .catch(console.error)
             } else {
               setFavoriteBookIds(new Set())
-              setView('landing')
+              setView(signedOutView)
             }
           } catch {
             setFavoriteBookIds(new Set())
-            setView('landing')
+            setView(signedOutView)
           }
         } else {
           setFavoriteBookIds(new Set())
-          setView('landing')
+          setView(signedOutView)
         }
         setAuthLoading(false)
       })

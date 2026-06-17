@@ -2,7 +2,12 @@ import { MAX_DAILY_EARNED_POINTS } from '@/config/constants'
 import { Button } from '@/components/sharedComponents'
 import type { Coupon } from '@/types'
 import * as iap from '@/services/iap'
-import { STRIPE_PAYMENT_LINKS, STRIPE_PREMIUM_PAYMENT_LINK } from '@/config/config'
+import {
+  STRIPE_PAYMENT_LINKS,
+  STRIPE_PREMIUM_PAYMENT_LINK,
+  COUPON_PRODUCTS,
+  STRIPE_COUPON_PAYMENT_LINKS
+} from '@/config/config'
 import { useApp } from '@/state/AppContext'
 
 export const DailyRewardsView = () => {
@@ -106,10 +111,85 @@ export const DailyRewardsView = () => {
               onClick={handleSpinWheel}
             >
               {' '}
-              Win a 100, 300, 500, or 1000 Pts Coupon
+              Win a $1, $3, $5, or $10 Coupon
             </Button>
             <p className='text-[8px] text-white/30 font-bold uppercase tracking-widest text-center mt-2'>
               Win coupons for your next book purchase
+            </p>
+          </div>
+
+          {/* Buy Coupons Section */}
+          <div className='p-8 bg-white rounded-[2.5rem] border border-gray-100 flex flex-col items-center gap-6 shadow-sm'>
+            <div className='text-center'>
+              <h3 className='text-lg font-bold'>Buy Coupons</h3>
+              <p className='text-[10px] text-gray-400 font-bold uppercase tracking-widest'>
+                Discounts for your next book
+              </p>
+            </div>
+            <div className='grid grid-cols-2 gap-4 w-full'>
+              {COUPON_PRODUCTS.map(c => (
+                <button
+                  key={c.sku}
+                  onClick={async () => {
+                    // iOS → Apple IAP (App Store 3.1.1). The coupon is
+                    // granted server-side after Apple approves; see the
+                    // verifyAppleReceipt callback wired in usePayments.
+                    if (iap.isNativeIAPAvailable()) {
+                      try {
+                        await iap.purchase(c.sku as iap.IapSku)
+                      } catch (err: any) {
+                        console.error(
+                          '[MainWRLD IAP] coupon purchase failed:',
+                          err
+                        )
+                        showToast(err?.message || 'Purchase failed.', 'error')
+                      }
+                      return
+                    }
+
+                    // Web → Stripe Checkout link, mirroring the points packs.
+                    // Until the link is configured we fail soft instead of
+                    // redirecting to an empty URL.
+                    const link = STRIPE_COUPON_PAYMENT_LINKS[c.sku]
+                    if (!link) {
+                      showToast(
+                        'Coupon purchases are not set up yet.',
+                        'info'
+                      )
+                      return
+                    }
+                    if (!firebaseUid) {
+                      showToast('Please sign in before purchasing.', 'error')
+                      return
+                    }
+                    localStorage.setItem(
+                      'mainwrld_pending_coupon',
+                      JSON.stringify({
+                        sku: c.sku,
+                        usd: c.usd,
+                        timestamp: Date.now()
+                      })
+                    )
+                    window.location.href =
+                      link + `?client_reference_id=${firebaseUid}`
+                  }}
+                  className='p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-white hover:border-accent transition-all flex flex-col items-center gap-1 group active:scale-95'
+                >
+                  <span className='material-icons-round text-accent text-xl'>
+                    confirmation_number
+                  </span>
+                  <span className='text-lg font-black text-accent'>
+                    ${c.usd}
+                  </span>
+                  <span className='text-[8px] font-bold text-gray-400 uppercase tracking-widest'>
+                    {c.pointsOff} Pts Off
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className='text-[8px] text-gray-400 text-center font-bold uppercase tracking-widest flex items-center justify-center gap-1 mt-2'>
+              <span className='material-icons-round text-[10px]'>lock</span>{' '}
+              Secured checkout
             </p>
           </div>
 
@@ -359,106 +439,120 @@ export const DailyRewardsView = () => {
 
         {/* Coupon Slots UI */}
         <div className='w-full space-y-6'>
-          <div className='flex justify-between items-end px-4'>
-            <h3 className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
-              Coupon Slots
-            </h3>
-            <span className='text-[10px] font-bold text-accent'>
-              {coupons.filter((c: Coupon) => !c.used).length}/3 Filled
-            </span>
-          </div>
-
-          <div className='grid grid-cols-3 gap-4'>
-            {[0, 1, 2].map(slotIdx => {
-              // Filter out used coupons before displaying
-              const availableCoupons = coupons.filter(
-                (c: Coupon) => !c.used
-              )
-              const coupon = availableCoupons[slotIdx]
-              return (
-                <div
-                  key={slotIdx}
-                  className={`aspect-square rounded-[1.8rem] border-2 flex flex-col items-center justify-center gap-1 transition-all ${
-                    coupon
-                      ? 'bg-accent/5 border-accent shadow-lg shadow-accent/10'
-                      : 'bg-gray-50 border-dashed border-gray-200 opacity-50'
-                  }`}
-                >
-                  {coupon ? (
-                    <>
-                      <span className='material-icons-round text-accent text-xl'>
-                        confirmation_number
-                      </span>
-                      <span className='text-lg font-black text-accent'>
-                        {coupon.value * 100}
-                      </span>
-                      <span className='text-[7px] font-bold text-accent/60 uppercase tracking-tighter'>
-                        Pts
-                      </span>
-                      <span className='text-[7px] font-bold text-accent/60 uppercase tracking-tighter'>
-                        {slotIdx === 0
-                          ? 'Oldest Slot'
-                          : slotIdx === 2
-                          ? 'Newest Slot'
-                          : 'Slot ' + (slotIdx + 1)}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className='material-icons-round text-gray-300'>
-                        lock_open
-                      </span>
-                      <span className='text-[8px] font-bold text-gray-300 uppercase'>
-                        Empty
-                      </span>
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {coupons.length > 0 && (
-            <div className='space-y-3 mt-8'>
-              <h4 className='text-[9px] font-bold text-gray-300 uppercase tracking-[0.2em] px-4'>
-                Inventory Details
-              </h4>
-              {coupons.map((c, idx) => (
-                <div
-                  key={c.id}
-                  className='p-5 bg-gray-50 border border-gray-100 rounded-2xl flex justify-between items-center animate-in slide-in-from-right duration-300'
-                  style={{ animationDelay: `${idx * 100}ms` }}
-                >
-                  <div className='flex items-center gap-4'>
-                    <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        idx === 0
-                          ? 'bg-red-50 text-red-500'
-                          : 'bg-accent/10 text-accent'
-                      }`}
-                    >
-                      <span className='material-icons-round text-sm'>
-                        {idx === 0 ? 'history' : 'local_offer'}
-                      </span>
-                    </div>
-                    <div>
-                      <p className='text-sm font-bold text-black'>
-                        ${c.value} Off Discount
-                      </p>
-                      <p className='text-[8px] font-bold text-gray-400 uppercase'>
-                        {idx === 0
-                          ? 'Removed next'
-                          : 'Stored in slot ' + (idx + 1)}
-                      </p>
-                    </div>
-                  </div>
-                  <span className='text-[10px] font-black text-accent uppercase tracking-widest'>
-                    Unused
+          {(() => {
+            const unusedCoupons = coupons.filter((c: Coupon) => !c.used)
+            // The wheel fills up to 3 slots, but purchased coupons (buy_* id)
+            // stack beyond that — so grow the grid in full rows of 3 instead
+            // of showing a misleading "4/3". A future spin only ever cycles
+            // out the oldest WON coupon, so that is the one we flag.
+            const slotCount = Math.max(
+              3,
+              Math.ceil(unusedCoupons.length / 3) * 3
+            )
+            const oldestWonId = unusedCoupons.find(
+              (c: Coupon) => !c.id.startsWith('buy_')
+            )?.id
+            return (
+              <>
+                <div className='flex justify-between items-end px-4'>
+                  <h3 className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
+                    Coupon Slots
+                  </h3>
+                  <span className='text-[10px] font-bold text-accent'>
+                    {unusedCoupons.length}{' '}
+                    {unusedCoupons.length === 1 ? 'Coupon' : 'Coupons'}
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
+
+                <div className='grid grid-cols-3 gap-4'>
+                  {Array.from({ length: slotCount }).map((_, slotIdx) => {
+                    const coupon = unusedCoupons[slotIdx]
+                    return (
+                      <div
+                        key={slotIdx}
+                        className={`aspect-square rounded-[1.8rem] border-2 flex flex-col items-center justify-center gap-1 transition-all ${
+                          coupon
+                            ? 'bg-accent/5 border-accent shadow-lg shadow-accent/10'
+                            : 'bg-gray-50 border-dashed border-gray-200 opacity-50'
+                        }`}
+                      >
+                        {coupon ? (
+                          <>
+                            <span className='material-icons-round text-accent text-xl'>
+                              confirmation_number
+                            </span>
+                            <span className='text-lg font-black text-accent'>
+                              ${coupon.value}
+                            </span>
+                            <span className='text-[7px] font-bold text-accent/60 uppercase tracking-tighter'>
+                              Off
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className='material-icons-round text-gray-300'>
+                              lock_open
+                            </span>
+                            <span className='text-[8px] font-bold text-gray-300 uppercase'>
+                              Empty
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {unusedCoupons.length > 0 && (
+                  <div className='space-y-3 mt-8'>
+                    <h4 className='text-[9px] font-bold text-gray-300 uppercase tracking-[0.2em] px-4'>
+                      Inventory Details
+                    </h4>
+                    {unusedCoupons.map((c, idx) => {
+                      const isPurchased = c.id.startsWith('buy_')
+                      const isNext = c.id === oldestWonId
+                      return (
+                        <div
+                          key={c.id}
+                          className='p-5 bg-gray-50 border border-gray-100 rounded-2xl flex justify-between items-center animate-in slide-in-from-right duration-300'
+                          style={{ animationDelay: `${idx * 100}ms` }}
+                        >
+                          <div className='flex items-center gap-4'>
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                isNext
+                                  ? 'bg-red-50 text-red-500'
+                                  : 'bg-accent/10 text-accent'
+                              }`}
+                            >
+                              <span className='material-icons-round text-sm'>
+                                {isNext ? 'history' : 'local_offer'}
+                              </span>
+                            </div>
+                            <div>
+                              <p className='text-sm font-bold text-black'>
+                                ${c.value} Off Discount
+                              </p>
+                              <p className='text-[8px] font-bold text-gray-400 uppercase'>
+                                {isPurchased
+                                  ? 'Purchased'
+                                  : isNext
+                                  ? 'Cycled out next'
+                                  : 'Won'}
+                              </p>
+                            </div>
+                          </div>
+                          <span className='text-[10px] font-black text-accent uppercase tracking-widest'>
+                            Unused
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       </div>
     </div>
