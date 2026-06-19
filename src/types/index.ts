@@ -34,6 +34,17 @@ export interface User {
   // Cloud Function (Stage 2c). UI-only — the security source of truth
   // is the token's `admin` claim, enforced by firestore.rules.
   isAdmin?: boolean;
+  // ---- Stripe Connect (seller payouts, F02) ----
+  // Mirror of the connected account's state, refreshed by the
+  // syncStripeAccountStatus callable + the account.updated webhook.
+  // NEVER store raw bank/SSN/tax data here — Stripe holds it. We only
+  // cache booleans + the account id. Written by Cloud Functions only
+  // (client writes to these are rejected by firestore.rules).
+  stripeAccountId?: string;          // acct_xxx, set on first onboarding-link create
+  payoutsEnabled?: boolean;          // Stripe account.payouts_enabled
+  chargesEnabled?: boolean;          // Stripe account.charges_enabled
+  detailsSubmitted?: boolean;        // account.details_submitted (KYC + tax form done)
+  stripeAccountUpdatedAt?: number;   // Date.now() of last sync, for staleness checks
 }
 
 export interface UserRecord extends User {
@@ -153,6 +164,24 @@ export interface Book {
   wasMonetizedBefore?: boolean;
   commentsEnabled?: boolean;
   isFree?: boolean;
+  // ---- Monetization request lifecycle (F01, stored on the book doc) ----
+  // The admin queue is `books.filter(b => b.monetizationStatus === 'pending')`
+  // — no separate collection. Written server-side (submitMonetizationRequest /
+  // reviewMonetization callables); client writes to these are rejected by rules.
+  monetizationStatus?: 'none' | 'pending' | 'approved' | 'denied';
+  requestedPrice?: number;            // USD tier the author asked for (9.99…29.99)
+  monetizationRequestedAt?: string;   // ISO; when the request was submitted
+  monetizationDenialReason?: string;  // set by reviewMonetization on denial (F03)
+  monetizationReviewedAt?: string;    // ISO; when the admin accepted/denied (F03)
+  monetizationReviewedBy?: string;    // admin username (F03)
+  // Permanence: once true the book can NEVER be monetized again. Set by the
+  // onBookMonetized trigger on author un-monetize / unpublish-while-monetized /
+  // admin take-down. Treat `permanentlyDemonetized || wasMonetizedBefore` as
+  // the terminal block (see canMonetize in src/config/constants.ts).
+  permanentlyDemonetized?: boolean;
+  // ---- Stripe Connect seller identity (F02) ----
+  sellerUid?: string;                 // firebaseUid of the author at monetize time
+  sellerStripeAccountId?: string;     // acct_xxx the 80% is transferred to
 }
 
 export interface BookProgress {

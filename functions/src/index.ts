@@ -10,3 +10,14 @@ export { moderateCommentOnCreate, moderateBookOnWrite } from './moderate.js'
 export { verifyAppleReceipt } from './verifyAppleReceipt.js'
 export { sendWelcomeEmail } from './sendWelcomeEmail.js'
 export { stripeWebhook } from './stripeWebhook.js'
+export {
+  createStripeAccountLink,
+  syncStripeAccountStatus,
+  createStripeDashboardLink,
+  getSellerBalance,
+  submitMonetizationRequest,
+  reviewMonetization,
+  createBookCheckoutSession,
+  purchaseBooksWithPoints,
+} from './stripeConnect.js'
+export { onBookMonetized } from './monetization.js'

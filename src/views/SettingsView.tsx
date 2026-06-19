@@ -3,6 +3,7 @@ import { Button } from '@/components/sharedComponents'
 import * as iap from '@/services/iap'
 import * as fbService from '@/services/firebaseService'
 import { useApp } from '@/state/AppContext'
+import { PayoutsSection } from '@/views/PayoutsSection'
 import type { User, View } from '@/types'
 
 export const SettingsView = () => {
@@ -294,34 +295,7 @@ export const SettingsView = () => {
           </div>
         </section>
 
-        <section className='space-y-4'>
-          <h3 className='text-[10px] font-bold text-gray-300 uppercase tracking-widest ml-4'>
-            Payments
-          </h3>
-          <div className='bg-gray-50 rounded-[2.5rem] overflow-hidden border border-gray-100'>
-            {[
-              'Add Bank Account',
-              'View Earnings',
-              'Withdraw Earnings',
-              'View Purchase History'
-            ].map((opt, i) => (
-              <button
-                key={opt}
-                onClick={() =>
-                  showToast('Payment features coming soon!', 'account_balance')
-                }
-                className={`w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all ${
-                  i !== 3 ? 'border-b border-gray-100' : ''
-                }`}
-              >
-                <span className='font-bold text-sm'>{opt}</span>
-                <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
-                  chevron_right
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
+        <PayoutsSection />
 
         {isAdmin && (
           <section className='space-y-4'>

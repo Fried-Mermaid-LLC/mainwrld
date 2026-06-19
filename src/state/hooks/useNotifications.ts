@@ -166,6 +166,19 @@ export function useNotifications({
       }
       return
     }
+
+    // Handle monetization notifications (F01 fan-out + F03 accept/deny) — all
+    // carry targetId = bookId and deep-link to the book.
+    if (n.title === 'Book Monetized' || n.title.startsWith('Monetization')) {
+      if (n.targetId) {
+        const targetBook = books.find(b => b.id === n.targetId)
+        if (targetBook) {
+          setSelectedBook(targetBook)
+          setView('book-detail')
+        }
+      }
+      return
+    }
   }
 
   return { notifications, setNotifications, addNotification, handleNotificationClick }

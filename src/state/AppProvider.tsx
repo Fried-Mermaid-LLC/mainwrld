@@ -350,7 +350,9 @@ export function useAppValue() {
     handleAddStrike,
     handleRemoveStrike,
     handleBanUser,
-    handleDismissReport
+    handleDismissReport,
+    handleApproveMonetization,
+    handleDenyMonetization
   } = admin
 
 
@@ -403,7 +405,7 @@ export function useAppValue() {
   // Payments (Stripe web redirects + native IAP verify) live in usePayments
   // (Phase B). Placed after the user-data loader and before useAuthActions so its
   // [view] and [] effects register in the same order as the monolith.
-  usePayments({ view, user, firebaseUid, setUser, coupons, setCoupons, showToast })
+  usePayments({ view, user, firebaseUid, setUser, coupons, setCoupons, showToast, setUserBookData, userBookDataRef })
 
   // Auth actions live in useAuthActions (Phase B). Placed at the tail so its
   // onAuthStateChanged listener registers LAST (after persist/loader/payment
@@ -449,7 +451,7 @@ export function useAppValue() {
     setLastSelectedBookId, lastSelectedChapterIndex, setLastSelectedChapterIndex, spotlightInit, setSpotlightInit, addNotification,
     handleUnpublishChapter, handleDeleteChapter, handleLogout, handleNotificationClick, handleLogin, handleSignup,
     handleSendMessage, handleLike, handleAdmire, handleReport, handleRemoveBook, handleRemoveComment,
-    handleAddStrike, handleRemoveStrike, handleBanUser, handleDismissReport, handleBlockUser, handleUnblockUser,
+    handleAddStrike, handleRemoveStrike, handleBanUser, handleDismissReport, handleApproveMonetization, handleDenyMonetization, handleBlockUser, handleUnblockUser,
     handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, handleToggleFavorite, handleAddToCart, awardPoints,
     awardMembershipBonus, handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
     handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,

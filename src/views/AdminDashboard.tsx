@@ -17,6 +17,8 @@ export const AdminDashboard = () => {
     handleRemoveStrike,
     handleBanUser,
     handleDismissReport,
+    handleApproveMonetization,
+    handleDenyMonetization,
     getItemCost,
     handleUpdateItemPrice,
     setView
@@ -37,6 +39,20 @@ export const AdminDashboard = () => {
   const [pricingFilter, setPricingFilter] = useState<
     'all' | 'face' | 'hair' | 'outfit'
   >('all')
+  // Inline deny-reason editor (no prompt-with-text primitive exists in the app).
+  const [denyTargetId, setDenyTargetId] = useState<string | null>(null)
+  const [denyReason, setDenyReason] = useState('')
+  const DENY_REASONS = [
+    'Rules of conduct violation',
+    'Explicit content',
+    'Plagiarism / IP',
+    'Spam / low quality',
+  ]
+  const submitDeny = (bookId: string) => {
+    handleDenyMonetization(bookId, denyReason)
+    setDenyTargetId(null)
+    setDenyReason('')
+  }
 
   const tabs = [
     { id: 'reports', label: 'Reports', icon: 'flag' },
@@ -47,6 +63,9 @@ export const AdminDashboard = () => {
   ]
 
   const pendingReports = reports.filter((r: Report) => r.status === 'pending')
+  const pendingMonetization = books.filter(
+    (b: Book) => b.monetizationStatus === 'pending'
+  )
   const monetizedBooks = books.filter((b: Book) => b.isMonetized)
   const monetizedAuthors = new Set(
     monetizedBooks.map((b: Book) => b.author.username)
@@ -113,6 +132,11 @@ export const AdminDashboard = () => {
             {tab.id === 'reports' && pendingReports.length > 0 && (
               <span className='w-5 h-5 rounded-full bg-white/30 text-[9px] flex items-center justify-center'>
                 {pendingReports.length}
+              </span>
+            )}
+            {tab.id === 'monetized' && pendingMonetization.length > 0 && (
+              <span className='w-5 h-5 rounded-full bg-white/30 text-[9px] flex items-center justify-center'>
+                {pendingMonetization.length}
               </span>
             )}
           </button>
@@ -332,6 +356,113 @@ export const AdminDashboard = () => {
         {/* Monetized Tab */}
         {activeTab === 'monetized' && (
           <>
+            {/* Pending monetization requests (accept / deny) */}
+            <h3 className='text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-4'>
+              Pending Requests ({pendingMonetization.length})
+            </h3>
+            <div className='bg-gray-50 rounded-[2.5rem] overflow-hidden border border-gray-100 mb-6'>
+              {pendingMonetization.length === 0 ? (
+                <div className='flex flex-col items-center justify-center h-32 text-gray-300'>
+                  <span className='material-icons-round text-3xl mb-2'>
+                    inbox
+                  </span>
+                  <p className='text-[10px] font-bold uppercase tracking-widest'>
+                    No pending requests
+                  </p>
+                </div>
+              ) : (
+                pendingMonetization.map((book: Book) => (
+                  <div
+                    key={book.id}
+                    className='p-6 border-b border-gray-100 last:border-none space-y-3'
+                  >
+                    <div className='flex justify-between items-start gap-4'>
+                      <div className='min-w-0'>
+                        <p className='text-sm font-bold truncate'>
+                          {book.title}
+                        </p>
+                        <p className='text-[10px] text-gray-400 mt-1'>
+                          by {book.author.displayName} (@{book.author.username})
+                        </p>
+                        <p className='text-[10px] text-gray-400 mt-1'>
+                          {book.chaptersCount} chapters
+                        </p>
+                      </div>
+                      <div className='text-right shrink-0'>
+                        <p className='text-sm font-bold'>
+                          ${(book.requestedPrice || 0).toFixed(2)}
+                        </p>
+                        <p className='text-[9px] uppercase tracking-widest text-gray-400 mt-1'>
+                          Requested
+                        </p>
+                      </div>
+                    </div>
+                    {denyTargetId === book.id ? (
+                      <div className='space-y-2'>
+                        <div className='flex gap-2 flex-wrap'>
+                          {DENY_REASONS.map(r => (
+                            <button
+                              key={r}
+                              onClick={() => setDenyReason(r)}
+                              className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest ${
+                                denyReason === r
+                                  ? 'bg-accent text-white'
+                                  : 'bg-white text-gray-400 border border-gray-100'
+                              }`}
+                            >
+                              {r}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          value={denyReason}
+                          onChange={e => setDenyReason(e.target.value)}
+                          placeholder='Reason (required, shown to the author)'
+                          className='w-full p-3 rounded-xl border border-gray-200 text-xs resize-none h-20 focus:outline-none focus:border-accent'
+                        />
+                        <div className='flex gap-2'>
+                          <button
+                            onClick={() => submitDeny(book.id)}
+                            disabled={!denyReason.trim()}
+                            className='h-10 px-4 rounded-xl bg-red-500/10 text-red-500 text-[10px] font-bold uppercase tracking-widest disabled:opacity-40'
+                          >
+                            Confirm Deny
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDenyTargetId(null)
+                              setDenyReason('')
+                            }}
+                            className='h-10 px-4 rounded-xl bg-gray-100 text-gray-400 text-[10px] font-bold uppercase tracking-widest'
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className='flex gap-2'>
+                        <button
+                          onClick={() => handleApproveMonetization(book.id)}
+                          className='h-10 px-4 rounded-xl bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-widest'
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDenyTargetId(book.id)
+                            setDenyReason('')
+                          }}
+                          className='h-10 px-4 rounded-xl bg-red-500/10 text-red-500 text-[10px] font-bold uppercase tracking-widest'
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
             <h3 className='text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-4'>
               Monetized Content
             </h3>

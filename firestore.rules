@@ -47,7 +47,14 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isSignedIn();
       allow create: if isUser(uid);
-      allow update: if isUser(uid) || isAdmin();
+      // The owner may update their own profile, EXCEPT the Stripe Connect payout
+      // mirror fields — those are written only by Cloud Functions (Admin SDK,
+      // which bypasses rules) so a client can never forge payouts-enabled.
+      allow update: if isAdmin()
+        || (isUser(uid)
+            && !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(['stripeAccountId', 'payoutsEnabled', 'chargesEnabled',
+                          'detailsSubmitted', 'stripeAccountUpdatedAt']));
       allow delete: if isAdmin();
     }
 
@@ -75,8 +82,34 @@ service cloud.firestore {
         && (resource.data.isDraft != true || resource.data.authorUsername == request.auth.token.username || isAdmin());
       allow create: if isSignedIn()
         && request.resource.data.authorUid == request.auth.uid;
-      allow update: if isSignedIn()
-        && (resource.data.authorUid == request.auth.uid || isAdmin());
+      // Authors may edit their own books, but monetization state is
+      // privilege-gated (Phase 2). The submit / review callables write the
+      // server-only lifecycle + seller fields via the Admin SDK. A non-admin
+      // author may NOT: write those server fields, self-grant isMonetized,
+      // change the price while the book stays monetized, or clear the terminal
+      // permanence flags. Author un-monetize (isMonetized true→false, price 0)
+      // is still allowed so the demonetize/unpublish handlers keep working.
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || (
+          resource.data.authorUid == request.auth.uid
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+               'monetizationStatus', 'requestedPrice', 'monetizationRequestedAt',
+               'monetizationDenialReason', 'monetizationReviewedAt',
+               'monetizationReviewedBy', 'sellerUid', 'sellerStripeAccountId',
+               'monetizationAttempts'
+             ])
+          && !(request.resource.data.get('isMonetized', false) == true
+               && resource.data.get('isMonetized', false) != true)
+          && !(resource.data.get('isMonetized', false) == true
+               && request.resource.data.get('isMonetized', false) == true
+               && request.resource.data.get('price', 0) != resource.data.get('price', 0))
+          && !(resource.data.get('permanentlyDemonetized', false) == true
+               && request.resource.data.get('permanentlyDemonetized', false) != true)
+          && !(resource.data.get('wasMonetizedBefore', false) == true
+               && request.resource.data.get('wasMonetizedBefore', false) != true)
+        )
+      );
       allow delete: if isSignedIn()
         && (resource.data.authorUid == request.auth.uid || isAdmin());
     }
@@ -180,6 +213,20 @@ service cloud.firestore {
     // which runs with admin privileges and bypasses these rules.
     match /iapTransactions/{transactionId} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    // ---- bookPurchases (cash + points book sales audit trail) ----
+    // Written ONLY by the Stripe webhook / purchaseBooksWithPoints callable
+    // (Admin SDK). The buyer and the seller can read their own rows; nobody
+    // can write from a client. This is the trustworthy record of a paid book
+    // and drives "Purchase History" + permanent ownership of paid books.
+    match /bookPurchases/{id} {
+      allow read: if isSignedIn() && (
+        resource.data.buyerUid == request.auth.uid
+        || resource.data.sellerUid == request.auth.uid
+        || isAdmin()
+      );
       allow write: if false;
     }
 

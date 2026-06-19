@@ -1,14 +1,14 @@
 import React, { useState } from 'react'
 import { Button } from '@/components/sharedComponents'
 import type { Coupon } from '@/types'
-import * as fbService from '@/services/firebaseService'
+import * as stripeConnect from '@/services/stripeConnect'
+import { POINTS_PER_DOLLAR } from '@/config/constants'
 import { useApp } from '@/state/AppContext'
 
 // Book USD price is stored on the book record; we charge the same in
 // in-app points at a fixed rate so the cost is identical on iOS and web.
 // $9.99 → 999 pts. Keeping the conversion centralised lets us tune the
 // rate later without touching every display site.
-const POINTS_PER_DOLLAR = 100
 const bookCost = (book: any): number =>
   Math.round((book.price || 9.99) * POINTS_PER_DOLLAR)
 
@@ -28,47 +28,51 @@ export const CartView = () => {
     setBooks,
     selectedBook,
     setSelectedBook,
-    firebaseUid
+    persistTimerRef
   } = useApp()
   const onBack = () => setView('self-profile')
-  const onOwnedUpdate = (bookId: string) => {
+
+  // Adopt the server-authoritative post-purchase state returned by the
+  // purchaseBooksWithPoints callable. The callable already deducted the buyer's
+  // points, credited each author 80% in points, consumed the coupon, granted
+  // permanent ownership and recorded the sale — so we copy its truth into local
+  // state instead of mutating it ourselves (which could double-spend or clobber).
+  const adoptPurchaseResult = (res: {
+    points: number
+    ownedBookIds: string[]
+    purchasedBookIds: string[]
+    coupons: Coupon[]
+  }) => {
+    setUser(prev => ({ ...prev, points: res.points }))
+    setCoupons(res.coupons)
     const currentUd = userBookDataRef.current[user.username] || {
       ownedBookIds: [],
       bookProgress: {},
       purchasedBookIds: []
     }
-    const newOwned = currentUd.ownedBookIds.includes(bookId)
-      ? currentUd.ownedBookIds
-      : [...currentUd.ownedBookIds, bookId]
-    const currentPurchased = currentUd.purchasedBookIds || []
-    const newPurchased = currentPurchased.includes(bookId)
-      ? currentPurchased
-      : [...currentPurchased, bookId]
     const updatedUd = {
       ...currentUd,
-      ownedBookIds: newOwned,
-      purchasedBookIds: newPurchased
+      ownedBookIds: res.ownedBookIds,
+      purchasedBookIds: res.purchasedBookIds
     }
     userBookDataRef.current = {
       ...userBookDataRef.current,
       [user.username]: updatedUd
     }
     setUserBookData(prev => ({ ...prev, [user.username]: updatedUd }))
-    setBooks(prev => {
-      const updated = prev.map(b =>
-        b.id === bookId ? { ...b, isOwned: true } : b
-      )
-      if (selectedBook && selectedBook.id === bookId) {
-        setSelectedBook({ ...selectedBook, isOwned: true })
-      }
-      return updated
-    })
-    if (firebaseUid) {
-      fbService
-        .addBookToLibrary(firebaseUid, bookId)
-        .catch(console.error)
+    const ownedSet = new Set([...res.ownedBookIds, ...res.purchasedBookIds])
+    setBooks(prev =>
+      prev.map(b => (ownedSet.has(b.id) ? { ...b, isOwned: true } : b))
+    )
+    if (selectedBook && ownedSet.has(selectedBook.id)) {
+      setSelectedBook({ ...selectedBook, isOwned: true })
     }
+    // Cancel any pending debounced persist so it can't write a stale (pre-deduct)
+    // points value over the server's. The fresh setUser above re-arms it with
+    // the correct value.
+    if (persistTimerRef?.current) clearTimeout(persistTimerRef.current)
   }
+
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -87,26 +91,42 @@ export const CartView = () => {
     setCart(cart.filter((b: any) => b.id !== bookId))
   }
 
-  const finalizePurchase = () => {
-    cart.forEach((b: any) => onOwnedUpdate(b.id))
-    if (selectedCoupon) {
-      setCoupons(coupons.filter((c: any) => c.id !== selectedCoupon.id))
+  const runPurchase = async () => {
+    setIsProcessing(true)
+    try {
+      const res = await stripeConnect.purchaseBooksWithPoints(
+        cart.map((b: any) => b.id),
+        selectedCoupon?.id
+      )
+      adoptPurchaseResult(res)
+      setCart([])
+      showToast('Books added to your library!', 'check_circle')
+      onBack()
+    } catch (err: any) {
+      const msg = String(err?.message || '')
+      if (/points/i.test(msg)) {
+        showConfirm({
+          title: 'Not enough points',
+          message:
+            'You don’t have enough points for this purchase. Earn or buy more in Daily Rewards.',
+          confirmLabel: 'Get Points',
+          cancelLabel: 'Cancel',
+          icon: 'auto_awesome',
+          onConfirm: () => setView('daily-rewards')
+        })
+      } else {
+        showToast(msg || 'Purchase failed. Please try again.', 'error')
+      }
+    } finally {
+      setIsProcessing(false)
     }
-    setCart([])
-    showToast('Books added to library!', 'check_circle')
-    onBack()
   }
 
   const handleCheckout = () => {
     if (cart.length === 0) return
 
-    // Coupon covers the full cart — no points charged.
-    if (totalPts === 0) {
-      finalizePurchase()
-      return
-    }
-
-    if (user.points < totalPts) {
+    // Client-side pre-check for nicer UX; the server re-enforces the balance.
+    if (totalPts > 0 && user.points < totalPts) {
       const shortage = totalPts - user.points
       showConfirm({
         title: 'Not enough points',
@@ -121,15 +141,13 @@ export const CartView = () => {
 
     showConfirm({
       title: 'Complete Purchase',
-      message: `Buy ${cart.length} book(s) for ${totalPts} pts?`,
+      message:
+        totalPts === 0
+          ? `Get ${cart.length} book(s) free with your coupon?`
+          : `Buy ${cart.length} book(s) for ${totalPts} pts? Authors earn 80% in points.`,
       confirmLabel: 'Purchase',
       icon: 'shopping_cart',
-      onConfirm: () => {
-        setIsProcessing(true)
-        setUser(prev => ({ ...prev, points: prev.points - totalPts }))
-        finalizePurchase()
-        setIsProcessing(false)
-      }
+      onConfirm: runPurchase
     })
   }
 

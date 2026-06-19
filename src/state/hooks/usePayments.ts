@@ -1,8 +1,18 @@
 import { useEffect } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, SetStateAction, MutableRefObject } from 'react'
 import * as fbService from '@/services/firebaseService'
+import * as stripeConnect from '@/services/stripeConnect'
 import * as iap from '@/services/iap'
-import type { User, View, Coupon } from '@/types'
+import type { User, View, Coupon, BookProgress } from '@/types'
+
+type UserBookDataMap = Record<
+  string,
+  {
+    ownedBookIds: string[]
+    purchasedBookIds?: string[]
+    bookProgress: Record<string, BookProgress>
+  }
+>
 
 interface PaymentsDeps {
   view: View
@@ -12,6 +22,8 @@ interface PaymentsDeps {
   coupons: Coupon[]
   setCoupons: Dispatch<SetStateAction<Coupon[]>>
   showToast: (message: string, icon?: string) => void
+  setUserBookData: Dispatch<SetStateAction<UserBookDataMap>>
+  userBookDataRef: MutableRefObject<UserBookDataMap>
 }
 
 // Payments domain. The Stripe web flow's source of truth is the
@@ -31,6 +43,8 @@ export function usePayments({
   coupons,
   setCoupons,
   showToast,
+  setUserBookData,
+  userBookDataRef,
 }: PaymentsDeps) {
   useEffect(() => {
     if (
@@ -45,6 +59,12 @@ export function usePayments({
     const premiumRedirect = urlParams.get('premium_success') === 'true'
     const couponRedirect = urlParams.get('coupon_success') === 'true'
     const cancelRedirect = urlParams.get('payment_cancelled') === 'true'
+    // Stripe Connect onboarding return (F02) + cash book-purchase return.
+    const connectReturn = urlParams.get('connect_return') === 'true'
+    const connectRefresh = urlParams.get('connect_refresh') === 'true'
+    const bookPurchaseSuccess = urlParams.get('book_purchase_success') === 'true'
+    const purchasedBookId = urlParams.get('bookId')
+
     if (cancelRedirect) {
       showToast('Payment cancelled.', 'info')
       localStorage.removeItem('mainwrld_pending_points')
@@ -53,6 +73,76 @@ export function usePayments({
       window.history.replaceState({}, '', window.location.pathname)
       return
     }
+
+    // Returned from Stripe Connect onboarding: re-sync the payout mirror and
+    // copy the fresh booleans into local state so the monetize gate updates.
+    if (connectReturn || connectRefresh) {
+      window.history.replaceState({}, '', window.location.pathname)
+      if (!firebaseUid) return
+      ;(async () => {
+        try {
+          const s = await stripeConnect.getAccountStatus()
+          setUser((prev) => ({
+            ...prev,
+            stripeAccountId: s.stripeAccountId ?? prev.stripeAccountId,
+            payoutsEnabled: s.payoutsEnabled,
+            chargesEnabled: s.chargesEnabled,
+            detailsSubmitted: s.detailsSubmitted,
+            stripeAccountUpdatedAt: Date.now(),
+          }))
+          showToast(
+            s.payoutsEnabled
+              ? 'Payouts enabled — you can now monetize.'
+              : 'Setup incomplete — finish the remaining steps.',
+            s.payoutsEnabled ? 'check_circle' : 'info'
+          )
+        } catch {
+          showToast('Could not refresh payout status.', 'info')
+        }
+      })()
+      return
+    }
+
+    // Returned from a cash book checkout: ownership is granted by the webhook,
+    // so poll the user doc until the book lands, then adopt it locally.
+    if (bookPurchaseSuccess) {
+      window.history.replaceState({}, '', window.location.pathname)
+      if (!firebaseUid) return
+      showToast('Verifying purchase…', 'sync')
+      ;(async () => {
+        for (let i = 0; i < 8; i++) {
+          const fresh = (await fbService
+            .getUserProfile(firebaseUid)
+            .catch(() => null)) as any
+          const purchased: string[] = fresh?.purchasedBookIds || []
+          if (purchasedBookId && purchased.includes(purchasedBookId)) {
+            const owned: string[] = fresh?.ownedBookIds || []
+            const username = user.username
+            const current = userBookDataRef.current[username] || {
+              ownedBookIds: [],
+              bookProgress: {},
+              purchasedBookIds: [],
+            }
+            const updated = {
+              ...current,
+              ownedBookIds: owned,
+              purchasedBookIds: purchased,
+            }
+            userBookDataRef.current = {
+              ...userBookDataRef.current,
+              [username]: updated,
+            }
+            setUserBookData((prev) => ({ ...prev, [username]: updated }))
+            showToast('Purchase complete — enjoy your book!', 'check_circle')
+            return
+          }
+          await new Promise((r) => setTimeout(r, 1000))
+        }
+        showToast('Payment confirmed. Your book will appear shortly.', 'sync')
+      })()
+      return
+    }
+
     if (!pointsRedirect && !premiumRedirect && !couponRedirect) return
     if (!firebaseUid) return
 

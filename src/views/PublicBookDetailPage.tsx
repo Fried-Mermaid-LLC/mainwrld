@@ -1,7 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Button, CoverImg } from '@/components/sharedComponents'
 import type { User } from '@/types'
 import { useApp } from '@/state/AppContext'
+import * as stripeConnect from '@/services/stripeConnect'
+import * as iap from '@/services/iap'
 
 export const PublicBookDetailPage = () => {
   const {
@@ -22,8 +24,10 @@ export const PublicBookDetailPage = () => {
     handleToggleFavorite,
     handleDeleteBook,
     handleUnpublish,
-    handleMarkCompleted
+    handleMarkCompleted,
+    showToast
   } = useApp()
+  const [buying, setBuying] = useState(false)
   const currentUser = user
   const book = selectedBook!
   const totalCommentsCount = allComments.filter(
@@ -62,6 +66,22 @@ export const PublicBookDetailPage = () => {
   const onUnpublish = handleUnpublish
   const onMarkCompleted = handleMarkCompleted
   const isAuthor = currentUser.username === book.author.username
+  // Cash purchase (web only). Apple forbids selling in-app digital content via
+  // an external processor, so the Stripe rail is hidden on iOS — there the book
+  // is bought on the website (points purchase stays available on both).
+  const isNative = iap.isNativeIAPAvailable()
+  const onBuyStripe = async () => {
+    if (buying) return
+    setBuying(true)
+    try {
+      const { url } = await stripeConnect.createBookCheckout(book.id)
+      await stripeConnect.openStripeUrl(url)
+    } catch (err: any) {
+      showToast(err?.message || 'Could not start checkout.', 'error')
+    } finally {
+      setBuying(false)
+    }
+  }
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in slide-in-from-right duration-500'>
@@ -233,27 +253,50 @@ export const PublicBookDetailPage = () => {
           {isOwned || isAuthor || book.isFree || !book.isMonetized ? (
             <Button className='w-full' onClick={onRead}>
               <span className='material-icons-round text-sm'>auto_stories</span>{' '}
-              {bookProgress > 0 ? 'Continue' : 'Read'}
+              {(bookProgress?.scrollProgress ?? 0) > 0 ? 'Continue' : 'Read'}
             </Button>
           ) : (
-            <div className='flex gap-2'>
-              <Button className='flex-1' onClick={onRead}>
-                <span className='material-icons-round text-sm'>
-                  auto_stories
-                </span>{' '}
-                Preview
-              </Button>
-              <Button
-                variant='secondary'
-                className='flex-1'
-                onClick={onAddToCart}
-              >
-                <span className='material-icons-round text-sm'>
-                  add_shopping_cart
-                </span>{' '}
-                Add to Cart ({Math.round((book.price || 9.99) * 100)} pts)
-              </Button>
-            </div>
+            <>
+              {/* Cash rail (web): real money, Stripe 80/20 split + payout. */}
+              {!isNative && (
+                <Button
+                  className='w-full'
+                  disabled={buying}
+                  onClick={onBuyStripe}
+                >
+                  <span className='material-icons-round text-sm'>
+                    shopping_bag
+                  </span>{' '}
+                  {buying
+                    ? 'Opening checkout…'
+                    : `Buy — $${(book.price || 9.99).toFixed(2)}`}
+                </Button>
+              )}
+              <div className='flex gap-2'>
+                <Button className='flex-1' onClick={onRead}>
+                  <span className='material-icons-round text-sm'>
+                    auto_stories
+                  </span>{' '}
+                  Preview
+                </Button>
+                {/* Points rail (web + iOS): author earns 80% in points. */}
+                <Button
+                  variant='secondary'
+                  className='flex-1'
+                  onClick={onAddToCart}
+                >
+                  <span className='material-icons-round text-sm'>
+                    add_shopping_cart
+                  </span>{' '}
+                  {Math.round((book.price || 9.99) * 100)} pts
+                </Button>
+              </div>
+              {isNative && (
+                <p className='text-[10px] text-gray-400 font-bold text-center pt-1'>
+                  Buy with card on mainwrld.com
+                </p>
+              )}
+            </>
           )}
           {/* Library button depends strictly on isOwned (visibility in Library tab) */}
           {!isAuthor && (

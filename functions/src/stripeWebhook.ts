@@ -100,6 +100,58 @@ export const stripeWebhook = onRequest(
       return
     }
 
+    // ---- Connect: account.updated keeps the payout mirror in sync (F02) ----
+    // Enable "Listen to events on Connected accounts" on the same webhook
+    // endpoint so these arrive signed with the existing secret. We read the
+    // account state straight off the event payload (no API call needed).
+    if (event.type === 'account.updated') {
+      const account = event.data.object as Stripe.Account
+      const db = getFirestore()
+      let uid = account.metadata?.uid as string | undefined
+      if (!uid) {
+        const q = await db
+          .collection('users')
+          .where('stripeAccountId', '==', account.id)
+          .limit(1)
+          .get()
+        if (!q.empty) uid = q.docs[0].id
+      }
+      if (!uid) {
+        res.status(200).send('skipped: account has no linked user')
+        return
+      }
+      const eventRef = db.collection('stripeEvents').doc(event.id)
+      const userRef = db.collection('users').doc(uid)
+      try {
+        await db.runTransaction(async (t) => {
+          const existing = await t.get(eventRef)
+          if (existing.exists) return
+          t.set(
+            userRef,
+            {
+              payoutsEnabled: !!account.payouts_enabled,
+              chargesEnabled: !!account.charges_enabled,
+              detailsSubmitted: !!account.details_submitted,
+              stripeAccountUpdatedAt: Date.now(),
+            },
+            { merge: true }
+          )
+          t.set(eventRef, {
+            uid,
+            eventType: 'account.updated',
+            accountId: account.id,
+            livemode: event!.livemode,
+            processedAt: FieldValue.serverTimestamp(),
+          })
+        })
+        res.status(200).send('ok')
+      } catch (err) {
+        logger.error('account.updated processing failed', { err, eventId: event.id })
+        res.status(500).send('processing error')
+      }
+      return
+    }
+
     if (event.type !== 'checkout.session.completed') {
       logger.info('Skipping unhandled Stripe event', {
         type: event.type,
@@ -120,6 +172,78 @@ export const stripeWebhook = onRequest(
       res.status(200).send('skipped: missing client_reference_id')
       return
     }
+
+    // ---- Book purchase (Stripe Connect destination charge, F02) ----
+    // Branches BEFORE the points/premium/coupon SKU map: a book purchase has
+    // metadata.kind='book_purchase' and no `sku`. Grants the buyer permanent
+    // ownership and writes the bookPurchases audit row, idempotently.
+    if (session.metadata?.kind === 'book_purchase') {
+      const bookId = session.metadata.bookId
+      const sellerUid = session.metadata.sellerUid || null
+      const paymentIntentId =
+        (typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : session.payment_intent?.id) || session.id
+      const amountTotal = session.amount_total ?? 0
+      if (!bookId) {
+        res.status(200).send('skipped: book_purchase missing bookId')
+        return
+      }
+      const db = getFirestore()
+      const eventRef = db.collection('stripeEvents').doc(event.id)
+      const purchaseRef = db.collection('bookPurchases').doc(paymentIntentId)
+      const userRef = db.collection('users').doc(uid)
+      try {
+        await db.runTransaction(async (t) => {
+          const existing = await t.get(eventRef)
+          if (existing.exists) {
+            logger.info('book_purchase replay no-op', { eventId: event!.id })
+            return
+          }
+          const platformFee = Math.round(amountTotal * 0.2)
+          // Permanent ownership: both arrays (purchasedBookIds is never removed).
+          t.update(userRef, {
+            ownedBookIds: FieldValue.arrayUnion(bookId),
+            purchasedBookIds: FieldValue.arrayUnion(bookId),
+          })
+          t.set(purchaseRef, {
+            buyerUid: uid,
+            sellerUid,
+            bookId,
+            rail: 'cash',
+            priceUsd: amountTotal / 100,
+            platformFeeUsd: platformFee / 100,
+            sellerNetUsd: (amountTotal - platformFee) / 100,
+            stripeSessionId: session.id,
+            stripePaymentIntentId: paymentIntentId,
+            livemode: event!.livemode,
+            createdAt: FieldValue.serverTimestamp(),
+          })
+          t.set(eventRef, {
+            uid,
+            eventType: 'book_purchase',
+            bookId,
+            sellerUid,
+            sessionId: session.id,
+            paymentIntentId,
+            livemode: event!.livemode,
+            processedAt: FieldValue.serverTimestamp(),
+          })
+        })
+        logger.info('Book purchase granted', { uid, bookId, eventId: event.id })
+        res.status(200).send('ok')
+      } catch (err) {
+        logger.error('Failed to grant book purchase', {
+          err,
+          eventId: event.id,
+          sessionId: session.id,
+          uid,
+        })
+        res.status(500).send('processing error')
+      }
+      return
+    }
+
     if (!sku) {
       logger.warn('Stripe session missing metadata.sku', {
         sessionId: session.id,

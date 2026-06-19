@@ -177,7 +177,11 @@ export const ReadingView = () => {
   }
 
   const isAuthor = currentUser?.username === book?.author?.username
-  const isOwned = book?.isOwned
+  // Use the authoritative owned+purchased set (same as PublicBookDetailPage),
+  // not the ad-hoc book.isOwned flag — so a purchased book reads in full even
+  // after a reload that didn't re-hydrate isOwned, and even after the book was
+  // removed from the library (purchasedBookIds is append-only / permanent).
+  const isOwned = book ? getUserOwnedBookIds().has(book.id) : false
   const isFreeOrUnmonetized = book?.isFree || !book?.isMonetized
   const canAccessAll = isAuthor || isOwned || isFreeOrUnmonetized
 

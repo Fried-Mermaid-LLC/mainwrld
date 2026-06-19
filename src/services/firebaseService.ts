@@ -151,8 +151,27 @@ export const updateUserProfile = async (uid: string, data: Partial<DocumentData>
   await updateDoc(doc(db, 'users', uid), data);
 };
 
-// Atomic array operations for library (order-independent, no race conditions)
+// Atomic array operations for library (order-independent, no race conditions).
+//
+// Ownership model (F01):
+//   ownedBookIds     — books currently shown in the Library tab (saved).
+//                      Add/remove freely.
+//   purchasedBookIds — books PAID FOR (points or cash). Append-only; never
+//                      arrayRemove. This is the permanence source of truth, so
+//                      removing a purchased book from the library never revokes
+//                      read access (getUserOwnedBookIds unions both sets).
+//
+// Saving a free book must NOT mark it purchased, so addBookToLibrary writes
+// only ownedBookIds. recordBookPurchase is the only client path that appends
+// to purchasedBookIds (cash purchases additionally get a server-side grant
+// from the Stripe webhook / points callable).
 export const addBookToLibrary = async (uid: string, bookId: string) => {
+  await updateDoc(doc(db, 'users', uid), {
+    ownedBookIds: arrayUnion(bookId),
+  });
+};
+
+export const recordBookPurchase = async (uid: string, bookId: string) => {
   await updateDoc(doc(db, 'users', uid), {
     ownedBookIds: arrayUnion(bookId),
     purchasedBookIds: arrayUnion(bookId),
@@ -160,10 +179,20 @@ export const addBookToLibrary = async (uid: string, bookId: string) => {
 };
 
 export const removeBookFromLibrary = async (uid: string, bookId: string) => {
+  // Owned-only: a purchased book stays in purchasedBookIds forever so the
+  // permanent-purchase guarantee survives library removal.
   await updateDoc(doc(db, 'users', uid), {
     ownedBookIds: arrayRemove(bookId),
-    purchasedBookIds: arrayRemove(bookId),
   });
+};
+
+// Buyer-side purchase history (cash + points rails), written only by the
+// Stripe webhook / purchaseBooksWithPoints callable. Sorted client-side to
+// avoid needing a composite index.
+export const getBookPurchases = async (uid: string) => {
+  const q = query(collection(db, 'bookPurchases'), where('buyerUid', '==', uid));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
 };
 
 export const changePassword = async (newPassword: string) => {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import * as stripeConnect from '@/services/stripeConnect'
 import { AVATAR_ITEMS } from '@/components/avatar'
 import type { Report, User, Book } from '@/types'
 
@@ -179,6 +180,34 @@ export function useAdmin({
     fbService.updateReportStatus(reportId, 'dismissed').catch(console.error)
   }
 
+  // ---- Monetization review (F03) ----
+  // Both go through the admin-only reviewMonetization callable (server verifies
+  // the admin claim + re-validates the price, and writes via the Admin SDK so
+  // firestore.rules can keep monetization fields client-unwritable). The
+  // author/owner notifications + emails are sent by the onBookMonetized trigger.
+  const handleApproveMonetization = async (bookId: string) => {
+    try {
+      await stripeConnect.reviewMonetization(bookId, 'approve')
+      showToast('Monetization approved', 'paid')
+    } catch (err: any) {
+      showToast(err?.message || 'Could not approve.', 'error')
+    }
+  }
+
+  const handleDenyMonetization = async (bookId: string, reason: string) => {
+    const trimmed = (reason || '').trim()
+    if (!trimmed) {
+      showToast('A denial reason is required.', 'error')
+      return
+    }
+    try {
+      await stripeConnect.reviewMonetization(bookId, 'deny', trimmed)
+      showToast('Monetization denied', 'money_off')
+    } catch (err: any) {
+      showToast(err?.message || 'Could not deny.', 'error')
+    }
+  }
+
   return {
     reports,
     setReports,
@@ -192,6 +221,8 @@ export function useAdmin({
     handleAddStrike,
     handleRemoveStrike,
     handleBanUser,
-    handleDismissReport
+    handleDismissReport,
+    handleApproveMonetization,
+    handleDenyMonetization
   }
 }

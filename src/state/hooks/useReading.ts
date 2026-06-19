@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import * as stripeConnect from '@/services/stripeConnect'
 import { MAX_DAILY_CHAPTERS, containsBadWord } from '@/config/constants'
 import type { User, Book, BookProgress, View, Relationship } from '@/types'
 
@@ -237,14 +238,13 @@ export function useReading({
     const newOwned = currentUd.ownedBookIds.includes(bookId)
       ? currentUd.ownedBookIds
       : [...currentUd.ownedBookIds, bookId]
-    const currentPurchased = currentUd.purchasedBookIds || []
-    const newPurchased = currentPurchased.includes(bookId)
-      ? currentPurchased
-      : [...currentPurchased, bookId]
+    // Saving a (free) book only adds it to the library — it must NOT mark the
+    // book purchased. purchasedBookIds is reserved for genuinely paid books
+    // (recordBookPurchase / the points + Stripe rails). Preserve any existing
+    // purchased ids via the spread; never append here.
     const updatedUd = {
       ...currentUd,
-      ownedBookIds: newOwned,
-      purchasedBookIds: newPurchased
+      ownedBookIds: newOwned
     }
     // Sync the ref RIGHT NOW so the next rapid save sees this book
     userBookDataRef.current = {
@@ -277,13 +277,12 @@ export function useReading({
     const newOwned = currentUd.ownedBookIds.filter(
       (id: string) => id !== bookId
     )
-    const newPurchased = (currentUd.purchasedBookIds || []).filter(
-      (id: string) => id !== bookId
-    )
+    // Permanence: removing from the library only drops ownedBookIds. A purchased
+    // book stays in purchasedBookIds forever, so getUserOwnedBookIds() (which
+    // unions both) keeps read access after removal.
     const updatedUd = {
       ...currentUd,
-      ownedBookIds: newOwned,
-      purchasedBookIds: newPurchased
+      ownedBookIds: newOwned
     }
     // Sync the ref RIGHT NOW so the next rapid remove sees this change
     userBookDataRef.current = {
@@ -502,11 +501,53 @@ export function useReading({
     }
   }
 
-  const handleRequestMonetization = async (bookId: string) => {
-    const book = books.find(b => b.id === bookId)
-    await fbService.updateBook(bookId, {
-      monetizationAttempts: (book?.monetizationAttempts || 0) + 1
-    })
+  // Submits a monetization request via the server (submitMonetizationRequest
+  // callable, F02). The server re-verifies ownership/eligibility, requires the
+  // seller's payout account to be enabled, validates the price tier, stamps the
+  // seller identity, sets monetizationStatus:'pending' and bumps attempts — all
+  // fields the client can no longer write directly (locked by firestore.rules).
+  // The "one more step" payout gate is handled in MonetizationRequestView before
+  // this is called; we still surface a payouts error gracefully as a fallback.
+  // Returns true on success so the view can navigate back.
+  const handleRequestMonetization = async (
+    bookId: string,
+    requestedPrice: number
+  ): Promise<boolean> => {
+    try {
+      await stripeConnect.submitMonetizationRequest(bookId, requestedPrice)
+      // Optimistic: reflect "pending" immediately; the books subscription
+      // confirms with server truth within ~1s.
+      setBooks(prev =>
+        prev.map(b =>
+          b.id === bookId
+            ? {
+                ...b,
+                monetizationStatus: 'pending' as const,
+                requestedPrice,
+                monetizationRequestedAt: new Date().toISOString(),
+                monetizationAttempts: (b.monetizationAttempts || 0) + 1
+              }
+            : b
+        )
+      )
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(prev =>
+          prev
+            ? { ...prev, monetizationStatus: 'pending', requestedPrice }
+            : prev
+        )
+      }
+      showToast('Request submitted for review', 'send')
+      return true
+    } catch (err: any) {
+      const msg = String(err?.message || '')
+      if (/payout/i.test(msg)) {
+        showToast('Set up your payout account first.', 'account_balance')
+      } else {
+        showToast(msg || 'Could not submit request. Please try again.', 'error')
+      }
+      return false
+    }
   }
 
   const handleSaveDraft = async (
