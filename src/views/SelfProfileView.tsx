@@ -9,24 +9,12 @@ export const SelfProfileView = () => {
     books,
     setSelectedBook,
     relationships,
-    avatarConfig,
-    cart
+    avatarConfig
   } = useApp()
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-500'>
       <header className='p-6 flex justify-end items-center sticky top-0 bg-white/80 backdrop-blur-md z-50'>
         <div className='flex gap-2'>
-          <button
-            onClick={() => setView('cart')}
-            className='w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 relative'
-          >
-            <span className='material-icons-round'>shopping_cart</span>
-            {cart.length > 0 && (
-              <span className='absolute -top-1 -right-1 w-5 h-5 bg-accent text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-white'>
-                {cart.length}
-              </span>
-            )}
-          </button>
           <button
             onClick={() => setView('settings')}
             className='w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400'

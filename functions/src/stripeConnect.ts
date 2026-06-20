@@ -390,7 +390,7 @@ export const reviewMonetization = onCall<
 // ============================================================
 
 export const createBookCheckoutSession = onCall<
-  { bookId: string; mode?: string; origin?: string },
+  { bookId: string; mode?: string; origin?: string; couponId?: string },
   Promise<{ url: string }>
 >(
   { region: REGION, secrets: [STRIPE_SECRET_KEY, STRIPE_TEST_SECRET_KEY] },
@@ -416,7 +416,8 @@ export const createBookCheckoutSession = onCall<
     }
     // Already owns it? (purchasedBookIds is permanent.)
     const buyerSnap = await db.collection('users').doc(buyerUid).get()
-    const purchased: string[] = (buyerSnap.data() as any)?.purchasedBookIds || []
+    const buyerData = (buyerSnap.data() as any) || {}
+    const purchased: string[] = buyerData.purchasedBookIds || []
     if (purchased.includes(bookId)) {
       throw new HttpsError('already-exists', 'You already own this book.')
     }
@@ -424,6 +425,36 @@ export const createBookCheckoutSession = onCall<
     const stripe = stripeFor(req.data?.mode)
     const origin = safeOrigin(req.data?.origin)
     const unitAmount = Math.round((book.price || 9.99) * 100)
+
+    // Optional in-app coupon → a one-time Stripe discount. The 80/20 split is
+    // computed on the DISCOUNTED amount (only model that's always valid for a
+    // destination charge); the discount is capped so the buyer still pays the
+    // Stripe minimum. The in-app coupon is marked used by the webhook on
+    // successful payment (so an abandoned checkout doesn't burn it).
+    const couponId: string | undefined = req.data?.couponId
+    let discountCents = 0
+    let stripeCouponId: string | undefined
+    if (couponId) {
+      const coupon = (buyerData.coupons || []).find(
+        (c: any) => c.id === couponId && !c.used
+      )
+      if (coupon) {
+        const raw = Math.round((coupon.value || 0) * 100)
+        discountCents = Math.max(0, Math.min(raw, unitAmount - 50))
+        if (discountCents > 0) {
+          const sc = await stripe.coupons.create({
+            amount_off: discountCents,
+            currency: 'usd',
+            duration: 'once',
+            max_redemptions: 1,
+            name: `MainWRLD $${coupon.value} coupon`,
+          })
+          stripeCouponId = sc.id
+        }
+      }
+    }
+    const chargedAmount = unitAmount - discountCents
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [
@@ -436,12 +467,19 @@ export const createBookCheckoutSession = onCall<
           quantity: 1,
         },
       ],
+      discounts: stripeCouponId ? [{ coupon: stripeCouponId }] : undefined,
       payment_intent_data: {
-        application_fee_amount: Math.round(unitAmount * PLATFORM_FEE_RATE),
+        application_fee_amount: Math.round(chargedAmount * PLATFORM_FEE_RATE),
         transfer_data: { destination },
       },
       client_reference_id: buyerUid,
-      metadata: { bookId, sellerUid, buyerUid, kind: 'book_purchase' },
+      metadata: {
+        bookId,
+        sellerUid,
+        buyerUid,
+        kind: 'book_purchase',
+        couponId: stripeCouponId ? couponId! : '',
+      },
       success_url: `${origin}/?book_purchase_success=true&bookId=${encodeURIComponent(
         bookId
       )}`,
@@ -453,130 +491,3 @@ export const createBookCheckoutSession = onCall<
     return { url: session.url }
   }
 )
-
-// ============================================================
-// 4. Reader points checkout — author earns 80% in points
-// ============================================================
-
-export const purchaseBooksWithPoints = onCall<
-  { bookIds: string[]; couponId?: string },
-  Promise<{
-    points: number
-    ownedBookIds: string[]
-    purchasedBookIds: string[]
-    coupons: Array<{ id: string; value: number; used: boolean }>
-  }>
->({ region: REGION }, async (req) => {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.')
-  const buyerUid = req.auth.uid
-  const bookIds: string[] = Array.isArray(req.data?.bookIds) ? req.data.bookIds : []
-  const couponId: string | undefined = req.data?.couponId
-  if (bookIds.length === 0) {
-    throw new HttpsError('invalid-argument', 'No books to purchase.')
-  }
-  const db = getFirestore()
-
-  // Pre-fetch the book docs (transactions can't run queries). doc id == id
-  // field for createBook books, but query defensively to match updateBook.
-  const found = await Promise.all(bookIds.map((id) => findBookByIdField(db, id)))
-  const books = found.map((f, i) => {
-    if (!f) throw new HttpsError('not-found', `Book ${bookIds[i]} not found.`)
-    return f
-  })
-
-  const buyerRef = db.collection('users').doc(buyerUid)
-
-  const result = await db.runTransaction(async (t) => {
-    const buyerSnap = await t.get(buyerRef)
-    if (!buyerSnap.exists) throw new HttpsError('not-found', 'User profile missing.')
-    const buyer = buyerSnap.data() as any
-    const owned: string[] = buyer.ownedBookIds || []
-    const purchased: string[] = buyer.purchasedBookIds || []
-    const coupons: Array<{ id: string; value: number; used: boolean }> =
-      buyer.coupons || []
-
-    // Only charge for monetized, non-free books the buyer doesn't already own.
-    const toBuy = books.filter(
-      (b) =>
-        b.data.isMonetized &&
-        !b.data.isFree &&
-        b.data.authorUid !== buyerUid &&
-        !purchased.includes(b.data.id)
-    )
-    // Free / already-owned books just get added to the library (no charge).
-
-    const subtotal = toBuy.reduce(
-      (acc, b) => acc + Math.round((b.data.price || 9.99) * 100),
-      0
-    )
-    let discount = 0
-    const coupon = couponId ? coupons.find((c) => c.id === couponId && !c.used) : undefined
-    if (coupon) discount = (coupon.value || 0) * 100
-    const total = Math.max(0, subtotal - discount)
-
-    if ((buyer.points || 0) < total) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Not enough points for this purchase.'
-      )
-    }
-
-    // Credit each author 80% of their book's points (the coupon discount is
-    // funded by the platform, not deducted from the author's share).
-    for (const b of toBuy) {
-      const bookPoints = Math.round((b.data.price || 9.99) * 100)
-      const authorShare = Math.round(bookPoints * (1 - PLATFORM_FEE_RATE))
-      const authorUid = b.data.sellerUid || b.data.authorUid
-      if (authorUid && authorUid !== buyerUid) {
-        t.update(db.collection('users').doc(authorUid), {
-          points: FieldValue.increment(authorShare),
-        })
-      }
-      // Idempotent sale record (points rail).
-      t.set(
-        db.collection('bookPurchases').doc(`pts_${buyerUid}_${b.data.id}`),
-        {
-          buyerUid,
-          sellerUid: authorUid || null,
-          bookId: b.data.id,
-          rail: 'points',
-          priceUsd: b.data.price || 9.99,
-          pointsPaid: bookPoints,
-          sellerNetPoints: authorShare,
-          createdAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
-    }
-
-    // Grant permanent ownership for every book in the cart (incl. free ones).
-    const allIds = books.map((b) => b.data.id)
-    const newOwned = Array.from(new Set([...owned, ...allIds]))
-    const newPurchased = Array.from(new Set([...purchased, ...allIds]))
-    const newCoupons = coupon
-      ? coupons.filter((c) => c.id !== coupon.id)
-      : coupons
-    const newPoints = (buyer.points || 0) - total
-
-    t.update(buyerRef, {
-      points: newPoints,
-      ownedBookIds: newOwned,
-      purchasedBookIds: newPurchased,
-      coupons: newCoupons,
-    })
-
-    return {
-      points: newPoints,
-      ownedBookIds: newOwned,
-      purchasedBookIds: newPurchased,
-      coupons: newCoupons,
-    }
-  })
-
-  logger.info('purchaseBooksWithPoints', {
-    buyerUid,
-    bookIds,
-    points: result.points,
-  })
-  return result
-})

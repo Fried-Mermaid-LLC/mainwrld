@@ -18,6 +18,5 @@ export {
   submitMonetizationRequest,
   reviewMonetization,
   createBookCheckoutSession,
-  purchaseBooksWithPoints,
 } from './stripeConnect.js'
 export { onBookMonetized } from './monetization.js'

@@ -116,14 +116,17 @@ export const reviewMonetization = async (
 // ---- Reader checkout ----
 
 // Cash purchase (web only). Returns a Stripe Checkout URL with the 80/20
-// split baked in (application_fee_amount + transfer_data.destination).
+// split baked in (application_fee_amount + transfer_data.destination). An
+// optional in-app coupon is applied as a one-time Stripe discount.
 export const createBookCheckout = async (
-  bookId: string
+  bookId: string,
+  couponId?: string
 ): Promise<{ url: string }> => {
-  const fn = call<{ bookId: string; mode: string; origin: string }, { url: string }>(
-    'createBookCheckoutSession'
-  )
-  const res = await fn({ bookId, mode: MODE, origin: origin() })
+  const fn = call<
+    { bookId: string; mode: string; origin: string; couponId?: string },
+    { url: string }
+  >('createBookCheckoutSession')
+  const res = await fn({ bookId, mode: MODE, origin: origin(), couponId })
   return res.data
 }
 

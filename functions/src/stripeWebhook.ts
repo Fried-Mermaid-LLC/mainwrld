@@ -193,6 +193,7 @@ export const stripeWebhook = onRequest(
       const eventRef = db.collection('stripeEvents').doc(event.id)
       const purchaseRef = db.collection('bookPurchases').doc(paymentIntentId)
       const userRef = db.collection('users').doc(uid)
+      const couponId = session.metadata?.couponId || ''
       try {
         await db.runTransaction(async (t) => {
           const existing = await t.get(eventRef)
@@ -200,12 +201,21 @@ export const stripeWebhook = onRequest(
             logger.info('book_purchase replay no-op', { eventId: event!.id })
             return
           }
+          const userSnap = await t.get(userRef)
+          const userData = (userSnap.data() as any) || {}
           const platformFee = Math.round(amountTotal * 0.2)
           // Permanent ownership: both arrays (purchasedBookIds is never removed).
-          t.update(userRef, {
+          const userUpdate: Record<string, any> = {
             ownedBookIds: FieldValue.arrayUnion(bookId),
             purchasedBookIds: FieldValue.arrayUnion(bookId),
-          })
+          }
+          // Burn the in-app coupon (if one was applied) now that payment landed.
+          if (couponId && Array.isArray(userData.coupons)) {
+            userUpdate.coupons = userData.coupons.map((c: any) =>
+              c.id === couponId ? { ...c, used: true } : c
+            )
+          }
+          t.update(userRef, userUpdate)
           t.set(purchaseRef, {
             buyerUid: uid,
             sellerUid,

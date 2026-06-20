@@ -20,14 +20,15 @@ export const PublicBookDetailPage = () => {
     isBookInLibrary,
     handleReport,
     handleShareBook,
-    handleAddToCart,
     handleToggleFavorite,
     handleDeleteBook,
     handleUnpublish,
     handleMarkCompleted,
-    showToast
+    showToast,
+    coupons
   } = useApp()
   const [buying, setBuying] = useState(false)
+  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null)
   const currentUser = user
   const book = selectedBook!
   const totalCommentsCount = allComments.filter(
@@ -60,7 +61,6 @@ export const PublicBookDetailPage = () => {
   const isSaved = isBookInLibrary(book.id)
   const onReport = () => handleReport('Book', book.id)
   const onShare = () => handleShareBook(book)
-  const onAddToCart = () => handleAddToCart(book)
   const onToggleFavorite = () => handleToggleFavorite(book.id)
   const onDelete = handleDeleteBook
   const onUnpublish = handleUnpublish
@@ -70,11 +70,25 @@ export const PublicBookDetailPage = () => {
   // an external processor, so the Stripe rail is hidden on iOS — there the book
   // is bought on the website (points purchase stays available on both).
   const isNative = iap.isNativeIAPAvailable()
+  const listPrice = book.price || 9.99
+  const availableCoupons = (coupons || []).filter((c: any) => !c.used)
+  const selectedCoupon = availableCoupons.find(
+    (c: any) => c.id === selectedCouponId
+  )
+  // Coupon discount in USD, capped so the buyer still pays the Stripe minimum
+  // (matches the server's cap). Split is computed server-side on the net.
+  const discountUsd = selectedCoupon
+    ? Math.max(0, Math.min(selectedCoupon.value, listPrice - 0.5))
+    : 0
+  const payPrice = listPrice - discountUsd
   const onBuyStripe = async () => {
     if (buying) return
     setBuying(true)
     try {
-      const { url } = await stripeConnect.createBookCheckout(book.id)
+      const { url } = await stripeConnect.createBookCheckout(
+        book.id,
+        selectedCoupon?.id
+      )
       await stripeConnect.openStripeUrl(url)
     } catch (err: any) {
       showToast(err?.message || 'Could not start checkout.', 'error')
@@ -255,47 +269,66 @@ export const PublicBookDetailPage = () => {
               <span className='material-icons-round text-sm'>auto_stories</span>{' '}
               {(bookProgress?.scrollProgress ?? 0) > 0 ? 'Continue' : 'Read'}
             </Button>
+          ) : !isNative ? (
+            <>
+              {/* Money-only purchase (web). Real card payment via Stripe with
+                  the 80/20 split + payout; an optional coupon discounts it. */}
+              {availableCoupons.length > 0 && (
+                <div className='space-y-2'>
+                  <p className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1'>
+                    Apply coupon
+                  </p>
+                  <div className='flex gap-2 overflow-x-auto no-scrollbar'>
+                    <button
+                      onClick={() => setSelectedCouponId(null)}
+                      className={`flex-shrink-0 px-4 py-2 rounded-xl border-2 text-[10px] font-bold ${
+                        !selectedCouponId
+                          ? 'bg-accent border-accent text-white'
+                          : 'bg-gray-50 border-gray-100 text-gray-400'
+                      }`}
+                    >
+                      None
+                    </button>
+                    {availableCoupons.map((c: any) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setSelectedCouponId(c.id)}
+                        className={`flex-shrink-0 px-4 py-2 rounded-xl border-2 text-[10px] font-bold ${
+                          selectedCouponId === c.id
+                            ? 'bg-accent border-accent text-white'
+                            : 'bg-gray-50 border-gray-100 text-gray-400'
+                        }`}
+                      >
+                        ${c.value} off
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <Button className='w-full' disabled={buying} onClick={onBuyStripe}>
+                <span className='material-icons-round text-sm'>shopping_bag</span>{' '}
+                {buying ? 'Opening checkout…' : `Buy — $${payPrice.toFixed(2)}`}
+                {discountUsd > 0 && (
+                  <span className='line-through opacity-60 ml-2'>
+                    ${listPrice.toFixed(2)}
+                  </span>
+                )}
+              </Button>
+              <Button variant='secondary' className='w-full' onClick={onRead}>
+                <span className='material-icons-round text-sm'>auto_stories</span>{' '}
+                Preview
+              </Button>
+            </>
           ) : (
             <>
-              {/* Cash rail (web): real money, Stripe 80/20 split + payout. */}
-              {!isNative && (
-                <Button
-                  className='w-full'
-                  disabled={buying}
-                  onClick={onBuyStripe}
-                >
-                  <span className='material-icons-round text-sm'>
-                    shopping_bag
-                  </span>{' '}
-                  {buying
-                    ? 'Opening checkout…'
-                    : `Buy — $${(book.price || 9.99).toFixed(2)}`}
-                </Button>
-              )}
-              <div className='flex gap-2'>
-                <Button className='flex-1' onClick={onRead}>
-                  <span className='material-icons-round text-sm'>
-                    auto_stories
-                  </span>{' '}
-                  Preview
-                </Button>
-                {/* Points rail (web + iOS): author earns 80% in points. */}
-                <Button
-                  variant='secondary'
-                  className='flex-1'
-                  onClick={onAddToCart}
-                >
-                  <span className='material-icons-round text-sm'>
-                    add_shopping_cart
-                  </span>{' '}
-                  {Math.round((book.price || 9.99) * 100)} pts
-                </Button>
-              </div>
-              {isNative && (
-                <p className='text-[10px] text-gray-400 font-bold text-center pt-1'>
-                  Buy with card on mainwrld.com
-                </p>
-              )}
+              {/* iOS: digital book sales are web-only (Apple IAP rules). */}
+              <Button variant='secondary' className='w-full' onClick={onRead}>
+                <span className='material-icons-round text-sm'>auto_stories</span>{' '}
+                Preview
+              </Button>
+              <p className='text-[10px] text-gray-400 font-bold text-center pt-1'>
+                Buy with card on mainwrld.com
+              </p>
             </>
           )}
           {/* Library button depends strictly on isOwned (visibility in Library tab) */}
