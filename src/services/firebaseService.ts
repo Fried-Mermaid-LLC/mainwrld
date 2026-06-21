@@ -425,46 +425,6 @@ export const deleteChapterDoc = async (bookId: string, chapterId: string) => {
   await deleteDoc(doc(db, 'books', bookId, 'chapters', chapterId));
 };
 
-// Migrate a legacy (schema < 2) book's inline `chapters[]` array into the
-// subcollection on first edit, so stripping the inline array later never loses
-// bodies. Returns the resulting chapterMeta. Idempotent: if the book already has
-// chapterMeta it is returned unchanged (no writes). Heavy lifting happens once
-// per legacy book, the first time its author touches it.
-export const ensureChaptersMigrated = async (
-  book: any
-): Promise<Array<{ id: string; title: string }>> => {
-  // Return a copy so callers can freely mutate (push/replace) without touching
-  // the array held in React state.
-  if (book.chapterMeta && book.chapterMeta.length)
-    return book.chapterMeta.map((m: any) => ({ id: m.id, title: m.title }));
-  const inline: Array<{ title?: string; content?: string }> = book.chapters || [];
-  if (!inline.length) return [];
-  const authorUsername = book.authorUsername || book.author?.username || '';
-  const batch = writeBatch(db);
-  const meta: Array<{ id: string; title: string }> = [];
-  inline.forEach((ch, i) => {
-    const id = newChapterId(book.id);
-    const title = ch.title || `Chapter ${i + 1}`;
-    meta.push({ id, title });
-    batch.set(doc(db, 'books', book.id, 'chapters', id), {
-      content: ch.content || '',
-      order: i,
-      title,
-      authorUsername,
-      updatedAt: serverTimestamp()
-    });
-  });
-  batch.update(doc(db, 'books', book.id), {
-    chapterMeta: meta,
-    schemaVersion: 2,
-    chapters: deleteField(),
-    content: deleteField(),
-    updatedAt: serverTimestamp()
-  });
-  await batch.commit();
-  return meta;
-};
-
 // Atomically write a chapter body AND the parent book's light metadata
 // (chapterMeta, chaptersCount, cover, status…). Also strips the legacy heavy
 // fields (chapters/content) and stamps schemaVersion 2, so any edited book is

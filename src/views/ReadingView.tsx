@@ -193,17 +193,9 @@ export const ReadingView = () => {
   const isFreeOrUnmonetized = book?.isFree || !book?.isMonetized
   const canAccessAll = isAuthor || isOwned || isFreeOrUnmonetized
 
-  // Chapter list now comes from light metadata (chapterMeta) instead of the
-  // full chapter bodies. Legacy (un-migrated) books still carry inline
-  // `chapters`, so derive a meta list from them for a transitional fallback.
-  const isSchema2 =
-    (book?.schemaVersion ?? 0) >= 2 || (book?.chapterMeta?.length ?? 0) > 0
-  const allMeta: { id: string; title: string }[] = isSchema2
-    ? book?.chapterMeta || []
-    : (book?.chapters || []).map((c, i) => ({
-        id: `legacy-${i}`,
-        title: c.title || `Chapter ${i + 1}`
-      }))
+  // Chapter list comes from light metadata (chapterMeta); chapter bodies are
+  // fetched lazily one at a time via the getChapterContent callable.
+  const allMeta: { id: string; title: string }[] = book?.chapterMeta || []
   // Author sees all chapters (including drafts), others with access see only
   // published chapters, non-access users see only the first chapter (preview).
   const visibleChapters = isAuthor
@@ -214,19 +206,10 @@ export const ReadingView = () => {
   const currentMeta = visibleChapters[currentChapterIdx]
   const currentChapterTitle = currentMeta?.title || book?.title || 'Story'
 
-  // Load the current chapter body lazily (schema 2 via callable; legacy from
-  // the inline array). Cancels in-flight loads on chapter/book change, and
-  // prefetches the next chapter into the cache.
+  // Load the current chapter body lazily via the callable. Cancels in-flight
+  // loads on chapter/book change, and prefetches the next chapter into the cache.
   useEffect(() => {
     if (!book) return
-    if (!isSchema2) {
-      setChapterLoading(false)
-      setChapterError(false)
-      setChapterContent(
-        book.chapters?.[currentChapterIdx]?.content || book.content || ''
-      )
-      return
-    }
     if (!currentMeta) {
       setChapterContent('')
       return
@@ -270,7 +253,7 @@ export const ReadingView = () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.id, currentChapterIdx, isSchema2, canAccessAll])
+  }, [book?.id, currentChapterIdx, canAccessAll])
 
   const handleForward = () => {
     if (!settings.scrollMode && pageFlipRef.current) {

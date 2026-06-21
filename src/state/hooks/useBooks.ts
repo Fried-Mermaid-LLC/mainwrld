@@ -176,7 +176,7 @@ export function useBooks({
 
     const chLikes = getChapterLikes(
       targetBook.likes,
-      targetBook.chapterMeta?.length || targetBook.chapters?.length || 1
+      targetBook.chapterMeta?.length || 1
     )
 
     if (isLiked) {
@@ -191,7 +191,6 @@ export function useBooks({
       chLikes[chapterIndex] = (chLikes[chapterIndex] || 0) + 1
       const chapterTitle =
         targetBook.chapterMeta?.[chapterIndex]?.title ||
-        targetBook.chapters?.[chapterIndex]?.title ||
         `Chapter ${chapterIndex + 1}`
       const authorUsername =
         (targetBook as any).authorUsername || targetBook.author.username

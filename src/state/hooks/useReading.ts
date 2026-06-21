@@ -213,8 +213,7 @@ export function useReading({
   const handleDeleteChapter = async (bookId: string, chapterIndex: number) => {
     const book = books.find(b => b.id === bookId)
     if (!book) return
-    // Migrate legacy inline chapters first so we have stable chapter ids.
-    const meta = await fbService.ensureChaptersMigrated(book)
+    const meta = (book.chapterMeta || []).map(m => ({ id: m.id, title: m.title }))
     if (chapterIndex < 0 || chapterIndex >= meta.length) return
     const chapterId = meta[chapterIndex].id
     const newMeta = meta.filter((_, i) => i !== chapterIndex)
@@ -360,10 +359,12 @@ export function useReading({
         // Update existing book - preserve existing metadata when just adding/updating chapters
         const existingBook = books.find(b => b.id === currentPublishingId)
         if (existingBook) {
-          // Schema 2: chapter bodies live in the subcollection. Migrate any
-          // legacy inline chapters first (so no bodies are lost), then edit only
-          // the target chapter and update the light chapterMeta on the book doc.
-          const meta = await fbService.ensureChaptersMigrated(existingBook)
+          // Chapter bodies live in the subcollection: edit only the target
+          // chapter and update the light chapterMeta on the book doc.
+          const meta = (existingBook.chapterMeta || []).map(m => ({
+            id: m.id,
+            title: m.title
+          }))
           const targetIndex =
             currentPublishingChapterIndex !== null
               ? currentPublishingChapterIndex
@@ -444,10 +445,7 @@ export function useReading({
           )
 
           // Notify users who have this book in their library about the new chapter
-          const prevChapterCount =
-            existingBook.chapterMeta?.length ??
-            existingBook.chapters?.length ??
-            0
+          const prevChapterCount = existingBook.chapterMeta?.length ?? 0
           if (
             currentPublishingChapterIndex === null ||
             currentPublishingChapterIndex >= prevChapterCount
@@ -622,7 +620,10 @@ export function useReading({
       // Update existing draft in Firestore (schema 2: chapter body → subcollection)
       const existingBook = books.find(b => b.id === bookId)
       if (existingBook) {
-        const meta = await fbService.ensureChaptersMigrated(existingBook)
+        const meta = (existingBook.chapterMeta || []).map(m => ({
+          id: m.id,
+          title: m.title
+        }))
         let chapterId: string
         let order: number
         let resolvedChapterTitle: string
@@ -686,7 +687,10 @@ export function useReading({
     if (existingDraft) {
       newBookId = existingDraft.id
       const resolvedChapterTitle = (chapterTitle || '').trim() || 'Chapter 1'
-      const meta = await fbService.ensureChaptersMigrated(existingDraft)
+      const meta = (existingDraft.chapterMeta || []).map(m => ({
+        id: m.id,
+        title: m.title
+      }))
       const chapterId = meta[0]?.id || fbService.newChapterId(existingDraft.id)
       await fbService.commitChapterWrite(
         existingDraft.id,

@@ -36,11 +36,9 @@ export const CommentsView = () => {
   const onReport = (id: string) => handleReport('Comment', id)
   const onLikeComment = handleLikeComment
   const currentUsername = user.username
-  // chapterMeta carries the light per-chapter list (id + title); fall back to
-  // legacy inline chapters for un-migrated books. Only length/title are read.
-  const chapters = (selectedBook?.chapterMeta ??
-    selectedBook?.chapters ??
-    []) as { title?: string }[]
+  // chapterMeta carries the light per-chapter list (id + title); only
+  // length/title are read here.
+  const chapters = (selectedBook?.chapterMeta ?? []) as { title?: string }[]
   const initialChapterIndex = readingChapterIndex
   const onScrolledTo = () => setScrollToCommentId(null)
   const [newText, setNewText] = useState('')

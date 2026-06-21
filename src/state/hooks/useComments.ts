@@ -82,8 +82,7 @@ export function useComments({
 
       const chapterMetaEntry =
         chapterIndex !== undefined
-          ? selectedBook.chapterMeta?.[chapterIndex] ||
-            selectedBook.chapters?.[chapterIndex]
+          ? selectedBook.chapterMeta?.[chapterIndex]
           : undefined
       const chapterName = chapterMetaEntry
         ? ` (${chapterMetaEntry.title})`

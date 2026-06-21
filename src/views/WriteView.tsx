@@ -408,8 +408,7 @@ export const WriteView = () => {
       const currentTitle = latestStateRef.current.newTitle
       const isSavingNewChapter =
         latestStateRef.current.selectedChapterIndex === 'new'
-      const chapterCountBeforeSave =
-        selectedBook?.chapterMeta?.length ?? selectedBook?.chapters?.length ?? 0
+      const chapterCountBeforeSave = selectedBook?.chapterMeta?.length ?? 0
       const currentChapterIndex = isSavingNewChapter
         ? null
         : parseInt(latestStateRef.current.selectedChapterIndex, 10)
@@ -502,15 +501,8 @@ export const WriteView = () => {
       setSaveState('idle')
     }
 
-    // Chapter metadata (id + title), falling back to legacy inline chapters.
-    const meta = selectedBook
-      ? selectedBook.chapterMeta?.length
-        ? selectedBook.chapterMeta
-        : (selectedBook.chapters || []).map((c, i) => ({
-            id: `legacy-${i}`,
-            title: c.title || `Chapter ${i + 1}`
-          }))
-      : []
+    // Chapter metadata (id + title) from the book's chapterMeta.
+    const meta = selectedBook?.chapterMeta || []
 
     // New book or new chapter → empty editor.
     if (!selectedBook || selectedChapterIndex === 'new') {
@@ -519,18 +511,8 @@ export const WriteView = () => {
     }
 
     const idx = parseInt(selectedChapterIndex)
-    const isSchema2 =
-      (selectedBook.schemaVersion ?? 0) >= 2 ||
-      (selectedBook.chapterMeta?.length ?? 0) > 0
 
-    // Legacy: chapter body is inline on the book doc.
-    if (!isSchema2) {
-      const ch = selectedBook.chapters?.[idx]
-      applyContent(ch?.content || '', ch?.title || `Chapter ${idx + 1}`)
-      return
-    }
-
-    // Schema 2: fetch the chapter body directly (rules allow the author).
+    // Fetch the chapter body directly (rules allow the author).
     const m = meta[idx]
     if (!m) {
       applyContent('', `Chapter ${idx + 1}`)
@@ -731,9 +713,7 @@ export const WriteView = () => {
               onChange={e => setSelectedChapterIndex(e.target.value)}
             >
               <option value='new'>+ New Chapter</option>
-              {(selectedBook?.chapterMeta ??
-                selectedBook?.chapters ??
-                []).map((ch: any, idx: number) => (
+              {(selectedBook?.chapterMeta ?? []).map((ch: any, idx: number) => (
                 <option key={idx} value={idx}>
                   {ch.title}
                 </option>

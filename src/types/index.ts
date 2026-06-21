@@ -128,11 +128,6 @@ export interface AvatarItem {
   cost: number;
 }
 
-export interface Chapter {
-  title: string;
-  content: string;
-}
-
 // Lightweight per-chapter metadata kept on the book document so dropdowns,
 // chapter lists and lazy-load can work without reading any chapter bodies.
 // `id` is the stable docId of the chapter in the books/{id}/chapters subcollection.
@@ -180,13 +175,11 @@ export interface Book {
   price?: number;
   isOwned?: boolean;
   minLikesPerChapter?: number;
-  // schemaVersion 2+: chapter bodies live in the books/{id}/chapters subcollection
-  // and are NOT present on the book doc. `chapterMeta` carries order + titles for UI.
-  // Legacy fields below remain only for transitional reads of un-migrated books.
+  // Chapter bodies live in the books/{id}/chapters subcollection, not on the
+  // book doc. `chapterMeta` carries order + titles for the UI; chaptersCount is
+  // the published-prefix length.
   chapterMeta?: ChapterMeta[];
   schemaVersion?: number;
-  content?: string;
-  chapters?: Chapter[];
   favoritesLastWeek?: number;
   monetizationAttempts?: number;
   isMonetized?: boolean;

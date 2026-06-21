@@ -43,8 +43,8 @@ export const INITIAL_BOOKS: Book[] = [
     monetizationAttempts: 0,
     commentsEnabled: true,
     minLikesPerChapter: 60,
-    content: LOREM_CONTENT,
-    chapters: [{ title: 'Chapter 1', content: LOREM_CONTENT }],
+    schemaVersion: 2,
+    chapterMeta: [{ id: 'e1-c1', title: 'Chapter 1' }],
   },
   {
     id: 'p1',
@@ -67,8 +67,11 @@ export const INITIAL_BOOKS: Book[] = [
     monetizationAttempts: 0,
     commentsEnabled: true,
     minLikesPerChapter: 15,
-    content: LOREM_CONTENT,
-    chapters: [{ title: 'Chapter 1', content: LOREM_CONTENT }, { title: 'Chapter 2', content: LOREM_CONTENT }],
+    schemaVersion: 2,
+    chapterMeta: [
+      { id: 'p1-c1', title: 'Chapter 1' },
+      { id: 'p1-c2', title: 'Chapter 2' },
+    ],
   },
   {
     id: 'e2',
@@ -92,11 +95,11 @@ export const INITIAL_BOOKS: Book[] = [
     monetizationAttempts: 0,
     commentsEnabled: false,
     minLikesPerChapter: 80,
-    content: LOREM_CONTENT,
-    chapters: [
-      { title: 'Chapter 1', content: LOREM_CONTENT },
-      { title: 'Chapter 2', content: LOREM_CONTENT },
-      { title: 'Chapter 3', content: LOREM_CONTENT },
+    schemaVersion: 2,
+    chapterMeta: [
+      { id: 'e2-c1', title: 'Chapter 1' },
+      { id: 'e2-c2', title: 'Chapter 2' },
+      { id: 'e2-c3', title: 'Chapter 3' },
     ],
   },
 ];

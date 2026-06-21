@@ -125,14 +125,11 @@ export const moderateCommentOnCreate = onDocumentCreated(
   }
 )
 
-// ---- Books: title / synopsis (+ legacy inline chapters) ----
+// ---- Books: title / synopsis ----
 //
-// Since schema 2, chapter bodies move to the books/{id}/chapters subcollection
-// (see moderateChapterOnWrite below). This trigger moderates the metadata that
-// still lives on the book doc — title and synopsis — AND, during the transition,
-// any legacy inline `chapters[]` content written by old clients that haven't
-// migrated yet. The inline check is a no-op for schema-2 books (no array), and
-// can be removed once all old clients are gone. A violation deletes the whole
+// Chapter bodies live in the books/{id}/chapters subcollection (see
+// moderateChapterOnWrite below). This trigger only moderates the metadata that
+// still lives on the book doc — title and synopsis. A violation deletes the whole
 // book (and its chapter subcollection) via recursiveDelete.
 
 export const moderateBookOnWrite = onDocumentUpdated(
@@ -156,14 +153,6 @@ export const moderateBookOnWrite = onDocumentUpdated(
     const synopsis = after.synopsis as string | undefined
     if (title && title !== before?.title) changedTexts.push(title)
     if (synopsis && synopsis !== before?.synopsis) changedTexts.push(synopsis)
-    // Transitional: moderate changed legacy inline chapter bodies too.
-    const beforeChapters: Array<{ content?: string }> = before?.chapters ?? []
-    const afterChapters: Array<{ content?: string }> = after.chapters ?? []
-    afterChapters.forEach((ch, i) => {
-      const newText = ch?.content ?? ''
-      const oldText = beforeChapters[i]?.content ?? ''
-      if (newText && newText !== oldText) changedTexts.push(newText)
-    })
     if (changedTexts.length === 0) return
     for (const text of changedTexts) {
       const verdict = await moderateText(text, key)
