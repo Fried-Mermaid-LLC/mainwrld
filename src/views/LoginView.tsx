@@ -5,16 +5,17 @@ import { useApp } from '@/state/AppContext'
 export const LoginView = () => {
   const { setView, setAuthError, loginForm, setLoginForm, authError, handleLogin } = useApp()
   return (
-    <div className='fixed inset-0 bg-white p-8 flex flex-col items-center justify-center animate-in fade-in duration-500'>
+    <div className='fixed inset-0 bg-white overflow-y-auto animate-in fade-in duration-500'>
       <button
         onClick={() => {
           setAuthError(null)
           setView('landing')
         }}
-        className='absolute top-safe-top left-8 mt-4 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
+        className='fixed top-safe-top left-8 mt-4 z-10 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
       >
         <span className='material-icons-round'>arrow_back</span>
       </button>
+      <div className='min-h-full p-8 pb-[max(2rem,env(keyboard-inset-height))] flex flex-col items-center justify-center'>
       <img
         src={`${BASE}logo.png`}
         alt='MainWRLD'
@@ -24,6 +25,8 @@ export const LoginView = () => {
       <div className='w-full max-w-sm space-y-4 mb-4'>
         <Input
           label='Username or Email'
+          name='username'
+          autoComplete='username'
           placeholder='Enter username or email...'
           value={loginForm.username}
           onChange={(val: string) =>
@@ -33,6 +36,8 @@ export const LoginView = () => {
         <Input
           label='Password'
           type='password'
+          name='password'
+          autoComplete='current-password'
           placeholder='••••••••••••'
           value={loginForm.password}
           onChange={(val: string) =>
@@ -51,7 +56,7 @@ export const LoginView = () => {
           {authError}
         </p>
       )}
-      <Button className='w-full max-w-sm' onClick={handleLogin}>
+      <Button className='w-full max-w-sm shrink-0' onClick={handleLogin}>
         Continue
       </Button>
       <button
@@ -63,6 +68,7 @@ export const LoginView = () => {
       >
         Create Account
       </button>
+      </div>
     </div>
   )
 }

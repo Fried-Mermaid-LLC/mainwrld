@@ -17,11 +17,14 @@ export const Button = ({ children, onClick, variant = 'primary', className = '',
   );
 };
 
-export const Input = ({ label, type = 'text', value, onChange, placeholder, description, maxLength }: any) => (
+export const Input = ({ label, type = 'text', value, onChange, placeholder, description, maxLength, autoComplete, name, inputMode }: any) => (
   <div className="space-y-1.5 w-full">
     {label && <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">{label}</label>}
     <input
       type={type}
+      name={name}
+      autoComplete={autoComplete}
+      inputMode={inputMode}
       value={value || ''}
       maxLength={maxLength}
       onChange={(e) => onChange && onChange(e.target.value)}

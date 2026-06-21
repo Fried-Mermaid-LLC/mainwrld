@@ -13,11 +13,24 @@ import * as stripeConnect from '@/services/stripeConnect'
 export const MonetizationRequestView = () => {
   const { books, user, handleRequestMonetization, setView, showToast, showConfirm } =
     useApp()
-  const works = books.filter(b => b.author.username === user.username)
+  const works = books.filter(
+    b => b.author.username?.toLowerCase() === user.username?.toLowerCase()
+  )
   const onBack = () => setView('write')
   const [selectedBook, setSelectedBook] = useState<Book | null>(works[0] || null)
   const [price, setPrice] = useState<number>(9.99)
   const [submitting, setSubmitting] = useState(false)
+
+  // `books` load asynchronously, so on first render `works` can still be empty
+  // and the useState initializer leaves `selectedBook` null forever. Re-sync
+  // the selection once works arrive (and clear it if the selected book is gone).
+  useEffect(() => {
+    if (!selectedBook && works.length > 0) {
+      setSelectedBook(works[0])
+    } else if (selectedBook && !works.some(w => w.id === selectedBook.id)) {
+      setSelectedBook(works[0] || null)
+    }
+  }, [works, selectedBook])
 
   const allowedTiers = useMemo(
     () => (selectedBook ? allowedPriceTiers(selectedBook.chaptersCount) : []),
@@ -114,8 +127,8 @@ export const MonetizationRequestView = () => {
         </button>
       </header>
       <div className='space-y-8 pb-32'>
-        <div className='p-5 bg-accent/5 rounded-3xl border border-accent/10'>
-          <p className='text-[10px] font-bold text-accent uppercase tracking-widest leading-relaxed'>
+        <div className='p-5 bg-gray-50 rounded-3xl border border-gray-100'>
+          <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed'>
             Note: You have a maximum of 2 monetization attempts per book. If a
             book was successfully monetized and subsequently unpublished, it
             cannot be monetized a second time. Bank details &amp; tax forms are
@@ -127,6 +140,16 @@ export const MonetizationRequestView = () => {
           <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
             Select Work
           </label>
+          {works.length === 0 && (
+            <div className='p-6 bg-gray-50 rounded-3xl border border-gray-100 text-center'>
+              <p className='text-[11px] font-bold text-gray-400'>
+                No works to monetize yet.
+              </p>
+              <p className='text-[10px] text-gray-300 mt-1'>
+                Publish a book to request monetization.
+              </p>
+            </div>
+          )}
           <div className='flex gap-4 overflow-x-auto no-scrollbar'>
             {works.map((b: Book) => (
               <button

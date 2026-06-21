@@ -84,6 +84,10 @@ export function useAuthActions({
                 admiringCount: (profile as any).admiringCount || 0,
                 premiumSince: (profile as any).premiumSince || 0
               })
+              // Ensure the username custom claim is on the token before the
+              // username-scoped subscriptions (chat, notifications) start —
+              // otherwise their first listen is rejected by the rules.
+              await fbService.ensureUsernameClaim()
               setFirebaseUid(firebaseUser.uid)
               setView('home')
               // Mark user online in Firestore on auth restore
@@ -152,6 +156,9 @@ export function useAuthActions({
         isPremium: (result as any).isPremium || false,
         admiringCount: (result as any).admiringCount || 0
       })
+      // Backfill the username claim + refresh token before the
+      // username-scoped subscriptions start (chat, notifications).
+      await fbService.ensureUsernameClaim()
       setFirebaseUid((result as any).uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)
@@ -233,6 +240,10 @@ export function useAuthActions({
       }
 
       setUser(newUser)
+      // signUp() refreshes the token, but the setUsernameClaim onCreate
+      // trigger may not have run yet. ensureUsernameClaim stamps the claim
+      // deterministically before the username-scoped subscriptions start.
+      await fbService.ensureUsernameClaim()
       setFirebaseUid(result.uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)

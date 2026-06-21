@@ -78,8 +78,13 @@ service cloud.firestore {
     // their author. Anyone signed in can create a book in their name.
     // Updates restricted to author or admin (for take-downs).
     match /books/{bookId} {
+      // Published books: any signed-in user. Drafts: only the author (by
+      // authorUid — the reliable request.auth.uid, NOT the username custom
+      // claim which may be missing mid-signup) or an admin. The client must
+      // query published + own-books separately; a listen on the whole
+      // collection can't satisfy this condition and is rejected wholesale.
       allow read: if isSignedIn()
-        && (resource.data.isDraft != true || resource.data.authorUsername == request.auth.token.username || isAdmin());
+        && (resource.data.isDraft != true || resource.data.authorUid == request.auth.uid || isAdmin());
       allow create: if isSignedIn()
         && request.resource.data.authorUid == request.auth.uid;
       // Authors may edit their own books, but monetization state is

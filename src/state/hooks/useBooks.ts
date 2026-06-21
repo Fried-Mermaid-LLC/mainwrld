@@ -92,6 +92,7 @@ export function useBooks({
   useEffect(() => {
     if (!firebaseUid) return
     const unsubscribe = fbService.subscribeToBooksChanges(
+      firebaseUid,
       (firestoreBooks: any[]) => {
         const converted = firestoreBooks.map((fb: any) => ({
           ...fb,

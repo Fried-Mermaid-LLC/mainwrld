@@ -76,3 +76,41 @@ export const setAdmin = onCall<{ uid: string; admin: boolean }>(
     return { uid, admin }
   }
 )
+
+// ---- ensureUsernameClaim ----
+//
+// Backfill for the username custom claim. setUsernameClaim only fires on
+// users/{uid} CREATE, so every account that existed before that trigger
+// shipped never got the claim — and token rotation does NOT re-run an
+// onCreate trigger. Without the claim, firestore.rules that authorize
+// username-keyed records (chatMessages.from/to, notifications.recipient,
+// relationships.admirer) reject the user's own reads/writes.
+//
+// The client calls this once after sign-in, then refreshes its ID token
+// (getIdToken(true)) so the rules can see the claim. Idempotent: if the
+// claim is already present and current it does nothing.
+export const ensureUsernameClaim = onCall(
+  { region: 'us-central1' },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError('unauthenticated', 'Sign in required.')
+    }
+    const uid = req.auth.uid
+    const snap = await getFirestore().collection('users').doc(uid).get()
+    const username = snap.exists
+      ? (snap.data()?.username as string | undefined)
+      : undefined
+    if (!username) {
+      // No profile doc yet (e.g. mid-signup race). Nothing to mirror.
+      return { ok: false, reason: 'no-username' as const, changed: false }
+    }
+    const existing = (await getAuth().getUser(uid)).customClaims ?? {}
+    if (existing.username === username) {
+      return { ok: true, changed: false, username }
+    }
+    // Preserve other claims (e.g. admin) when stamping the username.
+    await getAuth().setCustomUserClaims(uid, { ...existing, username })
+    logger.info('ensureUsernameClaim: claim backfilled', { uid, username })
+    return { ok: true, changed: true, username }
+  }
+)

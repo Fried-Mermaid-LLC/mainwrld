@@ -308,12 +308,20 @@ export function useReading({
   )
 
   const handlePublish = async (data: any) => {
+    console.log('[BOOKSAVE] handlePublish: start', {
+      currentPublishingId,
+      currentPublishingTitle,
+      currentPublishingChapterIndex,
+      firebaseUid: firebaseUid || null,
+      booksCount: books.length
+    })
     try {
       // Daily chapter publish limit
       const now = Date.now()
       const isNewDay = now - user.lastChapterPublishReset > 24 * 60 * 60 * 1000
       const dailyCount = isNewDay ? 0 : user.dailyChaptersPublished
       if (dailyCount >= MAX_DAILY_CHAPTERS) {
+        console.log('[BOOKSAVE] handlePublish: BLOCKED daily limit', dailyCount)
         showToast(
           `You've reached your daily publishing limit of ${MAX_DAILY_CHAPTERS} chapters. Please try again tomorrow!`
         )
@@ -324,6 +332,7 @@ export function useReading({
         containsBadWord(data.tagline || '') ||
         containsBadWord(currentPublishingChapterTitle || '')
       ) {
+        console.log('[BOOKSAVE] handlePublish: BLOCKED bad word')
         showToast(
           'Your book title, chapter title, or tagline contains inappropriate language. Please revise before publishing.',
           'warning'
@@ -333,6 +342,16 @@ export function useReading({
       if (currentPublishingId) {
         // Update existing book - preserve existing metadata when just adding/updating chapters
         const existingBook = books.find(b => b.id === currentPublishingId)
+        console.log('[BOOKSAVE] handlePublish: UPDATE branch', {
+          currentPublishingId,
+          existingBookFound: !!existingBook
+        })
+        if (!existingBook) {
+          console.error(
+            '[BOOKSAVE] handlePublish: existingBook NOT in local books — update SKIPPED, book stays draft',
+            currentPublishingId
+          )
+        }
         if (existingBook) {
           const updatedChapters = [...(existingBook.chapters || [])]
           const targetIndex =
@@ -421,6 +440,7 @@ export function useReading({
         }
       } else {
         // New book — write to Firestore
+        console.log('[BOOKSAVE] handlePublish: CREATE branch (no currentPublishingId)')
         const bookData = {
           title: currentPublishingTitle,
           authorUid: firebaseUid || '',
@@ -452,7 +472,12 @@ export function useReading({
           isFree: true,
           price: 0
         }
+        console.log('[BOOKSAVE] handlePublish: calling createBook (publish)', {
+          title: bookData.title,
+          authorUid: bookData.authorUid
+        })
         await fbService.createBook(bookData)
+        console.log('[BOOKSAVE] handlePublish: createBook (publish) returned')
 
         // Notify admirers and mutuals about the new book
         const myAdmirers = relationships
@@ -474,6 +499,7 @@ export function useReading({
           }
         })
       }
+      console.log('[BOOKSAVE] handlePublish: reached success path → self-profile + toast')
       setView('self-profile')
       setCurrentPublishingContent('')
       setCurrentPublishingTitle('')
@@ -496,7 +522,11 @@ export function useReading({
         }
       })
     } catch (err: any) {
-      console.error('Publish error:', err)
+      console.error('[BOOKSAVE] handlePublish: ERROR', {
+        code: err?.code,
+        message: err?.message,
+        err
+      })
       showToast('Failed to publish. Please try again.', 'error')
     }
   }
@@ -557,11 +587,26 @@ export function useReading({
     chapterIndex: number | null,
     chapterTitle?: string
   ): Promise<string | null> => {
-    if (!title.trim() && !bookId) return null
+    console.log('[BOOKSAVE] handleSaveDraft: start', {
+      bookId,
+      title,
+      chapterIndex,
+      booksCount: books.length
+    })
+    if (!title.trim() && !bookId) {
+      console.log('[BOOKSAVE] handleSaveDraft: BAILED (no title, no bookId)')
+      return null
+    }
     let newBookId = bookId
     if (bookId) {
       // Update existing draft in Firestore
       const existingBook = books.find(b => b.id === bookId)
+      if (!existingBook) {
+        console.error(
+          '[BOOKSAVE] handleSaveDraft: existingBook NOT in local books — update SKIPPED',
+          bookId
+        )
+      }
       if (existingBook) {
         const updatedChapters = [...(existingBook.chapters || [])]
         if (
@@ -640,8 +685,13 @@ export function useReading({
           ? [{ title: resolvedChapterTitle, content }]
           : []
       }
+      console.log('[BOOKSAVE] handleSaveDraft: creating new draft', {
+        title: bookData.title,
+        authorUid: bookData.authorUid
+      })
       const created = await fbService.createBook(bookData)
       newBookId = (created as any).id
+      console.log('[BOOKSAVE] handleSaveDraft: new draft id', newBookId)
     }
 
     setLastSelectedBookId(newBookId || 'new')

@@ -136,6 +136,34 @@ export const getCurrentFirebaseUser = (): FirebaseUser | null => {
   return auth.currentUser;
 };
 
+// Backfill the `username` custom claim for the signed-in user, then refresh
+// the ID token so firestore.rules can authorize username-keyed records
+// (chatMessages.from/to, notifications.recipient, relationships.admirer).
+//
+// setUsernameClaim only fires on users/{uid} CREATE, so accounts older than
+// that trigger never received the claim and token rotation does not re-run
+// it. Call this once right after sign-in, BEFORE the username-scoped
+// subscriptions start, otherwise their first listen is rejected. Fail-soft:
+// network/permission hiccups must not block login.
+export const ensureUsernameClaim = async (): Promise<void> => {
+  const current = auth.currentUser;
+  if (!current) return;
+  try {
+    const functions = getFunctions();
+    const fn = httpsCallable<void, { ok: boolean; changed?: boolean }>(
+      functions,
+      'ensureUsernameClaim'
+    );
+    const res = await fn();
+    // Refresh the token so the (possibly new) claim lands in request.auth.
+    if (res.data?.ok) {
+      await current.getIdToken(true);
+    }
+  } catch (err) {
+    console.error('[claims] ensureUsernameClaim failed', err);
+  }
+};
+
 export const checkUsernameAvailable = async (username: string): Promise<boolean> => {
   const usernameDoc = await getDoc(doc(db, 'usernames', username.toLowerCase()));
   return !usernameDoc.exists();
@@ -300,35 +328,63 @@ export const createBook = async (bookData: any) => {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
-  await setDoc(bookRef, bookWithId);
+  console.log('[BOOKSAVE] createBook: start', {
+    docId: bookRef.id,
+    title: bookData.title,
+    authorUid: bookData.authorUid,
+    isDraft: bookData.isDraft,
+    currentAuthUid: auth.currentUser?.uid ?? null,
+    authMatches: auth.currentUser?.uid === bookData.authorUid
+  });
+  try {
+    await setDoc(bookRef, bookWithId);
+    console.log('[BOOKSAVE] createBook: setDoc OK', bookRef.id);
+  } catch (err: any) {
+    console.error('[BOOKSAVE] createBook: setDoc FAILED', {
+      code: err?.code,
+      message: err?.message,
+      docId: bookRef.id
+    });
+    throw err;
+  }
   return bookWithId;
 };
 
+// NOTE: createBook stores `id` === documentId, so we address books DIRECTLY
+// by documentId. We must NOT look them up with query(where('id','==',bookId)):
+// the security rules grant draft access only to the author, and Firestore can
+// only prove that for queries whose *filters* establish it (authorUid / isDraft).
+// A query keyed on the `id` field proves nothing and is rejected wholesale with
+// permission-denied for any draft. A direct doc ref is evaluated per-document.
 export const updateBook = async (bookId: string, data: any) => {
-  // Find the Firestore document with matching id field
-  const q = query(collection(db, 'books'), where('id', '==', bookId));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) {
-    console.error('Book not found in Firestore:', bookId);
-    return;
+  console.log('[BOOKSAVE] updateBook: start', {
+    bookId,
+    keys: Object.keys(data),
+    isDraft: data.isDraft,
+    currentAuthUid: auth.currentUser?.uid ?? null
+  });
+  const docRef = doc(db, 'books', bookId);
+  try {
+    await updateDoc(docRef, { ...data, updatedAt: serverTimestamp() });
+    console.log('[BOOKSAVE] updateBook: updateDoc OK', bookId);
+  } catch (err: any) {
+    console.error('[BOOKSAVE] updateBook: updateDoc FAILED', {
+      code: err?.code,
+      message: err?.message,
+      bookId
+    });
+    throw err;
   }
-  const docRef = snapshot.docs[0].ref;
-  await updateDoc(docRef, { ...data, updatedAt: serverTimestamp() });
 };
 
 export const deleteBook = async (bookId: string) => {
-  const q = query(collection(db, 'books'), where('id', '==', bookId));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return;
-  await deleteDoc(snapshot.docs[0].ref);
+  await deleteDoc(doc(db, 'books', bookId));
 };
 
 export const getBook = async (bookId: string) => {
-  const q = query(collection(db, 'books'), where('id', '==', bookId));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-  const d = snapshot.docs[0];
-  return { id: d.id, ...d.data() };
+  const snap = await getDoc(doc(db, 'books', bookId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() };
 };
 
 export const getAllBooks = async () => {
@@ -336,14 +392,54 @@ export const getAllBooks = async () => {
   return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 };
 
-// Real-time listener for all books
+// Real-time listener for books the current user is allowed to read.
+//
+// A listen on the *whole* books collection is rejected by the security
+// rules, because draft visibility is conditional (author-only) and Firestore
+// can't prove every document in an unfiltered listen is readable. So we run
+// two rule-satisfiable listeners and merge them:
+//   1. all published books      (isDraft == false)  → readable by anyone
+//   2. all of MY books          (authorUid == uid)  → includes my drafts
+// Results are merged by id (my own published books appear in both).
 export const subscribeToBooksChanges = (
+  uid: string,
   callback: (books: any[]) => void
 ): Unsubscribe => {
-  return onSnapshot(collection(db, 'books'), (snapshot: QuerySnapshot) => {
-    const books = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    callback(books);
-  });
+  let published: any[] = [];
+  let mine: any[] = [];
+  const emit = () => {
+    const byId = new Map<string, any>();
+    for (const b of published) byId.set(b.id, b);
+    for (const b of mine) byId.set(b.id, b); // own drafts/edits win
+    callback(Array.from(byId.values()));
+  };
+  const onErr = (label: string) => (err: any) => {
+    console.error('[BOOKSAVE] subscribeToBooksChanges: listener FAILED', {
+      label,
+      code: err?.code,
+      message: err?.message
+    });
+  };
+  const unsubPublished = onSnapshot(
+    query(collection(db, 'books'), where('isDraft', '==', false)),
+    (snapshot: QuerySnapshot) => {
+      published = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      emit();
+    },
+    onErr('published')
+  );
+  const unsubMine = onSnapshot(
+    query(collection(db, 'books'), where('authorUid', '==', uid)),
+    (snapshot: QuerySnapshot) => {
+      mine = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      emit();
+    },
+    onErr('mine')
+  );
+  return () => {
+    unsubPublished();
+    unsubMine();
+  };
 };
 
 // ==================== GLOBAL SPOTLIGHT ====================
@@ -499,18 +595,74 @@ export const markMessagesRead = async (from: string, to: string) => {
   }
 };
 
-export const deleteChatMessagesOlderThan = async (cutoffDate: string) => {
-  const q = query(collection(db, 'chatMessages'));
-  const snapshot = await getDocs(q);
-  for (const d of snapshot.docs) {
-    if (d.data().timestamp < cutoffDate) await deleteDoc(d.ref);
+// Expire the current user's old DMs. A read/delete over the whole collection
+// is rejected by the rules (only a participant may read/delete a message), so
+// scope to messages the user sent or received — keyed by username.
+export const deleteChatMessagesOlderThan = async (
+  username: string,
+  cutoffDate: string
+) => {
+  const queries = [
+    query(collection(db, 'chatMessages'), where('from', '==', username)),
+    query(collection(db, 'chatMessages'), where('to', '==', username))
+  ];
+  const seen = new Set<string>();
+  for (const q of queries) {
+    const snapshot = await getDocs(q);
+    for (const d of snapshot.docs) {
+      if (seen.has(d.ref.path)) continue;
+      seen.add(d.ref.path);
+      if (d.data().timestamp < cutoffDate) await deleteDoc(d.ref);
+    }
   }
 };
 
-export const subscribeToChatMessages = (callback: (msgs: any[]) => void): Unsubscribe => {
-  return onSnapshot(collection(db, 'chatMessages'), (snapshot: QuerySnapshot) => {
-    callback(snapshot.docs.map(d => ({ ...d.data() })));
-  });
+// Real-time listener for the current user's DMs.
+//
+// A listen on the whole chatMessages collection is rejected by the rules
+// (read is limited to the two participants). The data model keys messages by
+// USERNAME, so we run two rule-satisfiable listeners — messages I sent and
+// messages I received — and merge them. Requires the `username` custom claim
+// on the token (see ensureUsernameClaim); without it both listens are denied.
+export const subscribeToChatMessages = (
+  username: string,
+  callback: (msgs: any[]) => void
+): Unsubscribe => {
+  let sent: any[] = [];
+  let received: any[] = [];
+  const emit = () => {
+    const byId = new Map<string, any>();
+    for (const m of sent) byId.set(m.id, m);
+    for (const m of received) byId.set(m.id, m);
+    callback(Array.from(byId.values()));
+  };
+  const onErr = (label: string) => (err: any) => {
+    console.error('[chat] subscribeToChatMessages listener failed', {
+      label,
+      code: err?.code,
+      message: err?.message
+    });
+  };
+  const unsubSent = onSnapshot(
+    query(collection(db, 'chatMessages'), where('from', '==', username)),
+    (snapshot: QuerySnapshot) => {
+      sent = snapshot.docs.map(d => ({ ...d.data() }));
+      emit();
+    },
+    onErr('sent')
+  );
+  const unsubReceived = onSnapshot(
+    query(collection(db, 'chatMessages'), where('to', '==', username)),
+    (snapshot: QuerySnapshot) => {
+      received = snapshot.docs.map(d => ({ ...d.data() }));
+      emit();
+    },
+    onErr('received')
+  );
+  return () => {
+    unsubSent();
+    unsubReceived();
+  };
 };
 
 // ==================== NOTIFICATIONS ====================
@@ -538,10 +690,28 @@ export const markNotificationRead = async (notificationId: string) => {
   }
 };
 
-export const subscribeToNotifications = (callback: (notifs: any[]) => void): Unsubscribe => {
-  return onSnapshot(collection(db, 'notifications'), (snapshot: QuerySnapshot) => {
-    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
+// Real-time listener for the current user's notifications.
+//
+// A listen on the whole notifications collection is rejected by the rules
+// (read is limited to the recipient). Scope the listen to documents whose
+// `recipient` is the current username. Requires the `username` custom claim
+// on the token (see ensureUsernameClaim); without it the listen is denied.
+export const subscribeToNotifications = (
+  username: string,
+  callback: (notifs: any[]) => void
+): Unsubscribe => {
+  return onSnapshot(
+    query(collection(db, 'notifications'), where('recipient', '==', username)),
+    (snapshot: QuerySnapshot) => {
+      callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    },
+    (err: any) => {
+      console.error('[notifications] subscribeToNotifications listener failed', {
+        code: err?.code,
+        message: err?.message
+      });
+    }
+  );
 };
 
 // ==================== COMMENTS ====================

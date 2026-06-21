@@ -40,8 +40,8 @@ export function useNotifications({
 
   // Subscribe to notifications
   useEffect(() => {
-    if (!firebaseUid) return
-    const unsub = fbService.subscribeToNotifications((notifs: any[]) => {
+    if (!firebaseUid || !user.username) return
+    const unsub = fbService.subscribeToNotifications(user.username, (notifs: any[]) => {
       setNotifications(
         notifs.map(n => ({
           id: n.id,
@@ -59,7 +59,7 @@ export function useNotifications({
       )
     })
     return () => unsub()
-  }, [firebaseUid])
+  }, [firebaseUid, user.username])
 
   const addNotification = useCallback(
     (

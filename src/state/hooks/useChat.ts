@@ -29,8 +29,8 @@ export function useChat({
 
   // Subscribe to chat messages
   useEffect(() => {
-    if (!firebaseUid) return
-    const unsub = fbService.subscribeToChatMessages((msgs: any[]) => {
+    if (!firebaseUid || !user.username) return
+    const unsub = fbService.subscribeToChatMessages(user.username, (msgs: any[]) => {
       setChatMessages(
         msgs.map(m => ({
           id: m.id,
@@ -43,7 +43,7 @@ export function useChat({
       )
     })
     return () => unsub()
-  }, [firebaseUid])
+  }, [firebaseUid, user.username])
 
   // Message expiry: delete messages older than 1 year from Firestore
   useEffect(() => {
@@ -51,7 +51,7 @@ export function useChat({
     const oneYearAgo = new Date()
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
     fbService
-      .deleteChatMessagesOlderThan(oneYearAgo.toISOString())
+      .deleteChatMessagesOlderThan(user.username, oneYearAgo.toISOString())
       .catch(console.error)
   }, [])
 
