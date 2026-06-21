@@ -8,9 +8,19 @@ export const SelfProfileView = () => {
     user,
     books,
     setSelectedBook,
+    setLastSelectedBookId,
+    setLastSelectedChapterIndex,
     relationships,
     avatarConfig
   } = useApp()
+  const openDraft = (bookId: string) => {
+    setLastSelectedBookId(bookId)
+    setLastSelectedChapterIndex('0')
+    setView('write')
+  }
+  const myDrafts = books.filter(
+    b => b.author.username === user.username && b.isDraft
+  )
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-500'>
       <header className='p-6 flex justify-end items-center sticky top-0 bg-white/80 backdrop-blur-md z-50'>
@@ -160,6 +170,41 @@ export const SelfProfileView = () => {
             ).length === 0 && (
               <p className='text-[9px] font-bold text-gray-300 uppercase tracking-widest ml-2 py-4'>
                 No published works
+              </p>
+            )}
+          </div>
+        </section>
+        <section className='w-full space-y-6 mb-12'>
+          <h3 className='text-xs font-bold uppercase tracking-widest text-gray-400 ml-2'>
+            Your Drafts
+          </h3>
+          <div className='flex gap-6 overflow-x-auto no-scrollbar px-2'>
+            {myDrafts.map(b => (
+              <div
+                key={b.id}
+                onClick={() => openDraft(b.id)}
+                className='flex-shrink-0 w-32 cursor-pointer space-y-2'
+              >
+                <div
+                  className='aspect-[2/3] shadow-md overflow-hidden relative opacity-60'
+                  style={{ backgroundColor: b.coverColor }}
+                >
+                  <CoverImg book={b} />
+                  <span className='absolute top-1 left-1 bg-black/60 text-white text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded'>
+                    Draft
+                  </span>
+                </div>
+                <div className='px-1'>
+                  <p className='text-xs font-bold truncate'>{b.title}</p>
+                  <p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider truncate'>
+                    {b.author.displayName}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {myDrafts.length === 0 && (
+              <p className='text-[9px] font-bold text-gray-300 uppercase tracking-widest ml-2 py-4'>
+                No drafts yet
               </p>
             )}
           </div>
