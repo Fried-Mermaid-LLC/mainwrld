@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "vite --port 5173 --strictPort",
+    "dev:ios": "cap run ios -l --host localhost --port 5173",
+    "build:web": "vite build",
+    "build:ios": "npm run build:web && cap sync ios"
   },
   "dependencies": {
     "@capacitor-firebase/crashlytics": "^8.3.0",
