@@ -77,6 +77,9 @@ export function useUI() {
   const [scrollToCommentId, setScrollToCommentId] = useState<string | null>(
     null
   )
+  // Distraction-free writing mode: WriteView flips this on while the editor is
+  // focused so the app shell can hide the bottom nav and reclaim vertical space.
+  const [isWriting, setIsWriting] = useState(false)
 
   useEffect(() => {
     if (view !== 'home') return
@@ -128,6 +131,8 @@ export function useUI() {
     activeCommentChapterKey,
     setActiveCommentChapterKey,
     scrollToCommentId,
-    setScrollToCommentId
+    setScrollToCommentId,
+    isWriting,
+    setIsWriting
   }
 }

@@ -38,7 +38,7 @@ import { useApp } from '@/state/AppContext'
 export const AppShell: React.FC = () => {
   const {
     view, setView, toast, confirmModal, setConfirmModal, userDataLoaded,
-    selectedBook, selectedProfileUser
+    selectedBook, selectedProfileUser, isWriting
   } = useApp()
 
   const renderView = () => {
@@ -146,13 +146,9 @@ export const AppShell: React.FC = () => {
     }
   }
 
-  const showNav = [
-    'home',
-    'explore',
-    'library',
-    'write',
-    'self-profile'
-  ].includes(view)
+  const showNav =
+    !isWriting &&
+    ['home', 'explore', 'library', 'write', 'self-profile'].includes(view)
 
   return (
     <div

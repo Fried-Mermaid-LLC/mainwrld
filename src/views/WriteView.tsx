@@ -5,6 +5,20 @@ import type { Chapter, Book } from '@/types'
 import * as fbService from '@/services/firebaseService'
 import { useApp } from '@/state/AppContext'
 
+// Formatting actions shown in the horizontal toolbar pinned above the keyboard.
+// `null` entries render a thin vertical divider between groups.
+const FORMAT_ACTIONS: ({ cmd: string; icon: string; title: string } | null)[] = [
+  { cmd: 'bold', icon: 'format_bold', title: 'Bold' },
+  { cmd: 'italic', icon: 'format_italic', title: 'Italic' },
+  { cmd: 'underline', icon: 'format_underlined', title: 'Underline' },
+  null,
+  { cmd: 'justifyLeft', icon: 'format_align_left', title: 'Align Left' },
+  { cmd: 'justifyCenter', icon: 'format_align_center', title: 'Align Center' },
+  { cmd: 'justifyRight', icon: 'format_align_right', title: 'Align Right' },
+  null,
+  { cmd: 'insertUnorderedList', icon: 'format_list_bulleted', title: 'Bullet List' }
+]
+
 export const WriteView = () => {
   const {
     books,
@@ -25,7 +39,9 @@ export const WriteView = () => {
     handleUnpublishChapter,
     handleDeleteChapter,
     showToast,
-    setNotifications
+    setNotifications,
+    isWriting,
+    setIsWriting
   } = useApp()
   const initialBookId = lastSelectedBookId
   const initialChapterIndex = lastSelectedChapterIndex
@@ -131,7 +147,9 @@ export const WriteView = () => {
   >('idle')
   const [wordCount, setWordCount] = useState(0) // Reactive word count state
   const [deleteConfirmIdx, setDeleteConfirmIdx] = useState<number | null>(null)
-  const [showToolbar, setShowToolbar] = useState(false)
+  // Distance in px from the layout-viewport bottom up to the keyboard's top,
+  // used to pin the formatting toolbar right above the on-screen keyboard.
+  const [keyboardOffset, setKeyboardOffset] = useState(0)
   const [unpublishConfirmIdx, setUnpublishConfirmIdx] = useState<number | null>(
     null
   )
@@ -144,26 +162,41 @@ export const WriteView = () => {
   const dirtyDraftRef = useRef(false)
   const saveTimerRef = useRef<number | null>(null)
   const saveInFlightRef = useRef(false)
+  // Touch origin for the editor, used to tell a tap (focus) from a scroll drag.
+  const editorTouchStartRef = useRef<{ x: number; y: number } | null>(null)
   const latestStateRef = useRef({
     selectedBookId: initialBookId,
     selectedChapterIndex: initialChapterIndex,
     newTitle: '',
     chapterTitle: 'Chapter 1'
   })
-  const toolbarRef = useRef<HTMLDivElement>(null)
 
+  // Track the keyboard's height via visualViewport so the formatting bar can sit
+  // flush on top of it. Works whether Capacitor resizes the webview (offset ~0)
+  // or overlays the keyboard (offset = keyboard height). Only runs while writing.
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        toolbarRef.current &&
-        !toolbarRef.current.contains(event.target as Node)
-      ) {
-        setShowToolbar(false)
-      }
+    const vv = window.visualViewport
+    if (!isWriting || !vv) {
+      setKeyboardOffset(0)
+      return
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    const update = () => {
+      const offset = window.innerHeight - vv.height - vv.offsetTop
+      setKeyboardOffset(Math.max(0, Math.round(offset)))
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [isWriting])
+
+  // Reset writing mode when leaving Studio so the bottom nav reappears elsewhere.
+  useEffect(() => {
+    return () => setIsWriting(false)
+  }, [setIsWriting])
 
   const myWorks = useMemo(
     () => books.filter((b: Book) => b.author.username === user.username),
@@ -563,28 +596,66 @@ export const WriteView = () => {
   }
 
   return (
-    <div className='fixed inset-0 bg-white flex flex-col pb-20 animate-in fade-in duration-500 overflow-hidden'>
-      <header className='px-6 py-6 border-b border-gray-50 flex justify-between items-center bg-white z-50'>
-        <div className='flex items-center gap-4'>
-          <button
-            onClick={onBack}
-            className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 transition-colors hover:text-accent'
-          >
-            <span className='material-icons-round'>arrow_back</span>
-          </button>
-          <div>
-            <h1 className='text-xl font-bold'>Studio</h1>
+    <div
+      className={`fixed inset-0 bg-white flex flex-col animate-in fade-in duration-500 overflow-hidden ${
+        isWriting ? 'pb-0' : 'pb-20'
+      }`}
+    >
+      {isWriting ? (
+        <header className='px-4 py-3 border-b border-gray-50 flex justify-between items-center gap-3 bg-white z-50 animate-in slide-in-from-top-2 duration-200'>
+          <div className='flex flex-col min-w-0'>
+            <span className='text-[9px] font-bold text-gray-300 uppercase tracking-widest'>
+              {selectedBookId === 'new' ? newTitle || 'New Work' : selectedBook?.title}
+            </span>
+            <span className='text-sm font-bold truncate'>
+              {chapterTitle || 'Untitled Chapter'}
+            </span>
           </div>
-        </div>
-        <Button variant='secondary' className='h-10 px-4' onClick={onMonetize}>
-          <span className='material-icons-round text-sm'>paid</span> Monetize
-        </Button>
-      </header>
+          <div className='flex items-center gap-3 shrink-0'>
+            <span
+              className={`text-[10px] font-bold uppercase tracking-widest tabular-nums ${
+                wordCount >= MAX_WORD_COUNT || wordCount < MIN_WORD_COUNT
+                  ? 'text-red-400'
+                  : wordCount >= MAX_WORD_COUNT - 100
+                  ? 'text-yellow-500'
+                  : 'text-green-500'
+              }`}
+            >
+              {wordCount} / {MAX_WORD_COUNT}
+            </span>
+            <button
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => editorRef.current?.blur()}
+              className='h-9 px-4 rounded-xl bg-accent text-white text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 active:scale-95 transition-transform'
+            >
+              <span className='material-icons-round text-sm'>check</span> Done
+            </button>
+          </div>
+        </header>
+      ) : (
+        <header className='px-6 py-6 border-b border-gray-50 flex justify-between items-center bg-white z-50'>
+          <div className='flex items-center gap-4'>
+            <button
+              onClick={onBack}
+              className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 transition-colors hover:text-accent'
+            >
+              <span className='material-icons-round'>arrow_back</span>
+            </button>
+            <div>
+              <h1 className='text-xl font-bold'>Studio</h1>
+            </div>
+          </div>
+          <Button variant='secondary' className='h-10 px-4' onClick={onMonetize}>
+            <span className='material-icons-round text-sm'>paid</span> Monetize
+          </Button>
+        </header>
+      )}
 
       <div
         className='flex-1 p-6 space-y-6 overflow-y-auto no-scrollbar'
         style={{ WebkitOverflowScrolling: 'touch', scrollBehavior: 'smooth' }}
       >
+        {!isWriting && (
         <div className='space-y-4'>
           <div className='space-y-1.5'>
             <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
@@ -657,118 +728,14 @@ export const WriteView = () => {
             />
           </div>
         </div>
+        )}
 
         <div className='relative'>
-          <div className='flex justify-end sticky top-0 z-[60] pointer-events-none'>
-            <div ref={toolbarRef} className='pointer-events-auto relative'>
-              <button
-                onClick={() => setShowToolbar(!showToolbar)}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-lg border ${
-                  showToolbar
-                    ? 'bg-accent text-white border-accent'
-                    : 'bg-white text-gray-400 border-gray-100'
-                }`}
-                title='Formatting Options'
-              >
-                <span className='material-icons-round'>
-                  {showToolbar ? 'close' : 'edit'}
-                </span>
-              </button>
-
-              {showToolbar && (
-                <div className='absolute right-0 mt-2 p-2 bg-white rounded-2xl border border-gray-100 shadow-2xl flex flex-col gap-1 animate-in slide-in-from-top-2 duration-200 z-[70] min-w-[48px]'>
-                  <button
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      execAction('bold')
-                    }}
-                    className='w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-accent hover:bg-accent/5 transition-all active:scale-90'
-                    title='Bold'
-                  >
-                    <span className='material-icons-round text-sm'>
-                      format_bold
-                    </span>
-                  </button>
-                  <button
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      execAction('italic')
-                    }}
-                    className='w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-accent hover:bg-accent/5 transition-all active:scale-90'
-                    title='Italic'
-                  >
-                    <span className='material-icons-round text-sm'>
-                      format_italic
-                    </span>
-                  </button>
-                  <button
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      execAction('underline')
-                    }}
-                    className='w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-accent hover:bg-accent/5 transition-all active:scale-90'
-                    title='Underline'
-                  >
-                    <span className='material-icons-round text-sm'>
-                      format_underlined
-                    </span>
-                  </button>
-                  <div className='h-px w-6 bg-gray-100 mx-auto my-1' />
-                  <button
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      execAction('justifyLeft')
-                    }}
-                    className='w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-accent hover:bg-accent/5 transition-all active:scale-90'
-                    title='Align Left'
-                  >
-                    <span className='material-icons-round text-sm'>
-                      format_align_left
-                    </span>
-                  </button>
-                  <button
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      execAction('justifyCenter')
-                    }}
-                    className='w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-accent hover:bg-accent/5 transition-all active:scale-90'
-                    title='Align Center'
-                  >
-                    <span className='material-icons-round text-sm'>
-                      format_align_center
-                    </span>
-                  </button>
-                  <button
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      execAction('justifyRight')
-                    }}
-                    className='w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-accent hover:bg-accent/5 transition-all active:scale-90'
-                    title='Align Right'
-                  >
-                    <span className='material-icons-round text-sm'>
-                      format_align_right
-                    </span>
-                  </button>
-                  <div className='h-px w-6 bg-gray-100 mx-auto my-1' />
-                  <button
-                    onMouseDown={e => {
-                      e.preventDefault()
-                      execAction('insertUnorderedList')
-                    }}
-                    className='w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:text-accent hover:bg-accent/5 transition-all active:scale-90'
-                    title='Bullet List'
-                  >
-                    <span className='material-icons-round text-sm'>
-                      format_list_bulleted
-                    </span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className='relative min-h-[400px] mt-4'>
+          <div
+            className={`relative transition-all ${
+              isWriting ? 'min-h-[70vh]' : 'min-h-[400px]'
+            }`}
+          >
             {selectedBook && selectedBook.isCompleted ? (
               <div className='w-full min-h-[400px] flex flex-col items-center justify-center text-center p-8 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200'>
                 <span className='material-icons-round text-4xl text-gray-300 mb-3'>
@@ -789,7 +756,9 @@ export const WriteView = () => {
                 role='textbox'
                 aria-multiline='true'
                 spellCheck='true'
-                className='w-full min-h-[400px] bg-transparent border-none outline-none text-base leading-relaxed placeholder:text-gray-200 resize-none no-scrollbar focus:ring-0 rich-editor'
+                className={`w-full bg-transparent border-none outline-none text-base leading-relaxed placeholder:text-gray-200 resize-none no-scrollbar focus:ring-0 rich-editor ${
+                  isWriting ? 'min-h-[70vh]' : 'min-h-[400px]'
+                }`}
                 style={{
                   WebkitUserSelect: 'text',
                   userSelect: 'text',
@@ -799,7 +768,27 @@ export const WriteView = () => {
                 onBeforeInput={handleBeforeInput}
                 onPaste={handlePaste}
                 onInput={handleEditorInput}
+                onFocus={() => setIsWriting(true)}
+                onBlur={() => setIsWriting(false)}
+                onTouchStart={e => {
+                  const t = e.touches[0]
+                  editorTouchStartRef.current = t
+                    ? { x: t.clientX, y: t.clientY }
+                    : null
+                }}
                 onTouchEnd={e => {
+                  const start = editorTouchStartRef.current
+                  const t = e.changedTouches[0]
+                  editorTouchStartRef.current = null
+                  // A drag means the user was scrolling — don't grab focus on
+                  // release; only a near-stationary tap should activate the editor.
+                  if (
+                    start &&
+                    t &&
+                    Math.hypot(t.clientX - start.x, t.clientY - start.y) > 10
+                  ) {
+                    return
+                  }
                   e.currentTarget.focus()
                   ensureCaretVisible()
                 }}
@@ -808,7 +797,7 @@ export const WriteView = () => {
           </div>
         </div>
 
-        {selectedChapterIndex !== 'new' && (
+        {!isWriting && selectedChapterIndex !== 'new' && (
           <div className='flex gap-4 pt-4 pb-2 animate-in slide-in-from-bottom duration-300'>
             {isPublished && (
               <button
@@ -846,6 +835,7 @@ export const WriteView = () => {
         )}
       </div>
 
+      {!isWriting && (
       <div className='p-6 bg-white border-t border-gray-50'>
         <div className='flex justify-between items-center mb-6'>
           <div className='flex flex-col'>
@@ -911,6 +901,37 @@ export const WriteView = () => {
           </Button>
         </div>
       </div>
+      )}
+
+      {isWriting && (
+        <div
+          className='fixed left-0 right-0 z-[80] h-12 bg-white/95 backdrop-blur-xl border-t border-gray-100 flex items-center gap-0.5 px-2 overflow-x-auto no-scrollbar animate-in slide-in-from-bottom-2 duration-150'
+          style={{ bottom: keyboardOffset }}
+        >
+          {FORMAT_ACTIONS.map((action, idx) =>
+            action === null ? (
+              <div
+                key={`div-${idx}`}
+                className='h-5 w-px bg-gray-200 mx-1.5 shrink-0'
+              />
+            ) : (
+              <button
+                key={action.cmd}
+                onMouseDown={e => {
+                  e.preventDefault()
+                  execAction(action.cmd)
+                }}
+                className='w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-gray-600 hover:text-accent hover:bg-accent/5 active:scale-90 transition-all'
+                title={action.title}
+              >
+                <span className='material-icons-round text-xl'>
+                  {action.icon}
+                </span>
+              </button>
+            )
+          )}
+        </div>
+      )}
     </div>
   )
 }
