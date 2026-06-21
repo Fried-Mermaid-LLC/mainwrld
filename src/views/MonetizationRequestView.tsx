@@ -11,8 +11,15 @@ import {
 import * as stripeConnect from '@/services/stripeConnect'
 
 export const MonetizationRequestView = () => {
-  const { books, user, handleRequestMonetization, setView, showToast, showConfirm } =
-    useApp()
+  const {
+    books,
+    user,
+    isAdmin,
+    handleRequestMonetization,
+    setView,
+    showToast,
+    showConfirm,
+  } = useApp()
   const works = books.filter(
     b => b.author.username?.toLowerCase() === user.username?.toLowerCase()
   )
@@ -32,9 +39,15 @@ export const MonetizationRequestView = () => {
     }
   }, [works, selectedBook])
 
+  // Admins may price any book at any tier (eligibility is bypassed for them).
   const allowedTiers = useMemo(
-    () => (selectedBook ? allowedPriceTiers(selectedBook.chaptersCount) : []),
-    [selectedBook]
+    () =>
+      !selectedBook
+        ? []
+        : isAdmin
+        ? [...PRICE_TIERS]
+        : allowedPriceTiers(selectedBook.chaptersCount),
+    [selectedBook, isAdmin]
   )
 
   // Clamp the chosen price into the tiers the selected book unlocks so an
@@ -72,8 +85,9 @@ export const MonetizationRequestView = () => {
     if ((selectedBook.monetizationAttempts || 0) >= 2)
       r.push('Maximum 2 attempts reached')
 
-    return { met: r.length === 0, reasons: r }
-  }, [selectedBook])
+    // Admins bypass all prerequisites (mirrors the server bypass).
+    return { met: isAdmin || r.length === 0, reasons: r }
+  }, [selectedBook, isAdmin])
 
   const submitRequest = async () => {
     if (!selectedBook) return
@@ -199,6 +213,19 @@ export const MonetizationRequestView = () => {
                 Reason: {selectedBook.monetizationDenialReason}
               </p>
             )}
+          </div>
+        )}
+
+        {selectedBook && !isPending && isAdmin && eligibility.reasons.length > 0 && (
+          <div className='p-6 bg-indigo-50 rounded-3xl border border-indigo-100'>
+            <h3 className='text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 flex items-center gap-2'>
+              <span className='material-icons-round text-sm'>shield</span>
+              Admin override
+            </h3>
+            <p className='text-[10px] text-indigo-400 font-bold'>
+              Eligibility prerequisites are bypassed for admins. Payout setup is
+              still required.
+            </p>
           </div>
         )}
 

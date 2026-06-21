@@ -260,38 +260,45 @@ export const submitMonetizationRequest = onCall<
     throw new HttpsError('permission-denied', 'Not your book.')
   }
 
-  // Re-verify eligibility server-side (the client UI gates too, but never trust
-  // it). Mirrors MonetizationRequestView's eligibility memo.
-  if (!book.isCompleted) {
-    throw new HttpsError('failed-precondition', 'Book must be completed.')
-  }
-  if ((book.chaptersCount || 0) < 5) {
-    throw new HttpsError('failed-precondition', 'Need at least 5 chapters.')
-  }
-  if (minLikesPerPublishedChapter(book) < 100) {
-    throw new HttpsError('failed-precondition', 'Need 100+ likes per chapter.')
-  }
-  const published = new Date(book.publishedDate)
-  const days = Math.ceil(
-    Math.abs(Date.now() - published.getTime()) / (1000 * 60 * 60 * 24)
-  )
-  if (days < 21) {
-    throw new HttpsError('failed-precondition', 'Must be published 21+ days.')
-  }
-  if (!canMonetize(book)) {
-    throw new HttpsError('failed-precondition', 'This book can’t be monetized again.')
-  }
-  if ((book.monetizationAttempts || 0) >= 2) {
-    throw new HttpsError('failed-precondition', 'Maximum 2 attempts reached.')
+  // Admins bypass the eligibility prerequisites (testing + special cases); the
+  // ownership check, payout gate and pending guard below still apply to them.
+  // Everyone else is re-verified server-side (never trust the client UI).
+  const isAdmin = req.auth.token.admin === true
+  if (!isAdmin) {
+    if (!book.isCompleted) {
+      throw new HttpsError('failed-precondition', 'Book must be completed.')
+    }
+    if ((book.chaptersCount || 0) < 5) {
+      throw new HttpsError('failed-precondition', 'Need at least 5 chapters.')
+    }
+    if (minLikesPerPublishedChapter(book) < 100) {
+      throw new HttpsError('failed-precondition', 'Need 100+ likes per chapter.')
+    }
+    const published = new Date(book.publishedDate)
+    const days = Math.ceil(
+      Math.abs(Date.now() - published.getTime()) / (1000 * 60 * 60 * 24)
+    )
+    if (days < 21) {
+      throw new HttpsError('failed-precondition', 'Must be published 21+ days.')
+    }
+    if (!canMonetize(book)) {
+      throw new HttpsError('failed-precondition', 'This book can’t be monetized again.')
+    }
+    if ((book.monetizationAttempts || 0) >= 2) {
+      throw new HttpsError('failed-precondition', 'Maximum 2 attempts reached.')
+    }
+    if (!allowedPriceTiers(book.chaptersCount || 0).includes(priceUsd)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Price not allowed for this chapter count.'
+      )
+    }
+  } else if (!PRICE_TIERS.includes(priceUsd)) {
+    // Admin still must pick a real price tier (just not gated by chapter count).
+    throw new HttpsError('invalid-argument', 'Invalid price tier.')
   }
   if (book.monetizationStatus === 'pending') {
     throw new HttpsError('failed-precondition', 'A request is already pending.')
-  }
-  if (!allowedPriceTiers(book.chaptersCount || 0).includes(priceUsd)) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Price not allowed for this chapter count.'
-    )
   }
 
   // Payout gate: a connected, payout-enabled account is required (the "one
