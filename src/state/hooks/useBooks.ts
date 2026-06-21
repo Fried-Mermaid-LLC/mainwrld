@@ -50,6 +50,7 @@ export function useBooks({
   setRewardedItems
 }: BooksDeps) {
   const [books, setBooks] = useState<Book[]>([])
+  const [booksLoading, setBooksLoading] = useState(true)
   const [globalSpotlightBookId, setGlobalSpotlightBookId] = useState<
     string | null
   >(null)
@@ -115,6 +116,7 @@ export function useBooks({
           price: fb.price ?? 0
         }))
         setBooks(converted)
+        setBooksLoading(false)
       }
     )
     return () => unsubscribe()
@@ -383,6 +385,7 @@ export function useBooks({
   return {
     books,
     setBooks,
+    booksLoading,
     globalSpotlightBookId,
     setGlobalSpotlightBookId,
     likedBooks,

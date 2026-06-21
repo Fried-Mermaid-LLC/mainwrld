@@ -2,11 +2,26 @@ import { AvatarLayers, getHairPosition } from '@/components/avatar'
 import { Button, CoverImg } from '@/components/sharedComponents'
 import { useApp } from '@/state/AppContext'
 
+const BookSkeletons = ({ count = 3 }: { count?: number }) => (
+  <>
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className='flex-shrink-0 w-32 space-y-2 animate-pulse'>
+        <div className='aspect-[2/3] bg-gray-100 rounded' />
+        <div className='px-1 space-y-1.5'>
+          <div className='h-2.5 w-4/5 bg-gray-100 rounded' />
+          <div className='h-2 w-1/2 bg-gray-100 rounded' />
+        </div>
+      </div>
+    ))}
+  </>
+)
+
 export const SelfProfileView = () => {
   const {
     setView,
     user,
     books,
+    booksLoading,
     setSelectedBook,
     setLastSelectedBookId,
     setLastSelectedChapterIndex,
@@ -167,13 +182,15 @@ export const SelfProfileView = () => {
                   </div>
                 </div>
               ))}
-            {books.filter(
-              b => b.author.username === user.username && !b.isDraft
-            ).length === 0 && (
-              <p className='text-[9px] font-bold text-gray-300 uppercase tracking-widest ml-2 py-4'>
-                No published works
-              </p>
-            )}
+            {booksLoading && <BookSkeletons />}
+            {!booksLoading &&
+              books.filter(
+                b => b.author.username === user.username && !b.isDraft
+              ).length === 0 && (
+                <p className='text-[9px] font-bold text-gray-300 uppercase tracking-widest ml-2 py-4'>
+                  No published works
+                </p>
+              )}
           </div>
         </section>
         <section className='w-full space-y-6 mb-12'>
@@ -204,7 +221,8 @@ export const SelfProfileView = () => {
                 </div>
               </div>
             ))}
-            {myDrafts.length === 0 && (
+            {booksLoading && <BookSkeletons />}
+            {!booksLoading && myDrafts.length === 0 && (
               <p className='text-[9px] font-bold text-gray-300 uppercase tracking-widest ml-2 py-4'>
                 No drafts yet
               </p>
@@ -243,7 +261,8 @@ export const SelfProfileView = () => {
                   </div>
                 </div>
               ))}
-            {books.filter(b => b.isFavorite).length === 0 && (
+            {booksLoading && <BookSkeletons />}
+            {!booksLoading && books.filter(b => b.isFavorite).length === 0 && (
               <p className='text-[9px] font-bold text-gray-300 uppercase tracking-widest ml-2 py-4'>
                 No favorites yet
               </p>

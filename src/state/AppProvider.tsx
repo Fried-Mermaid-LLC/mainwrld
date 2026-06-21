@@ -154,6 +154,7 @@ export function useAppValue() {
   const {
     books,
     setBooks,
+    booksLoading,
     globalSpotlightBookId,
     setGlobalSpotlightBookId,
     likedBooks,
@@ -436,7 +437,7 @@ export function useAppValue() {
     view, setView, toast, setToast, showToast, confirmModal,
     setConfirmModal, showConfirm, BLANK_USER, user, setUser, authLoading,
     setAuthLoading, firebaseUid, setFirebaseUid, userDataLoaded, setUserDataLoaded, books,
-    setBooks, globalSpotlightBookId, setGlobalSpotlightBookId, selectedBook, setSelectedBook, readingChapterIndex,
+    setBooks, booksLoading, globalSpotlightBookId, setGlobalSpotlightBookId, selectedBook, setSelectedBook, readingChapterIndex,
     setReadingChapterIndex, selectedProfileUser, setSelectedProfileUser, selectedChatUser, setSelectedChatUser, chatMessages,
     setChatMessages, moveDir, setMoveDir, readerSettings, setReaderSettings, likedBooks,
     setLikedBooks, favoriteBookIds, setFavoriteBookIds, likedBooksInteracted, signUpForm, setSignUpForm,
