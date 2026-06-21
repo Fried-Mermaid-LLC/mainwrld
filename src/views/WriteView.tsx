@@ -40,13 +40,6 @@ export const WriteView = () => {
     chapterIndex: number | null,
     chapterTitle: string
   ) => {
-    console.log('[BOOKSAVE] WriteView.onPublish: start', {
-      id,
-      title,
-      chapterIndex,
-      firebaseUid: firebaseUid || null,
-      username: user?.username
-    })
     let effectiveId = id
     if (!effectiveId) {
       // For new books, create in Firestore and wait for the ID
@@ -76,17 +69,12 @@ export const WriteView = () => {
       try {
         const created = await fbService.createBook(bookData)
         effectiveId = (created as any).id
-        console.log('[BOOKSAVE] WriteView.onPublish: new book created', effectiveId)
-      } catch (err: any) {
-        console.error('[BOOKSAVE] WriteView.onPublish: createBook FAILED', {
-          code: err?.code,
-          message: err?.message
-        })
+      } catch (err) {
+        console.error('Failed to create book:', err)
         return
       }
     } else {
       // Existing book — save draft
-      console.log('[BOOKSAVE] WriteView.onPublish: existing book → handleSaveDraft', id)
       await handleSaveDraft(
         id,
         title,
@@ -96,7 +84,6 @@ export const WriteView = () => {
       )
     }
 
-    console.log('[BOOKSAVE] WriteView.onPublish: effectiveId before publishing view', effectiveId)
     if (effectiveId) {
       const existingBook = books.find(b => b.id === effectiveId)
       setCurrentPublishingId(effectiveId)

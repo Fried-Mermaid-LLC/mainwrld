@@ -328,25 +328,7 @@ export const createBook = async (bookData: any) => {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
-  console.log('[BOOKSAVE] createBook: start', {
-    docId: bookRef.id,
-    title: bookData.title,
-    authorUid: bookData.authorUid,
-    isDraft: bookData.isDraft,
-    currentAuthUid: auth.currentUser?.uid ?? null,
-    authMatches: auth.currentUser?.uid === bookData.authorUid
-  });
-  try {
-    await setDoc(bookRef, bookWithId);
-    console.log('[BOOKSAVE] createBook: setDoc OK', bookRef.id);
-  } catch (err: any) {
-    console.error('[BOOKSAVE] createBook: setDoc FAILED', {
-      code: err?.code,
-      message: err?.message,
-      docId: bookRef.id
-    });
-    throw err;
-  }
+  await setDoc(bookRef, bookWithId);
   return bookWithId;
 };
 
@@ -357,24 +339,7 @@ export const createBook = async (bookData: any) => {
 // A query keyed on the `id` field proves nothing and is rejected wholesale with
 // permission-denied for any draft. A direct doc ref is evaluated per-document.
 export const updateBook = async (bookId: string, data: any) => {
-  console.log('[BOOKSAVE] updateBook: start', {
-    bookId,
-    keys: Object.keys(data),
-    isDraft: data.isDraft,
-    currentAuthUid: auth.currentUser?.uid ?? null
-  });
-  const docRef = doc(db, 'books', bookId);
-  try {
-    await updateDoc(docRef, { ...data, updatedAt: serverTimestamp() });
-    console.log('[BOOKSAVE] updateBook: updateDoc OK', bookId);
-  } catch (err: any) {
-    console.error('[BOOKSAVE] updateBook: updateDoc FAILED', {
-      code: err?.code,
-      message: err?.message,
-      bookId
-    });
-    throw err;
-  }
+  await updateDoc(doc(db, 'books', bookId), { ...data, updatedAt: serverTimestamp() });
 };
 
 export const deleteBook = async (bookId: string) => {
@@ -414,7 +379,7 @@ export const subscribeToBooksChanges = (
     callback(Array.from(byId.values()));
   };
   const onErr = (label: string) => (err: any) => {
-    console.error('[BOOKSAVE] subscribeToBooksChanges: listener FAILED', {
+    console.error('subscribeToBooksChanges: listener failed', {
       label,
       code: err?.code,
       message: err?.message
