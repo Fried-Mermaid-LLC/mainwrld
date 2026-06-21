@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { CoverImg } from '@/components/sharedComponents'
 import { AVATAR_ITEMS } from '@/components/avatar'
-import { ADMIN_USERNAMES } from '@/config/constants'
 import type { Report, Book, UserRecord, Comment, AvatarItem } from '@/types'
 import { useApp } from '@/state/AppContext'
 
@@ -269,7 +268,7 @@ export const AdminDashboard = () => {
                       </div>
                     )}
                   </div>
-                  {!(u.isAdmin || ADMIN_USERNAMES.includes(u.username)) && (
+                  {!u.isAdmin && (
                     <div className='flex gap-2'>
                       <button
                         onClick={() => onAddStrike(u.username)}

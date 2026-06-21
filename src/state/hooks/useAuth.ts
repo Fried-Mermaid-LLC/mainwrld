@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { auth } from '@/lib/firebase'
-import { ADMIN_USERNAMES } from '@/config/constants'
 import type { User } from '@/types'
 
 // Auth identity/session domain (Phase B). Owns the current user, session flags
@@ -35,12 +34,11 @@ export function useAuth() {
   })
   const [loginForm, setLoginForm] = useState({ username: '', password: '' })
   const [authError, setAuthError] = useState<string | null>(null)
-  // Admin authority lives in the Firebase Auth custom claim `admin`,
-  // set by the setAdmin Cloud Function (Stage 2c). The Firestore Rules
-  // enforce this server-side; this client state is just for UI.
-  // ADMIN_USERNAMES.includes(...) is kept as a TEMPORARY fallback so
-  // existing admins keep working until the bootstrap setAdmin call is
-  // run for them — it should be removed once all admins have the claim.
+  // Admin authority lives ONLY in the Firebase Auth custom claim `admin`,
+  // set by the setAdmin Cloud Function (Stage 2c) and enforced server-side by
+  // Firestore Rules + the admin-gated callables. This client state mirrors the
+  // claim for UI visibility only. (The legacy username-list fallback was
+  // removed — admin access now requires the real claim.)
   const [hasAdminClaim, setHasAdminClaim] = useState(false)
   useEffect(() => {
     let cancelled = false
@@ -61,7 +59,7 @@ export function useAuth() {
       unsubscribe()
     }
   }, [])
-  const isAdmin = hasAdminClaim || ADMIN_USERNAMES.includes(user.username)
+  const isAdmin = hasAdminClaim
   return {
     BLANK_USER,
     user,

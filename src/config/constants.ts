@@ -8,7 +8,6 @@ export const CHAPTER_LIKES_THRESHOLD = 10;
 export const MAX_DAILY_CHAPTERS = 7;
 export const MAX_WORD_COUNT = 11000;
 export const GENRE_LIST = ['Mystery', 'Sci-Fi', 'Romance', 'Horror', 'Dystopian', 'Fantasy', 'Action', 'Drama', 'Western', 'Fiction', 'Non-Fiction', 'Thriller', 'FanFic', 'Poetry', 'Religious', 'Erotica', 'LGBTQ+', 'Self-Help', 'Sports'];
-export const ADMIN_USERNAMES = ['admin', 'mochamattel', 'jevonmahoney'];
 
 // ---- Monetization pricing (F01) ----
 // A book may only be priced in tiers its PUBLISHED chapter count unlocks:
@@ -87,7 +86,6 @@ export default {
   MAX_DAILY_CHAPTERS,
   MAX_WORD_COUNT,
   GENRE_LIST,
-  ADMIN_USERNAMES,
   PRICE_TIERS,
   allowedPriceTiers,
   PLATFORM_FEE_RATE,
