@@ -71,7 +71,9 @@ export function useAppValue() {
     scrollToCommentId,
     setScrollToCommentId,
     isWriting,
-    setIsWriting
+    setIsWriting,
+    writeReturnView,
+    setWriteReturnView
   } = ui
   // Auth identity/session state lives in useAuth (Phase B). Placed right after
   // useUI so its onIdTokenChanged effect registers in the same order as before.
@@ -457,7 +459,7 @@ export function useAppValue() {
     handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, handleToggleFavorite, handleAddToCart, awardPoints,
     awardMembershipBonus, handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
     handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,
-    handleShareBook, isWriting, setIsWriting,
+    handleShareBook, isWriting, setIsWriting, writeReturnView, setWriteReturnView,
   }
 }
 

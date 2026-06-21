@@ -80,6 +80,10 @@ export function useUI() {
   // Distraction-free writing mode: WriteView flips this on while the editor is
   // focused so the app shell can hide the bottom nav and reclaim vertical space.
   const [isWriting, setIsWriting] = useState(false)
+  // Where the WriteView back button should return to. Set when the editor is
+  // opened from a specific origin (e.g. a draft tapped on the profile), so Back
+  // goes there instead of the default Home. Cleared on plain tab navigation.
+  const [writeReturnView, setWriteReturnView] = useState<View | null>(null)
 
   useEffect(() => {
     if (view !== 'home') return
@@ -133,6 +137,8 @@ export function useUI() {
     scrollToCommentId,
     setScrollToCommentId,
     isWriting,
-    setIsWriting
+    setIsWriting,
+    writeReturnView,
+    setWriteReturnView
   }
 }

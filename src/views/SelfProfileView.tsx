@@ -10,12 +10,14 @@ export const SelfProfileView = () => {
     setSelectedBook,
     setLastSelectedBookId,
     setLastSelectedChapterIndex,
+    setWriteReturnView,
     relationships,
     avatarConfig
   } = useApp()
   const openDraft = (bookId: string) => {
     setLastSelectedBookId(bookId)
     setLastSelectedChapterIndex('0')
+    setWriteReturnView('self-profile')
     setView('write')
   }
   const myDrafts = books.filter(
@@ -186,7 +188,7 @@ export const SelfProfileView = () => {
                 className='flex-shrink-0 w-32 cursor-pointer space-y-2'
               >
                 <div
-                  className='aspect-[2/3] shadow-md overflow-hidden relative opacity-60'
+                  className='aspect-[2/3] shadow-md overflow-hidden relative'
                   style={{ backgroundColor: b.coverColor }}
                 >
                   <CoverImg book={b} />

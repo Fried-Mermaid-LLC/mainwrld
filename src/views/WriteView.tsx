@@ -41,7 +41,9 @@ export const WriteView = () => {
     showToast,
     setNotifications,
     isWriting,
-    setIsWriting
+    setIsWriting,
+    writeReturnView,
+    setWriteReturnView
   } = useApp()
   const initialBookId = lastSelectedBookId
   const initialChapterIndex = lastSelectedChapterIndex
@@ -125,7 +127,10 @@ export const WriteView = () => {
   const onUnpublishChapter = handleUnpublishChapter
   const onDeleteChapter = handleDeleteChapter
   const onMonetize = () => setView('monetization-request')
-  const onBack = () => setView('home')
+  const onBack = () => {
+    setView(writeReturnView || 'home')
+    setWriteReturnView(null)
+  }
   const onNotify = (title: string, message: string) => {
     const newNotif = {
       id: Math.random().toString(36).substr(2, 9),

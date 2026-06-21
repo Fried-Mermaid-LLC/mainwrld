@@ -38,7 +38,7 @@ import { useApp } from '@/state/AppContext'
 export const AppShell: React.FC = () => {
   const {
     view, setView, toast, confirmModal, setConfirmModal, userDataLoaded,
-    selectedBook, selectedProfileUser, isWriting
+    selectedBook, selectedProfileUser, isWriting, setWriteReturnView
   } = useApp()
 
   const renderView = () => {
@@ -170,7 +170,12 @@ export const AppShell: React.FC = () => {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setView(tab.id as View)}
+              onClick={() => {
+                // Plain tab navigation: clear any draft-origin so the editor's
+                // Back falls back to Home instead of a stale return view.
+                setWriteReturnView(null)
+                setView(tab.id as View)
+              }}
               className={`flex flex-col items-center gap-1 transition-all ${
                 view === tab.id
                   ? 'text-accent scale-110'
