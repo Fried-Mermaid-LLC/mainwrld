@@ -19,8 +19,10 @@
 //   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
 //     node scripts/migrate.mjs --cleanup-legacy    # drop chapters/content (final)
 //
-// Requires firebase-admin (already a dep in functions/). Run from repo root:
-//   node --experimental-vm-modules scripts/migrate.mjs   (Node 18+ has fetch/crypto)
+// Requires firebase-admin. It is NOT a root dependency — install it before
+// running this one-off script, then remove it again if you like:
+//   npm i -D firebase-admin && node scripts/migrate.mjs --dry-run
+// (Node 18+ has global fetch/crypto.)
 
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
