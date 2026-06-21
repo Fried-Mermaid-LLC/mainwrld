@@ -40,7 +40,9 @@ export const LibraryView = () => {
           const scrollProgress = progressData.scrollProgress || 0
           const chapterIndex = progressData.chapterIndex || 0
           const currentChapterTitle =
-            b.chapters?.[chapterIndex]?.title || null
+            b.chapterMeta?.[chapterIndex]?.title ||
+            b.chapters?.[chapterIndex]?.title ||
+            null
 
           return (
             <div

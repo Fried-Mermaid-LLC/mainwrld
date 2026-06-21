@@ -117,6 +117,23 @@ service cloud.firestore {
       );
       allow delete: if isSignedIn()
         && (resource.data.authorUid == request.auth.uid || isAdmin());
+
+      // ---- chapter bodies (schema 2) ----
+      // Chapter text lives here, out of the book doc, so listings stay light.
+      // Direct reads are limited to the author (editor + own preview) and
+      // admins. EVERY other reader gets chapter content through the
+      // getChapterContent callable, which enforces the paywall server-side
+      // (free/preview/purchased). Authors/admins may write; the moderation
+      // trigger (Admin SDK) bypasses these rules.
+      match /chapters/{chapterId} {
+        function parentBook() {
+          return get(/databases/$(database)/documents/books/$(bookId)).data;
+        }
+        allow read: if isSignedIn()
+          && (parentBook().authorUid == request.auth.uid || isAdmin());
+        allow write: if isSignedIn()
+          && (parentBook().authorUid == request.auth.uid || isAdmin());
+      }
     }
 
     // ---- comments ----

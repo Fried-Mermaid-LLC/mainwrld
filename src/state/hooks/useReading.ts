@@ -168,6 +168,30 @@ export function useReading({
   const [lastSelectedChapterIndex, setLastSelectedChapterIndex] =
     useState<string>('new')
 
+  // Upload a freshly-picked base64 cover to Storage and return its URL + path,
+  // or null to keep the existing cover. Degrades gracefully: if the upload fails
+  // (offline, Storage error) we keep the previous cover rather than blocking the
+  // publish. Best-effort deletes the old file when a new one replaces it.
+  const resolveCover = async (
+    bookId: string,
+    dataCover: string | undefined | null,
+    prevPath?: string | null
+  ): Promise<{ coverImage: string; coverPath: string } | null> => {
+    if (!dataCover || !dataCover.startsWith('data:')) return null
+    try {
+      const up = await fbService.uploadCover(
+        firebaseUid || 'anon',
+        bookId,
+        dataCover
+      )
+      if (prevPath) fbService.deleteCoverByPath(prevPath)
+      return { coverImage: up.url, coverPath: up.path }
+    } catch (err) {
+      console.warn('[MainWRLD] Cover upload failed, keeping existing:', err)
+      return null
+    }
+  }
+
   const handleUnpublishChapter = (bookId: string, chapterIndex: number) => {
     setBooks(prev =>
       prev.map(b => {
@@ -186,34 +210,36 @@ export function useReading({
     showToast('Chapter unpublished and moved to drafts.', 'info')
   }
 
-  const handleDeleteChapter = (bookId: string, chapterIndex: number) => {
-    setBooks(prev =>
-      prev.map(b => {
-        if (b.id === bookId && b.chapters) {
-          const updatedChapters = b.chapters.filter(
-            (_, i) => i !== chapterIndex
-          )
-          const newChaptersCount =
-            chapterIndex < b.chaptersCount
-              ? Math.max(0, b.chaptersCount - 1)
-              : b.chaptersCount
-          const newContent = updatedChapters.map(c => c.content).join('\n\n')
-          fbService
-            .updateBook(bookId, {
-              chapters: updatedChapters,
-              chaptersCount: newChaptersCount,
-              content: newContent
-            })
-            .catch(console.error)
-          return {
-            ...b,
-            chapters: updatedChapters,
-            chaptersCount: newChaptersCount,
-            content: newContent
-          }
-        }
-        return b
+  const handleDeleteChapter = async (bookId: string, chapterIndex: number) => {
+    const book = books.find(b => b.id === bookId)
+    if (!book) return
+    // Migrate legacy inline chapters first so we have stable chapter ids.
+    const meta = await fbService.ensureChaptersMigrated(book)
+    if (chapterIndex < 0 || chapterIndex >= meta.length) return
+    const chapterId = meta[chapterIndex].id
+    const newMeta = meta.filter((_, i) => i !== chapterIndex)
+    const newChaptersCount =
+      chapterIndex < book.chaptersCount
+        ? Math.max(0, book.chaptersCount - 1)
+        : book.chaptersCount
+
+    try {
+      await fbService.commitChapterDelete(bookId, chapterId, {
+        chapterMeta: newMeta,
+        chaptersCount: newChaptersCount
       })
+    } catch (err) {
+      console.error(err)
+      showToast('Failed to delete chapter. Please try again.', 'error')
+      return
+    }
+
+    setBooks(prev =>
+      prev.map(b =>
+        b.id === bookId
+          ? { ...b, chapterMeta: newMeta, chaptersCount: newChaptersCount }
+          : b
+      )
     )
     showToast('Chapter permanently deleted.', 'error')
   }
@@ -334,72 +360,97 @@ export function useReading({
         // Update existing book - preserve existing metadata when just adding/updating chapters
         const existingBook = books.find(b => b.id === currentPublishingId)
         if (existingBook) {
-          const updatedChapters = [...(existingBook.chapters || [])]
+          // Schema 2: chapter bodies live in the subcollection. Migrate any
+          // legacy inline chapters first (so no bodies are lost), then edit only
+          // the target chapter and update the light chapterMeta on the book doc.
+          const meta = await fbService.ensureChaptersMigrated(existingBook)
           const targetIndex =
             currentPublishingChapterIndex !== null
               ? currentPublishingChapterIndex
-              : updatedChapters.length - 1
+              : meta.length - 1
 
-          if (targetIndex >= 0 && targetIndex < updatedChapters.length) {
-            const resolvedChapterTitle =
+          let chapterId: string
+          let order: number
+          let resolvedChapterTitle: string
+          if (targetIndex >= 0 && targetIndex < meta.length) {
+            chapterId = meta[targetIndex].id
+            order = targetIndex
+            resolvedChapterTitle =
               currentPublishingChapterTitle.trim() ||
-              updatedChapters[targetIndex]?.title ||
+              meta[targetIndex].title ||
               `Chapter ${targetIndex + 1}`
-            updatedChapters[targetIndex] = {
-              ...updatedChapters[targetIndex],
-              title: resolvedChapterTitle,
-              content: currentPublishingContent
-            }
+            meta[targetIndex] = { id: chapterId, title: resolvedChapterTitle }
           } else {
-            const resolvedChapterTitle =
+            order = meta.length
+            chapterId = fbService.newChapterId(existingBook.id)
+            resolvedChapterTitle =
               currentPublishingChapterTitle.trim() ||
-              `Chapter ${updatedChapters.length + 1}`
-            updatedChapters.push({
-              title: resolvedChapterTitle,
-              content: currentPublishingContent
-            })
+              `Chapter ${meta.length + 1}`
+            meta.push({ id: chapterId, title: resolvedChapterTitle })
           }
 
           const updatedLikes = (() => {
             const arr = Array.isArray(existingBook.likes)
               ? [...existingBook.likes]
               : [existingBook.likes || 0]
-            while (arr.length < updatedChapters.length) arr.push(0)
+            while (arr.length < meta.length) arr.push(0)
             return arr
           })()
 
-          await fbService.updateBook(currentPublishingId, {
-            tagline: data.tagline || existingBook.tagline || '',
-            isExplicit: data.isExplicit ?? existingBook.isExplicit ?? false,
-            genres:
-              data.genres && data.genres.length > 0
-                ? data.genres
-                : existingBook.genres || [],
-            hashtags:
-              data.hashtags && data.hashtags.length > 0
-                ? data.hashtags
-                : existingBook.hashtags || [],
-            coverImage: data.coverImage || existingBook.coverImage || null,
-            coverColor: data.coverImage
-              ? '#f5f5f5'
-              : existingBook.coverColor ||
-                '#' + Math.floor(Math.random() * 16777215).toString(16),
-            chapters: updatedChapters,
-            chaptersCount: Math.max(
-              existingBook.chaptersCount || 0,
-              targetIndex + 1
-            ),
-            likes: updatedLikes,
-            isDraft: false,
-            commentsEnabled: data.commentsEnabled ?? true,
-            content: updatedChapters.map((c: any) => c.content).join('\n\n')
-          })
+          // Upload a freshly-picked cover to Storage (degrades gracefully).
+          const cover = await resolveCover(
+            existingBook.id,
+            data.coverImage,
+            existingBook.coverPath
+          )
+
+          await fbService.commitChapterWrite(
+            currentPublishingId,
+            chapterId,
+            {
+              content: currentPublishingContent,
+              order,
+              title: resolvedChapterTitle,
+              authorUsername: user?.username || '',
+              isDraft: false
+            },
+            {
+              tagline: data.tagline || existingBook.tagline || '',
+              isExplicit: data.isExplicit ?? existingBook.isExplicit ?? false,
+              genres:
+                data.genres && data.genres.length > 0
+                  ? data.genres
+                  : existingBook.genres || [],
+              hashtags:
+                data.hashtags && data.hashtags.length > 0
+                  ? data.hashtags
+                  : existingBook.hashtags || [],
+              ...(cover
+                ? { coverImage: cover.coverImage, coverPath: cover.coverPath }
+                : {}),
+              coverColor: cover
+                ? '#f5f5f5'
+                : existingBook.coverColor ||
+                  '#' + Math.floor(Math.random() * 16777215).toString(16),
+              chapterMeta: meta,
+              chaptersCount: Math.max(
+                existingBook.chaptersCount || 0,
+                order + 1
+              ),
+              likes: updatedLikes,
+              isDraft: false,
+              commentsEnabled: data.commentsEnabled ?? true
+            }
+          )
 
           // Notify users who have this book in their library about the new chapter
+          const prevChapterCount =
+            existingBook.chapterMeta?.length ??
+            existingBook.chapters?.length ??
+            0
           if (
             currentPublishingChapterIndex === null ||
-            (existingBook.chapters &&
-              currentPublishingChapterIndex >= existingBook.chapters.length)
+            currentPublishingChapterIndex >= prevChapterCount
           ) {
             Object.entries(userBookData).forEach(
               ([username, udata]: [string, any]) => {
@@ -420,16 +471,23 @@ export function useReading({
           }
         }
       } else {
-        // New book — write to Firestore
+        // New book (schema 2) — light doc + first chapter in the subcollection.
+        const bookId = fbService.newBookId()
+        const chapterId = fbService.newChapterId(bookId)
+        const firstChapterTitle =
+          currentPublishingChapterTitle.trim() || 'Chapter 1'
+        const cover = await resolveCover(bookId, data.coverImage, null)
         const bookData = {
+          id: bookId,
           title: currentPublishingTitle,
           authorUid: firebaseUid || '',
           authorUsername: user?.username || '',
           authorDisplayName: user?.displayName || '',
-          coverColor: data.coverImage
+          coverColor: cover
             ? '#f5f5f5'
             : '#' + Math.floor(Math.random() * 16777215).toString(16),
-          coverImage: data.coverImage || null,
+          coverImage: cover ? cover.coverImage : null,
+          coverPath: cover ? cover.coverPath : null,
           likes: [0],
           commentsCount: 0,
           monetizationAttempts: 0,
@@ -440,19 +498,20 @@ export function useReading({
           tagline: data.tagline || '',
           genres: data.genres || [],
           hashtags: data.hashtags || [],
-          content: currentPublishingContent,
           isDraft: false,
           commentsEnabled: data.commentsEnabled ?? true,
-          chapters: [
-            {
-              title: currentPublishingChapterTitle.trim() || 'Chapter 1',
-              content: currentPublishingContent
-            }
-          ],
+          chapterMeta: [{ id: chapterId, title: firstChapterTitle }],
+          schemaVersion: 2,
           isFree: true,
           price: 0
         }
         await fbService.createBook(bookData)
+        await fbService.saveChapter(bookId, chapterId, {
+          content: currentPublishingContent,
+          order: 0,
+          title: firstChapterTitle,
+          authorUsername: user?.username || ''
+        })
 
         // Notify admirers and mutuals about the new book
         const myAdmirers = relationships
@@ -560,35 +619,56 @@ export function useReading({
     if (!title.trim() && !bookId) return null
     let newBookId = bookId
     if (bookId) {
-      // Update existing draft in Firestore
+      // Update existing draft in Firestore (schema 2: chapter body → subcollection)
       const existingBook = books.find(b => b.id === bookId)
       if (existingBook) {
-        const updatedChapters = [...(existingBook.chapters || [])]
+        const meta = await fbService.ensureChaptersMigrated(existingBook)
+        let chapterId: string
+        let order: number
+        let resolvedChapterTitle: string
         if (
           chapterIndex !== null &&
           chapterIndex >= 0 &&
-          chapterIndex < updatedChapters.length
+          chapterIndex < meta.length
         ) {
-          const resolvedChapterTitle =
+          chapterId = meta[chapterIndex].id
+          order = chapterIndex
+          resolvedChapterTitle =
             (chapterTitle || '').trim() ||
-            updatedChapters[chapterIndex]?.title ||
+            meta[chapterIndex].title ||
             `Chapter ${chapterIndex + 1}`
-          updatedChapters[chapterIndex] = {
-            ...updatedChapters[chapterIndex],
-            title: resolvedChapterTitle,
-            content
-          }
+          meta[chapterIndex] = { id: chapterId, title: resolvedChapterTitle }
         } else if (content.trim()) {
-          const resolvedChapterTitle =
-            (chapterTitle || '').trim() ||
-            `Chapter ${updatedChapters.length + 1}`
-          updatedChapters.push({ title: resolvedChapterTitle, content })
+          order = meta.length
+          chapterId = fbService.newChapterId(bookId)
+          resolvedChapterTitle =
+            (chapterTitle || '').trim() || `Chapter ${meta.length + 1}`
+          meta.push({ id: chapterId, title: resolvedChapterTitle })
+        } else {
+          // Nothing to write (empty new chapter) — just persist the title.
+          await fbService.updateBook(bookId, {
+            title: title.trim() || existingBook.title
+          })
+          setLastSelectedBookId(bookId)
+          setLastSelectedChapterIndex(
+            chapterIndex !== null ? chapterIndex.toString() : 'new'
+          )
+          return bookId
         }
-        await fbService.updateBook(bookId, {
-          title: title.trim() || existingBook.title,
-          chapters: updatedChapters,
-          content: updatedChapters.map((c: any) => c.content).join('\n\n')
-        })
+        await fbService.commitChapterWrite(
+          bookId,
+          chapterId,
+          {
+            content,
+            order,
+            title: resolvedChapterTitle,
+            authorUsername: user?.username || ''
+          },
+          {
+            title: title.trim() || existingBook.title,
+            chapterMeta: meta
+          }
+        )
       }
       setLastSelectedBookId(bookId)
       setLastSelectedChapterIndex(
@@ -606,20 +686,32 @@ export function useReading({
     if (existingDraft) {
       newBookId = existingDraft.id
       const resolvedChapterTitle = (chapterTitle || '').trim() || 'Chapter 1'
-      const updatedChapters = content.trim()
-        ? [{ title: resolvedChapterTitle, content }]
-        : []
-      await fbService.updateBook(existingDraft.id, {
-        title: title.trim() || existingDraft.title,
-        content,
-        chapters: updatedChapters,
-        chaptersCount: updatedChapters.length,
-        isDraft: true
-      })
+      const meta = await fbService.ensureChaptersMigrated(existingDraft)
+      const chapterId = meta[0]?.id || fbService.newChapterId(existingDraft.id)
+      await fbService.commitChapterWrite(
+        existingDraft.id,
+        chapterId,
+        {
+          content,
+          order: 0,
+          title: resolvedChapterTitle,
+          authorUsername: user?.username || ''
+        },
+        {
+          title: title.trim() || existingDraft.title,
+          chapterMeta: [{ id: chapterId, title: resolvedChapterTitle }],
+          chaptersCount: content.trim() ? 1 : 0,
+          isDraft: true
+        }
+      )
     } else {
-      // Create new draft in Firestore and return the real document id
+      // Create a new draft (schema 2): light doc + first chapter in subcollection.
       const resolvedChapterTitle = (chapterTitle || '').trim() || 'Chapter 1'
+      const id = fbService.newBookId()
+      const hasContent = !!content.trim()
+      const chapterId = hasContent ? fbService.newChapterId(id) : null
       const bookData = {
+        id,
         title: title.trim(),
         authorUid: firebaseUid || '',
         authorUsername: user?.username || '',
@@ -631,17 +723,26 @@ export function useReading({
         isCompleted: false,
         isDraft: true,
         isExplicit: false,
-        chaptersCount: content.trim() ? 1 : 0,
+        chaptersCount: hasContent ? 1 : 0,
         tagline: '',
         genres: [],
         hashtags: [],
-        content,
-        chapters: content.trim()
-          ? [{ title: resolvedChapterTitle, content }]
-          : []
+        chapterMeta:
+          hasContent && chapterId
+            ? [{ id: chapterId, title: resolvedChapterTitle }]
+            : [],
+        schemaVersion: 2
       }
       const created = await fbService.createBook(bookData)
       newBookId = (created as any).id
+      if (hasContent && chapterId) {
+        await fbService.saveChapter(id, chapterId, {
+          content,
+          order: 0,
+          title: resolvedChapterTitle,
+          authorUsername: user?.username || ''
+        })
+      }
     }
 
     setLastSelectedBookId(newBookId || 'new')

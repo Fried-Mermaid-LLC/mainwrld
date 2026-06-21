@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Button } from '@/components/sharedComponents'
 import { MAX_WORD_COUNT, MIN_WORD_COUNT } from '@/config/constants'
-import type { Chapter, Book } from '@/types'
+import type { Book } from '@/types'
 import * as fbService from '@/services/firebaseService'
 import { useApp } from '@/state/AppContext'
 
@@ -27,7 +27,6 @@ export const WriteView = () => {
     lastSelectedChapterIndex,
     setLastSelectedBookId,
     setLastSelectedChapterIndex,
-    firebaseUid,
     handleSaveDraft,
     setCurrentPublishingId,
     setCurrentPublishingTitle,
@@ -59,47 +58,23 @@ export const WriteView = () => {
     chapterTitle: string
   ) => {
     let effectiveId = id
-    if (!effectiveId) {
-      // For new books, create in Firestore and wait for the ID
-      const resolvedChapterTitle = chapterTitle.trim() || 'Chapter 1'
-      const bookData = {
-        title: title.trim(),
-        authorUid: firebaseUid || '',
-        authorUsername: user?.username || '',
-        authorDisplayName: user?.displayName || '',
-        coverColor:
-          '#' + Math.floor(Math.random() * 16777215).toString(16),
-        likes: [0],
-        commentsCount: 0,
-        publishedDate: new Date().toISOString().split('T')[0],
-        isCompleted: false,
-        isDraft: true,
-        isExplicit: false,
-        chaptersCount: content.trim() ? 1 : 0,
-        tagline: '',
-        genres: [],
-        hashtags: [],
-        content,
-        chapters: content.trim()
-          ? [{ title: resolvedChapterTitle, content }]
-          : []
-      }
-      try {
-        const created = await fbService.createBook(bookData)
-        effectiveId = (created as any).id
-      } catch (err) {
-        console.error('Failed to create book:', err)
-        return
-      }
-    } else {
-      // Existing book — save draft
-      await handleSaveDraft(
+    // Persist the draft first (schema 2: light book doc + chapter subcollection).
+    // handleSaveDraft creates the book for a new id and returns the real doc id.
+    try {
+      const savedId = await handleSaveDraft(
         id,
         title,
         content,
         chapterIndex,
         chapterTitle
       )
+      if (!effectiveId) {
+        if (!savedId) return
+        effectiveId = savedId
+      }
+    } catch (err) {
+      console.error('Failed to save book:', err)
+      return
     }
 
     if (effectiveId) {
@@ -151,6 +126,8 @@ export const WriteView = () => {
     'idle' | 'saving' | 'saved' | 'error'
   >('idle')
   const [wordCount, setWordCount] = useState(0) // Reactive word count state
+  // True while a chapter body is being lazily fetched into the editor (schema 2).
+  const [editorLoading, setEditorLoading] = useState(false)
   const [deleteConfirmIdx, setDeleteConfirmIdx] = useState<number | null>(null)
   // Distance in px from the layout-viewport bottom up to the keyboard's top,
   // used to pin the formatting toolbar right above the on-screen keyboard.
@@ -431,7 +408,8 @@ export const WriteView = () => {
       const currentTitle = latestStateRef.current.newTitle
       const isSavingNewChapter =
         latestStateRef.current.selectedChapterIndex === 'new'
-      const chapterCountBeforeSave = selectedBook?.chapters?.length || 0
+      const chapterCountBeforeSave =
+        selectedBook?.chapterMeta?.length ?? selectedBook?.chapters?.length ?? 0
       const currentChapterIndex = isSavingNewChapter
         ? null
         : parseInt(latestStateRef.current.selectedChapterIndex, 10)
@@ -510,20 +488,9 @@ export const WriteView = () => {
 
     if (selectedBookId !== 'new' && !selectedBook) return
 
-    let content = ''
-    let nextChapterTitle = 'Chapter 1'
-    if (selectedBook && selectedChapterIndex !== 'new') {
-      const idx = parseInt(selectedChapterIndex)
-      if (selectedBook.chapters && selectedBook.chapters[idx]) {
-        content = selectedBook.chapters[idx].content
-        nextChapterTitle =
-          selectedBook.chapters[idx].title || `Chapter ${idx + 1}`
-      }
-    } else if (selectedBook && selectedChapterIndex === 'new') {
-      nextChapterTitle = `Chapter ${(selectedBook.chapters?.length || 0) + 1}`
-    }
-
-    if (editorRef.current) {
+    // Apply a loaded chapter (or empty editor) and reset the editor bookkeeping.
+    const applyContent = (content: string, nextChapterTitle: string) => {
+      if (!editorRef.current) return
       loadedEditorTargetRef.current = targetKey
       editorRef.current.innerHTML = content
       lastValidHtmlRef.current = content
@@ -533,6 +500,60 @@ export const WriteView = () => {
       setChapterTitle(nextChapterTitle)
       dirtyDraftRef.current = false
       setSaveState('idle')
+    }
+
+    // Chapter metadata (id + title), falling back to legacy inline chapters.
+    const meta = selectedBook
+      ? selectedBook.chapterMeta?.length
+        ? selectedBook.chapterMeta
+        : (selectedBook.chapters || []).map((c, i) => ({
+            id: `legacy-${i}`,
+            title: c.title || `Chapter ${i + 1}`
+          }))
+      : []
+
+    // New book or new chapter → empty editor.
+    if (!selectedBook || selectedChapterIndex === 'new') {
+      applyContent('', selectedBook ? `Chapter ${meta.length + 1}` : 'Chapter 1')
+      return
+    }
+
+    const idx = parseInt(selectedChapterIndex)
+    const isSchema2 =
+      (selectedBook.schemaVersion ?? 0) >= 2 ||
+      (selectedBook.chapterMeta?.length ?? 0) > 0
+
+    // Legacy: chapter body is inline on the book doc.
+    if (!isSchema2) {
+      const ch = selectedBook.chapters?.[idx]
+      applyContent(ch?.content || '', ch?.title || `Chapter ${idx + 1}`)
+      return
+    }
+
+    // Schema 2: fetch the chapter body directly (rules allow the author).
+    const m = meta[idx]
+    if (!m) {
+      applyContent('', `Chapter ${idx + 1}`)
+      return
+    }
+    let cancelled = false
+    setEditorLoading(true)
+    fbService
+      .getChapter(selectedBook.id, m.id)
+      .then(docData => {
+        if (cancelled) return
+        applyContent(docData?.content || '', m.title || `Chapter ${idx + 1}`)
+      })
+      .catch(err => {
+        if (cancelled) return
+        console.warn('[MainWRLD] Chapter load failed in editor:', err)
+        applyContent('', m.title || `Chapter ${idx + 1}`)
+      })
+      .finally(() => {
+        if (!cancelled) setEditorLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
   }, [selectedChapterIndex, selectedBookId, selectedBook, calculateWordCount])
 
@@ -710,7 +731,9 @@ export const WriteView = () => {
               onChange={e => setSelectedChapterIndex(e.target.value)}
             >
               <option value='new'>+ New Chapter</option>
-              {selectedBook?.chapters?.map((ch: any, idx: number) => (
+              {(selectedBook?.chapterMeta ??
+                selectedBook?.chapters ??
+                []).map((ch: any, idx: number) => (
                 <option key={idx} value={idx}>
                   {ch.title}
                 </option>
@@ -754,6 +777,12 @@ export const WriteView = () => {
                 </p>
               </div>
             ) : (
+              <>
+              {editorLoading && (
+                <p className='text-center text-[10px] font-bold text-gray-300 uppercase tracking-widest pb-2'>
+                  Loading chapter…
+                </p>
+              )}
               <div
                 ref={editorRef}
                 contentEditable='true'
@@ -798,6 +827,7 @@ export const WriteView = () => {
                   ensureCaretVisible()
                 }}
               />
+              </>
             )}
           </div>
         </div>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { ChapterAdBanner } from '@/components/ChapterAdBanner'
 import { renderFormattedContent } from '@/utils/renderFormattedContent'
-import type { Chapter, BookProgress } from '@/types'
+import type { BookProgress } from '@/types'
 import { useApp } from '@/state/AppContext'
+import * as fbService from '@/services/firebaseService'
 
 export const ReadingView = () => {
   const {
@@ -77,6 +78,13 @@ export const ReadingView = () => {
     initialScrollProgress || 0
   )
   const [isBlurred, setIsBlurred] = useState(false)
+  // Schema 2: chapter bodies are lazy-loaded one at a time through the
+  // getChapterContent callable (paywall-enforced). Cache by chapterId so
+  // re-visiting a chapter is instant; prefetch the next one.
+  const [chapterContent, setChapterContent] = useState('')
+  const [chapterLoading, setChapterLoading] = useState(false)
+  const [chapterError, setChapterError] = useState(false)
+  const chapterCacheRef = useRef<Map<string, string>>(new Map())
   const containerRef = useRef<HTMLDivElement>(null)
   const pageFlipRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef(0)
@@ -185,17 +193,84 @@ export const ReadingView = () => {
   const isFreeOrUnmonetized = book?.isFree || !book?.isMonetized
   const canAccessAll = isAuthor || isOwned || isFreeOrUnmonetized
 
-  const allChapters = book?.chapters || []
-  // Author sees all chapters (including drafts), others with access see only published chapters, non-access users see only first chapter (preview)
+  // Chapter list now comes from light metadata (chapterMeta) instead of the
+  // full chapter bodies. Legacy (un-migrated) books still carry inline
+  // `chapters`, so derive a meta list from them for a transitional fallback.
+  const isSchema2 =
+    (book?.schemaVersion ?? 0) >= 2 || (book?.chapterMeta?.length ?? 0) > 0
+  const allMeta: { id: string; title: string }[] = isSchema2
+    ? book?.chapterMeta || []
+    : (book?.chapters || []).map((c, i) => ({
+        id: `legacy-${i}`,
+        title: c.title || `Chapter ${i + 1}`
+      }))
+  // Author sees all chapters (including drafts), others with access see only
+  // published chapters, non-access users see only the first chapter (preview).
   const visibleChapters = isAuthor
-    ? allChapters
+    ? allMeta
     : canAccessAll
-    ? allChapters.slice(0, book?.chaptersCount || allChapters.length)
-    : allChapters.slice(0, 1)
-  const currentChapter = visibleChapters[currentChapterIdx] || {
-    title: book?.title,
-    content: book?.content
-  }
+    ? allMeta.slice(0, book?.chaptersCount || allMeta.length)
+    : allMeta.slice(0, 1)
+  const currentMeta = visibleChapters[currentChapterIdx]
+  const currentChapterTitle = currentMeta?.title || book?.title || 'Story'
+
+  // Load the current chapter body lazily (schema 2 via callable; legacy from
+  // the inline array). Cancels in-flight loads on chapter/book change, and
+  // prefetches the next chapter into the cache.
+  useEffect(() => {
+    if (!book) return
+    if (!isSchema2) {
+      setChapterLoading(false)
+      setChapterError(false)
+      setChapterContent(
+        book.chapters?.[currentChapterIdx]?.content || book.content || ''
+      )
+      return
+    }
+    if (!currentMeta) {
+      setChapterContent('')
+      return
+    }
+    const cached = chapterCacheRef.current.get(currentMeta.id)
+    if (cached !== undefined) {
+      setChapterContent(cached)
+      setChapterLoading(false)
+      setChapterError(false)
+    }
+    let cancelled = false
+    if (cached === undefined) {
+      setChapterLoading(true)
+      setChapterError(false)
+      fbService
+        .fetchChapterContent(book.id, currentMeta.id)
+        .then(res => {
+          if (cancelled) return
+          chapterCacheRef.current.set(currentMeta.id, res.content)
+          setChapterContent(res.content)
+        })
+        .catch(err => {
+          if (cancelled) return
+          console.warn('[MainWRLD] Chapter load failed:', err)
+          setChapterError(true)
+          setChapterContent('')
+        })
+        .finally(() => {
+          if (!cancelled) setChapterLoading(false)
+        })
+    }
+    // Prefetch the next visible chapter.
+    const next = visibleChapters[currentChapterIdx + 1]
+    if (next && !chapterCacheRef.current.has(next.id)) {
+      fbService
+        .fetchChapterContent(book.id, next.id)
+        .then(r => chapterCacheRef.current.set(next.id, r.content))
+        .catch(() => {})
+    }
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book?.id, currentChapterIdx, isSchema2, canAccessAll])
 
   const handleForward = () => {
     if (!settings.scrollMode && pageFlipRef.current) {
@@ -584,10 +659,20 @@ export const ReadingView = () => {
               </div>
             )}
             <h1 className='text-3xl font-bold text-center mb-12'>
-              {currentChapter.title}
+              {currentChapterTitle}
             </h1>
             <div className='leading-relaxed whitespace-pre-line text-justify'>
-              {renderFormattedContent(currentChapter.content)}
+              {chapterLoading ? (
+                <p className='text-center text-xs opacity-40 py-10 uppercase tracking-widest'>
+                  Loading…
+                </p>
+              ) : chapterError ? (
+                <p className='text-center text-xs opacity-40 py-10 uppercase tracking-widest'>
+                  Couldn’t load this chapter.
+                </p>
+              ) : (
+                renderFormattedContent(chapterContent)
+              )}
             </div>
             <ChapterAdBanner
               isPremium={currentUser?.isPremium}
@@ -669,10 +754,20 @@ export const ReadingView = () => {
               }}
             >
               <h1 className='text-3xl font-bold mb-12 pt-10'>
-                {currentChapter.title}
+                {currentChapterTitle}
               </h1>
               <div className='leading-relaxed whitespace-pre-line text-justify'>
-                {renderFormattedContent(currentChapter.content)}
+                {chapterLoading ? (
+                  <p className='text-center text-xs opacity-40 py-10 uppercase tracking-widest'>
+                    Loading…
+                  </p>
+                ) : chapterError ? (
+                  <p className='text-center text-xs opacity-40 py-10 uppercase tracking-widest'>
+                    Couldn’t load this chapter.
+                  </p>
+                ) : (
+                  renderFormattedContent(chapterContent)
+                )}
               </div>
               <ChapterAdBanner
                 isPremium={currentUser?.isPremium}

@@ -133,12 +133,36 @@ export interface Chapter {
   content: string;
 }
 
+// Lightweight per-chapter metadata kept on the book document so dropdowns,
+// chapter lists and lazy-load can work without reading any chapter bodies.
+// `id` is the stable docId of the chapter in the books/{id}/chapters subcollection.
+export interface ChapterMeta {
+  id: string;
+  title: string;
+}
+
+// Body of a single chapter, stored in books/{bookId}/chapters/{chapterId}.
+// `order` is the position in the book; authorUsername/isDraft are denormalized
+// so server-side moderation can act without re-reading the parent book doc.
+export interface ChapterDoc {
+  id: string;
+  content: string;
+  order: number;
+  title: string;
+  authorUsername?: string;
+  isDraft?: boolean;
+}
+
 export interface Book {
   id: string;
   title: string;
   author: User;
   coverColor: string;
+  // schemaVersion >= 2: download URL pointing at Firebase Storage.
+  // Legacy (schemaVersion unset/1): base64 data URL inlined in the doc.
   coverImage?: string;
+  // Storage path of the cover (for deletion/replacement); only set for schema 2+.
+  coverPath?: string;
   tagline: string;
   genres: string[];
   hashtags: string[];
@@ -156,6 +180,11 @@ export interface Book {
   price?: number;
   isOwned?: boolean;
   minLikesPerChapter?: number;
+  // schemaVersion 2+: chapter bodies live in the books/{id}/chapters subcollection
+  // and are NOT present on the book doc. `chapterMeta` carries order + titles for UI.
+  // Legacy fields below remain only for transitional reads of un-migrated books.
+  chapterMeta?: ChapterMeta[];
+  schemaVersion?: number;
   content?: string;
   chapters?: Chapter[];
   favoritesLastWeek?: number;

@@ -80,10 +80,14 @@ export function useComments({
       setAllComments(prev => [...prev, newComment as any])
       const createdCommentId = await fbService.addCommentDoc(newComment)
 
-      const chapterName =
-        chapterIndex !== undefined && selectedBook.chapters?.[chapterIndex]
-          ? ` (${selectedBook.chapters[chapterIndex].title})`
-          : ''
+      const chapterMetaEntry =
+        chapterIndex !== undefined
+          ? selectedBook.chapterMeta?.[chapterIndex] ||
+            selectedBook.chapters?.[chapterIndex]
+          : undefined
+      const chapterName = chapterMetaEntry
+        ? ` (${chapterMetaEntry.title})`
+        : ''
       addNotification(
         'New Comment',
         `${user.displayName} commented on "${selectedBook.title}"${chapterName}`,

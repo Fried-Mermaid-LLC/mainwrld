@@ -6,7 +6,12 @@ initializeApp()
 
 export { deleteAccount } from './deleteAccount.js'
 export { setUsernameClaim, setAdmin, ensureUsernameClaim } from './userClaims.js'
-export { moderateCommentOnCreate, moderateBookOnWrite } from './moderate.js'
+export {
+  moderateCommentOnCreate,
+  moderateBookOnWrite,
+  moderateChapterOnWrite,
+} from './moderate.js'
+export { getChapterContent } from './chapters.js'
 export { verifyAppleReceipt } from './verifyAppleReceipt.js'
 export { sendWelcomeEmail } from './sendWelcomeEmail.js'
 export { stripeWebhook } from './stripeWebhook.js'

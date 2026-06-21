@@ -1,5 +1,11 @@
-import { auth, db } from '@/lib/firebase';
+import { auth, db, storage } from '@/lib/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import {
+  ref as storageRef,
+  uploadString,
+  getDownloadURL,
+  deleteObject,
+} from 'firebase/storage';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -25,6 +31,8 @@ import {
   orderBy,
   addDoc,
   runTransaction,
+  writeBatch,
+  deleteField,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
@@ -320,8 +328,16 @@ export const getUserByUsername = async (username: string) => {
 
 // ==================== BOOK FUNCTIONS ====================
 
+// Pre-allocate a book id so the caller can upload a cover into
+// book-covers/{uid}/{bookId}/… and reference it before the doc exists.
+export const newBookId = (): string => doc(collection(db, 'books')).id;
+
 export const createBook = async (bookData: any) => {
-  const bookRef = doc(collection(db, 'books'));
+  // Honour a caller-supplied id (from newBookId) so cover/chapter writes can be
+  // keyed on it before creation; otherwise allocate a fresh one.
+  const bookRef = bookData.id
+    ? doc(db, 'books', bookData.id)
+    : doc(collection(db, 'books'));
   const bookWithId = {
     ...bookData,
     id: bookRef.id,
@@ -343,6 +359,14 @@ export const updateBook = async (bookId: string, data: any) => {
 };
 
 export const deleteBook = async (bookId: string) => {
+  // Delete the chapter subcollection alongside the book doc so no orphaned
+  // chapter bodies linger (client SDK has no recursive delete).
+  const chapterSnap = await getDocs(collection(db, 'books', bookId, 'chapters'));
+  if (!chapterSnap.empty) {
+    const batch = writeBatch(db);
+    chapterSnap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
   await deleteDoc(doc(db, 'books', bookId));
 };
 
@@ -355,6 +379,179 @@ export const getBook = async (bookId: string) => {
 export const getAllBooks = async () => {
   const snapshot = await getDocs(collection(db, 'books'));
   return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+};
+
+// ==================== CHAPTER SUBCOLLECTION (schema 2) ====================
+//
+// Chapter bodies live in books/{bookId}/chapters/{chapterId}, keyed by a STABLE
+// id (not a positional index) so deleting a middle chapter never renumbers the
+// rest. The parent book doc keeps only `chapterMeta` (id + title + order) and
+// `chaptersCount`. Reader access to other people's chapter bodies goes through
+// the getChapterContent callable (paywall enforcement); authors read directly.
+
+const chaptersCol = (bookId: string) => collection(db, 'books', bookId, 'chapters');
+
+export const newChapterId = (bookId: string): string => doc(chaptersCol(bookId)).id;
+
+export const getChapter = async (bookId: string, chapterId: string) => {
+  const snap = await getDoc(doc(db, 'books', bookId, 'chapters', chapterId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as any;
+};
+
+export const getChapters = async (bookId: string) => {
+  const snapshot = await getDocs(query(chaptersCol(bookId), orderBy('order')));
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+};
+
+export const saveChapter = async (
+  bookId: string,
+  chapterId: string,
+  data: {
+    content: string;
+    order: number;
+    title: string;
+    authorUsername?: string;
+  }
+) => {
+  await setDoc(
+    doc(db, 'books', bookId, 'chapters', chapterId),
+    { ...data, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+};
+
+export const deleteChapterDoc = async (bookId: string, chapterId: string) => {
+  await deleteDoc(doc(db, 'books', bookId, 'chapters', chapterId));
+};
+
+// Migrate a legacy (schema < 2) book's inline `chapters[]` array into the
+// subcollection on first edit, so stripping the inline array later never loses
+// bodies. Returns the resulting chapterMeta. Idempotent: if the book already has
+// chapterMeta it is returned unchanged (no writes). Heavy lifting happens once
+// per legacy book, the first time its author touches it.
+export const ensureChaptersMigrated = async (
+  book: any
+): Promise<Array<{ id: string; title: string }>> => {
+  // Return a copy so callers can freely mutate (push/replace) without touching
+  // the array held in React state.
+  if (book.chapterMeta && book.chapterMeta.length)
+    return book.chapterMeta.map((m: any) => ({ id: m.id, title: m.title }));
+  const inline: Array<{ title?: string; content?: string }> = book.chapters || [];
+  if (!inline.length) return [];
+  const authorUsername = book.authorUsername || book.author?.username || '';
+  const batch = writeBatch(db);
+  const meta: Array<{ id: string; title: string }> = [];
+  inline.forEach((ch, i) => {
+    const id = newChapterId(book.id);
+    const title = ch.title || `Chapter ${i + 1}`;
+    meta.push({ id, title });
+    batch.set(doc(db, 'books', book.id, 'chapters', id), {
+      content: ch.content || '',
+      order: i,
+      title,
+      authorUsername,
+      updatedAt: serverTimestamp()
+    });
+  });
+  batch.update(doc(db, 'books', book.id), {
+    chapterMeta: meta,
+    schemaVersion: 2,
+    chapters: deleteField(),
+    content: deleteField(),
+    updatedAt: serverTimestamp()
+  });
+  await batch.commit();
+  return meta;
+};
+
+// Atomically write a chapter body AND the parent book's light metadata
+// (chapterMeta, chaptersCount, cover, status…). Also strips the legacy heavy
+// fields (chapters/content) and stamps schemaVersion 2, so any edited book is
+// migrated forward on the fly. Keeps the chaptersCount <= chapterMeta.length
+// invariant by writing both sides in one batch.
+export const commitChapterWrite = async (
+  bookId: string,
+  chapterId: string,
+  chapterData: {
+    content: string;
+    order: number;
+    title: string;
+    authorUsername?: string;
+    isDraft?: boolean;
+  },
+  bookUpdates: Record<string, any>
+) => {
+  const batch = writeBatch(db);
+  batch.set(
+    doc(db, 'books', bookId, 'chapters', chapterId),
+    { ...chapterData, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+  batch.update(doc(db, 'books', bookId), {
+    ...bookUpdates,
+    chapters: deleteField(),
+    content: deleteField(),
+    schemaVersion: 2,
+    updatedAt: serverTimestamp()
+  });
+  await batch.commit();
+};
+
+// Atomically delete a chapter body and update the parent book's metadata.
+export const commitChapterDelete = async (
+  bookId: string,
+  chapterId: string,
+  bookUpdates: Record<string, any>
+) => {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'books', bookId, 'chapters', chapterId));
+  batch.update(doc(db, 'books', bookId), {
+    ...bookUpdates,
+    updatedAt: serverTimestamp()
+  });
+  await batch.commit();
+};
+
+// Reader path: fetch a chapter body through the server, which enforces the
+// paywall (author/admin, free book, preview chapter, or purchased). Throws a
+// functions error (e.g. 'permission-denied') when access is not allowed.
+export const fetchChapterContent = async (
+  bookId: string,
+  chapterId: string
+): Promise<{ title: string; content: string }> => {
+  const functions = getFunctions();
+  const fn = httpsCallable<
+    { bookId: string; chapterId: string },
+    { title: string; content: string }
+  >(functions, 'getChapterContent');
+  const res = await fn({ bookId, chapterId });
+  return res.data;
+};
+
+// ==================== COVER IMAGES (Firebase Storage) ====================
+
+// Upload a base64 data URL cover to Storage and return its download URL + path.
+// Path embeds the author uid so Storage rules can enforce write-ownership.
+export const uploadCover = async (
+  authorUid: string,
+  bookId: string,
+  dataUrl: string
+): Promise<{ url: string; path: string }> => {
+  const path = `book-covers/${authorUid}/${bookId}/${crypto.randomUUID()}.jpg`;
+  const r = storageRef(storage, path);
+  await uploadString(r, dataUrl, 'data_url');
+  const url = await getDownloadURL(r);
+  return { url, path };
+};
+
+// Best-effort delete of a previous cover when it is replaced. Never throws.
+export const deleteCoverByPath = async (path: string): Promise<void> => {
+  try {
+    await deleteObject(storageRef(storage, path));
+  } catch (err) {
+    console.warn('[MainWRLD] Failed to delete old cover:', err);
+  }
 };
 
 // Real-time listener for books the current user is allowed to read.
