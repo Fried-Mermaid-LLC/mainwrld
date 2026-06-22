@@ -6,6 +6,7 @@ import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as pushService from '@/services/pushService'
 import { MIN_SIGNUP_AGE } from '@/config/constants'
+import { containsProfanity } from '@/config/profanity'
 import { ageFromBirthDate } from '@/utils/age'
 import { sendWelcomeEmail } from '@/config/config'
 import type { User, View } from '@/types'
@@ -206,6 +207,12 @@ export function useAuthActions({
       setAuthError(
         'Password must be 12-35 characters and include at least one uppercase letter, one number, and one symbol.'
       )
+      return
+    }
+    // Profanity blocked client-side (instant); the server (moderateUsername)
+    // re-checks profanity + OpenAI before the account is created.
+    if (containsProfanity(username) || containsProfanity(displayName)) {
+      setAuthError('Username or display name contains inappropriate language.')
       return
     }
     // Moderate username + display name via OpenAI (server-side) before creating

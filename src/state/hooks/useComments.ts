@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import { COMMENT_LIKES_THRESHOLD } from '@/config/constants'
+import { containsProfanity } from '@/config/profanity'
 import type { Comment, User, Book } from '@/types'
 
 interface CommentsDeps {
@@ -59,8 +60,12 @@ export function useComments({
       showToast('No book selected for comment.', 'error')
       return
     }
-    // Moderation is server-side (OpenAI): moderateCommentOnCreate removes
-    // flagged comments after the write. No client-side word list.
+    // Profanity blocked client-side (instant); the server
+    // (moderateCommentOnCreate) re-checks profanity + OpenAI authoritatively.
+    if (containsProfanity(text)) {
+      showToast('Your comment contains inappropriate language.', 'warning')
+      return
+    }
 
     const newComment = {
       id: Math.random().toString(36).substr(2, 9),

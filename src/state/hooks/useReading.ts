@@ -4,6 +4,7 @@ import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { MAX_DAILY_CHAPTERS } from '@/config/constants'
+import { containsProfanity } from '@/config/profanity'
 import type { User, Book, BookProgress, View, Relationship } from '@/types'
 
 interface ReadingDeps {
@@ -345,9 +346,20 @@ export function useReading({
         )
         return
       }
-      // Moderation is server-side (OpenAI): moderateBookOnWrite /
-      // moderateChapterOnWrite take down flagged titles/synopsis/chapters after
-      // the write. No client-side word list.
+      // Profanity blocked client-side (instant); the server
+      // (moderateBookOnWrite / moderateChapterOnWrite) re-checks profanity +
+      // OpenAI authoritatively after the write.
+      if (
+        containsProfanity(currentPublishingTitle) ||
+        containsProfanity(data.tagline) ||
+        containsProfanity(currentPublishingChapterTitle)
+      ) {
+        showToast(
+          'Your book title, chapter title, or tagline contains inappropriate language. Please revise before publishing.',
+          'warning'
+        )
+        return
+      }
       if (currentPublishingId) {
         // Update existing book - preserve existing metadata when just adding/updating chapters
         const existingBook = books.find(b => b.id === currentPublishingId)

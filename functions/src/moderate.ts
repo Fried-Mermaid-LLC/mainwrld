@@ -7,6 +7,7 @@ import { onCall } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions/v2'
+import { containsProfanity } from './profanity.js'
 
 // MainWRLD UGC moderation
 //
@@ -27,9 +28,14 @@ import { logger } from 'firebase-functions/v2'
 //
 //   firebase functions:secrets:set OPENAI_API_KEY
 //
-// If the secret is unset, the function logs a warning and skips
-// moderation — better than failing closed because that would prevent
-// any UGC from being published.
+// Two layers: (1) a curated profanity filter (obscenity, ./profanity.js) that
+// always runs and (2) the OpenAI classifier for hate/harassment/sexual/violent
+// content, which runs when OPENAI_API_KEY is set. If the key is unset, only the
+// profanity layer applies (we never fail closed and block all UGC). The
+// profanity layer is applied to identity/metadata/social text (usernames,
+// display names, comments, chat, book titles/synopses, chapter titles) but NOT
+// to chapter body prose, where swearing in creative fiction is legitimate and
+// only the OpenAI layer applies.
 
 const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY')
 
@@ -73,6 +79,20 @@ const moderateText = async (
   }
 }
 
+// Combined verdict: the profanity layer (optional, on by default) plus the
+// OpenAI layer. Set checkProfanity=false for chapter body prose so legitimate
+// swearing in fiction is not removed (OpenAI still screens it).
+const screen = async (
+  text: string,
+  apiKey: string,
+  checkProfanity = true
+): Promise<{ flagged: boolean; topCategory?: string; score?: number }> => {
+  if (checkProfanity && containsProfanity(text))
+    return { flagged: true, topCategory: 'profanity' }
+  if (!apiKey) return { flagged: false }
+  return moderateText(text, apiKey)
+}
+
 const logFlag = async (
   kind: 'Comment' | 'Book' | 'Chat',
   targetId: string,
@@ -105,16 +125,12 @@ export const moderateCommentOnCreate = onDocumentCreated(
   },
   async (event) => {
     const key = OPENAI_API_KEY.value()
-    if (!key) {
-      logger.warn('OPENAI_API_KEY unset — skipping comment moderation')
-      return
-    }
     const snap = event.data
     if (!snap) return
     const data = snap.data()
     const text = String(data?.text ?? '')
     const author = data?.authorUsername as string | undefined
-    const verdict = await moderateText(text, key)
+    const verdict = await screen(text, key)
     if (!verdict.flagged) return
     await snap.ref.delete()
     await logFlag('Comment', event.params.commentId, author, verdict.topCategory ?? 'unknown', verdict.score)
@@ -141,10 +157,6 @@ export const moderateBookOnWrite = onDocumentUpdated(
   },
   async (event) => {
     const key = OPENAI_API_KEY.value()
-    if (!key) {
-      logger.warn('OPENAI_API_KEY unset — skipping book moderation')
-      return
-    }
     const before = event.data?.before.data()
     const after = event.data?.after.data()
     if (!after) return
@@ -156,7 +168,8 @@ export const moderateBookOnWrite = onDocumentUpdated(
     if (synopsis && synopsis !== before?.synopsis) changedTexts.push(synopsis)
     if (changedTexts.length === 0) return
     for (const text of changedTexts) {
-      const verdict = await moderateText(text, key)
+      // Title + synopsis are public-facing metadata → profanity layer applies.
+      const verdict = await screen(text, key)
       if (!verdict.flagged) continue
       // Cascade-delete the book and its chapter subcollection.
       await getFirestore().recursiveDelete(event.data!.after.ref)
@@ -193,25 +206,24 @@ export const moderateChapterOnWrite = onDocumentWritten(
   },
   async (event) => {
     const key = OPENAI_API_KEY.value()
-    if (!key) {
-      logger.warn('OPENAI_API_KEY unset — skipping chapter moderation')
-      return
-    }
     const after = event.data?.after.data()
     if (!after) return // deletion — nothing to moderate
     const before = event.data?.before.data()
     const newText = String(after.content ?? '')
     const oldText = String(before?.content ?? '')
-    // Also catch a changed chapter title.
-    const texts: string[] = []
-    if (newText && newText !== oldText) texts.push(newText)
-    if (after.title && after.title !== before?.title) texts.push(String(after.title))
+    // Body prose: OpenAI only (no profanity layer — swearing in fiction is OK).
+    // Chapter title: public-facing metadata → profanity layer applies.
+    const texts: Array<{ text: string; checkProfanity: boolean }> = []
+    if (newText && newText !== oldText)
+      texts.push({ text: newText, checkProfanity: false })
+    if (after.title && after.title !== before?.title)
+      texts.push({ text: String(after.title), checkProfanity: true })
     if (texts.length === 0) return
 
     const author = after.authorUsername as string | undefined
     const bookId = event.params.bookId
-    for (const text of texts) {
-      const verdict = await moderateText(text, key)
+    for (const { text, checkProfanity } of texts) {
+      const verdict = await screen(text, key, checkProfanity)
       if (!verdict.flagged) continue
       // Cascade-delete the parent book and all its chapters.
       const bookRef = getFirestore().collection('books').doc(bookId)
@@ -249,16 +261,12 @@ export const moderateChatMessageOnCreate = onDocumentCreated(
   },
   async (event) => {
     const key = OPENAI_API_KEY.value()
-    if (!key) {
-      logger.warn('OPENAI_API_KEY unset — skipping chat moderation')
-      return
-    }
     const snap = event.data
     if (!snap) return
     const data = snap.data()
     const text = String(data?.text ?? '')
     const author = data?.from as string | undefined
-    const verdict = await moderateText(text, key)
+    const verdict = await screen(text, key)
     if (!verdict.flagged) return
     await snap.ref.delete()
     await logFlag('Chat', event.params.messageId, author, verdict.topCategory ?? 'unknown', verdict.score)
@@ -272,22 +280,19 @@ export const moderateChatMessageOnCreate = onDocumentCreated(
 
 // ---- Signup username / display name ----
 //
-// OpenAI can't see the signup form, and there is no content doc to moderate
-// post-hoc, so the client calls this synchronously BEFORE creating the account
-// and rejects a flagged name (instead of tearing down a created account on a
-// false positive). Unauthenticated by design (the user has no account yet).
-// Fail-open: if the key is unset, returns flagged:false so signup is never
-// blocked by a misconfiguration.
+// The client calls this synchronously BEFORE creating the account and rejects a
+// flagged name (instead of tearing down a created account on a false positive).
+// Unauthenticated by design (the user has no account yet). The profanity layer
+// always runs; OpenAI runs additionally when the key is set.
 
 export const moderateUsername = onCall(
   { region: 'us-central1', secrets: [OPENAI_API_KEY] },
   async (req) => {
     const key = OPENAI_API_KEY.value()
-    if (!key) return { flagged: false }
     const username = String((req.data as any)?.username ?? '')
     const displayName = String((req.data as any)?.displayName ?? '')
     const combined = `${username} ${displayName}`.trim()
-    const verdict = await moderateText(combined, key)
+    const verdict = await screen(combined, key)
     return { flagged: verdict.flagged, category: verdict.topCategory ?? null }
   }
 )

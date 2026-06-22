@@ -25,6 +25,7 @@
     "@react-three/fiber": "9.1.0",
     "cordova-plugin-purchase": "^13.16.0",
     "firebase": "^12.10.0",
+    "obscenity": "^0.4.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "three": "0.174.0"
