@@ -16,6 +16,8 @@ export {
 export { getChapterContent } from './chapters.js'
 export { verifyAppleReceipt } from './verifyAppleReceipt.js'
 export { sendWelcomeEmail } from './sendWelcomeEmail.js'
+export { sendPasswordReset } from './sendPasswordReset.js'
+export { sendRenewalReminders } from './sendRenewalReminders.js'
 export { stripeWebhook } from './stripeWebhook.js'
 export {
   createStripeAccountLink,

@@ -3,6 +3,15 @@ import { defineSecret } from 'firebase-functions/params'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions/v2'
 import Stripe from 'stripe'
+import {
+  RESEND_API_KEY,
+  sendEmail,
+  userContact,
+  membershipWelcomeEmail,
+  pointsPurchaseEmail,
+  couponPurchaseEmail,
+  bookPurchaseEmail,
+} from './email.js'
 
 // MainWRLD Stripe webhook handler.
 //
@@ -57,7 +66,7 @@ const COUPON_VALUE_BY_SKU: Record<string, number> = {
 export const stripeWebhook = onRequest(
   {
     region: 'us-central1',
-    secrets: [STRIPE_LIVE_WEBHOOK_SECRET, STRIPE_TEST_WEBHOOK_SECRET],
+    secrets: [STRIPE_LIVE_WEBHOOK_SECRET, STRIPE_TEST_WEBHOOK_SECRET, RESEND_API_KEY],
   },
   async (req, res) => {
     const sig = req.headers['stripe-signature']
@@ -152,6 +161,65 @@ export const stripeWebhook = onRequest(
       return
     }
 
+    // ---- Subscription lifecycle: keep the accurate next-renewal date in sync ----
+    // The 7-day renewal reminder (sendRenewalReminders) reads premiumRenewalAt;
+    // these events are the authoritative source for it and refresh it on every
+    // renewal. Enable "customer.subscription.*" on the webhook endpoint.
+    if (
+      event.type === 'customer.subscription.created' ||
+      event.type === 'customer.subscription.updated' ||
+      event.type === 'customer.subscription.deleted'
+    ) {
+      const sub = event.data.object as Stripe.Subscription
+      const customerId =
+        typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
+      const db = getFirestore()
+      let uid = (sub.metadata?.uid as string) || undefined
+      if (!uid && customerId) {
+        const q = await db
+          .collection('users')
+          .where('stripeCustomerId', '==', customerId)
+          .limit(1)
+          .get()
+        if (!q.empty) uid = q.docs[0].id
+      }
+      if (!uid) {
+        res.status(200).send('skipped: subscription has no linked user')
+        return
+      }
+      // current_period_end lives on the subscription (older API) or its first
+      // item (2025+ API) — read both defensively.
+      const periodEndSec: number =
+        (sub as any).current_period_end ||
+        (sub as any).items?.data?.[0]?.current_period_end ||
+        0
+      const active = sub.status === 'active' || sub.status === 'trialing'
+      const deleted = event.type === 'customer.subscription.deleted'
+      try {
+        await db.collection('users').doc(uid).set(
+          {
+            stripeSubscriptionId: sub.id,
+            premiumProvider: 'stripe',
+            premiumRenewalAt: periodEndSec ? periodEndSec * 1000 : FieldValue.delete(),
+            premiumCancelAtPeriodEnd: !!sub.cancel_at_period_end,
+            subscriptionStatus: sub.status,
+            isPremium: deleted ? false : active,
+          },
+          { merge: true }
+        )
+        logger.info('Subscription state synced', {
+          uid,
+          status: sub.status,
+          eventType: event.type,
+        })
+        res.status(200).send('ok')
+      } catch (err) {
+        logger.error('Subscription sync failed', { err, eventId: event.id })
+        res.status(500).send('processing error')
+      }
+      return
+    }
+
     if (event.type !== 'checkout.session.completed') {
       logger.info('Skipping unhandled Stripe event', {
         type: event.type,
@@ -195,11 +263,11 @@ export const stripeWebhook = onRequest(
       const userRef = db.collection('users').doc(uid)
       const couponId = session.metadata?.couponId || ''
       try {
-        await db.runTransaction(async (t) => {
+        const newlyProcessed = await db.runTransaction(async (t) => {
           const existing = await t.get(eventRef)
           if (existing.exists) {
             logger.info('book_purchase replay no-op', { eventId: event!.id })
-            return
+            return false
           }
           const userSnap = await t.get(userRef)
           const userData = (userSnap.data() as any) || {}
@@ -239,8 +307,19 @@ export const stripeWebhook = onRequest(
             livemode: event!.livemode,
             processedAt: FieldValue.serverTimestamp(),
           })
+          return true
         })
         logger.info('Book purchase granted', { uid, bookId, eventId: event.id })
+        // Receipt email (best-effort; only on first processing so a Stripe
+        // redelivery never double-sends).
+        if (newlyProcessed) {
+          const buyer = await userContact(db, uid)
+          if (buyer.email) {
+            const title = session.metadata?.bookTitle || 'your new book'
+            const mail = bookPurchaseEmail(buyer.displayName, title)
+            await sendEmail(buyer.email, mail.subject, mail.html)
+          }
+        }
         res.status(200).send('ok')
       } catch (err) {
         logger.error('Failed to grant book purchase', {
@@ -279,8 +358,19 @@ export const stripeWebhook = onRequest(
     const eventRef = db.collection('stripeEvents').doc(event.id)
     const userRef = db.collection('users').doc(uid)
 
+    // The customer/subscription ids let the subscription.* events map back to
+    // this uid (and let the renewal reminder find the subscription).
+    const stripeCustomerId =
+      typeof session.customer === 'string'
+        ? session.customer
+        : session.customer?.id || null
+    const stripeSubscriptionId =
+      typeof session.subscription === 'string'
+        ? session.subscription
+        : session.subscription?.id || null
+
     try {
-      await db.runTransaction(async (t) => {
+      const newlyProcessed = await db.runTransaction(async (t) => {
         const existing = await t.get(eventRef)
         if (existing.exists) {
           // Stripe retries failed deliveries with the same event.id;
@@ -288,7 +378,7 @@ export const stripeWebhook = onRequest(
           logger.info('Event already processed — replay no-op', {
             eventId: event!.id,
           })
-          return
+          return false
         }
         const userSnap = await t.get(userRef)
         if (!userSnap.exists) {
@@ -305,6 +395,9 @@ export const stripeWebhook = onRequest(
             isPremium: true,
             premiumSince: new Date().toISOString(),
             membershipStartDate: Date.now(),
+            premiumProvider: 'stripe',
+            ...(stripeCustomerId ? { stripeCustomerId } : {}),
+            ...(stripeSubscriptionId ? { stripeSubscriptionId } : {}),
           })
         }
         if (couponValue) {
@@ -330,6 +423,7 @@ export const stripeWebhook = onRequest(
           couponValue,
           processedAt: FieldValue.serverTimestamp(),
         })
+        return true
       })
       logger.info('Stripe credit applied', {
         uid,
@@ -340,6 +434,18 @@ export const stripeWebhook = onRequest(
         eventId: event.id,
         livemode: event.livemode,
       })
+      // Confirmation emails (best-effort; only on first processing so a Stripe
+      // redelivery never double-sends).
+      if (newlyProcessed) {
+        const buyer = await userContact(db, uid)
+        if (buyer.email) {
+          let mail
+          if (isPremium) mail = membershipWelcomeEmail(buyer.displayName)
+          else if (points) mail = pointsPurchaseEmail(buyer.displayName, points)
+          else if (couponValue) mail = couponPurchaseEmail(buyer.displayName, couponValue)
+          if (mail) await sendEmail(buyer.email, mail.subject, mail.html)
+        }
+      }
       res.status(200).send('ok')
     } catch (err) {
       logger.error('Failed to apply Stripe credit', {

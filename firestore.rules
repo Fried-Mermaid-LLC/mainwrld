@@ -54,7 +54,15 @@ service cloud.firestore {
         || (isUser(uid)
             && !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['stripeAccountId', 'payoutsEnabled', 'chargesEnabled',
-                          'detailsSubmitted', 'stripeAccountUpdatedAt']));
+                          'detailsSubmitted', 'stripeAccountUpdatedAt',
+                          // Subscription / renewal mirror — written only by the
+                          // Stripe webhook, Apple verifier and reminder cron
+                          // (Admin SDK), so a client can't forge membership or
+                          // spoof the renewal reminder.
+                          'stripeCustomerId', 'stripeSubscriptionId',
+                          'premiumProvider', 'premiumRenewalAt',
+                          'premiumCancelAtPeriodEnd', 'subscriptionStatus',
+                          'renewalReminderSentForAt']));
       allow delete: if isAdmin();
     }
 
