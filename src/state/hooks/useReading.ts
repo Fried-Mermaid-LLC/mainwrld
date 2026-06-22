@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { MAX_DAILY_CHAPTERS, containsBadWord } from '@/config/constants'
 import type { User, Book, BookProgress, View, Relationship } from '@/types'
@@ -783,14 +784,16 @@ export function useReading({
         })
       return { ...prev, [user.username]: userActivity.slice(0, 10) }
     })
-    // Update user activity status to "Reading"
+    // Update user activity status to "Reading" via RTDB presence (X06) so the
+    // live "currently reading" signal carries the book id and self-clears on
+    // disconnect; the mirror Cloud Function writes it back to Firestore. (Do
+    // NOT write activity to Firestore directly here — that would fight the
+    // mirror.)
+    if (firebaseUid) {
+      presenceService.setActivity(firebaseUid, 'Reading', bookId)
+    }
     if (user.activity !== 'Reading') {
       setUser(prev => ({ ...prev, activity: 'Reading' }))
-      if (firebaseUid) {
-        fbService
-          .updateUserProfile(firebaseUid, { activity: 'Reading' })
-          .catch(console.error)
-      }
     }
   }
 

@@ -21,6 +21,12 @@ export const OtherProfileView = () => {
     registeredUsers
   } = useApp()
   const user = selectedProfileUser!
+  // Live presence: selectedProfileUser is a static snapshot taken at navigation
+  // time, so it never updates while the profile is open. registeredUsers is the
+  // real-time source (kept fresh by the mirror via subscribeToUsers), so read
+  // isOnline/activity/currentBookId from it. (X06 Bug A fix.)
+  const liveUser =
+    registeredUsers.find((u: any) => u.username === user.username) ?? user
   const onBack = () => setView('home')
   const onBookSelect = (b: Book) => {
     setSelectedBook(b)
@@ -193,16 +199,15 @@ export const OtherProfileView = () => {
           <div className='flex items-center gap-2 mb-10'>
             <div
               className={`w-2 h-2 rounded-full ${
-                user.isOnline ? 'bg-green-500' : 'bg-gray-300'
+                liveUser.isOnline ? 'bg-green-500' : 'bg-gray-300'
               }`}
             />
             <span className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
-              {user.isOnline
-                ? `Online • ${
-                    (readingActivity[user.username] || []).length > 0
-                      ? 'Reading'
-                      : user.activity
-                  }`
+              {/* Drive "Reading" from the live activity, not the never-emptying
+                  readingActivity history (which made a mutual read "Reading"
+                  forever after one read). X06 Bug B fix. */}
+              {liveUser.isOnline
+                ? `Online • ${liveUser.activity || 'Idle'}`
                 : 'Offline'}
             </span>
           </div>
@@ -257,20 +262,26 @@ export const OtherProfileView = () => {
           {/* Currently Reading — only visible to mutuals */}
           {isMutual ? (
             (() => {
+              // Only show "Currently Reading" while the mutual is ACTUALLY
+              // reading right now (live presence), not for a stale history
+              // entry from days ago. X06 requirement. The book is the live
+              // currentBookId; timeSince comes from the matching history entry.
+              const isReadingNow =
+                liveUser.isOnline &&
+                liveUser.activity === 'Reading' &&
+                !!liveUser.currentBookId
               const activities = readingActivity[user.username] || []
-              const activity =
-                activities.length > 0
-                  ? activities.sort(
-                      (a: any, b: any) =>
-                        new Date(b.lastRead).getTime() -
-                        new Date(a.lastRead).getTime()
-                    )[0]
-                  : null
-              const readingBook = activity
-                ? books.find((b: Book) => b.id === activity.bookId)
+              const activity = isReadingNow
+                ? activities.find(
+                    (a: any) => a.bookId === liveUser.currentBookId
+                  ) || null
+                : null
+              const readingBook = isReadingNow
+                ? books.find((b: Book) => b.id === liveUser.currentBookId)
                 : null
               if (readingBook) {
                 const timeSince = (() => {
+                  if (!activity) return 'Just now'
                   const diff =
                     Date.now() - new Date(activity.lastRead).getTime()
                   const mins = Math.floor(diff / 60000)

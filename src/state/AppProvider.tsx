@@ -17,6 +17,7 @@ import { useAuthActions } from './hooks/useAuthActions'
 import { useUserDataLoader } from './hooks/useUserDataLoader'
 import { usePayments } from './hooks/usePayments'
 import { usePersist } from './hooks/usePersist'
+import { useAppLifecycle } from './hooks/useAppLifecycle'
 
 // useAppValue composes the app's domain hooks (Phase B complete). Each hook owns
 // one slice of state / effects / handlers; this function only wires them together.
@@ -371,6 +372,7 @@ export function useAppValue() {
     firebaseUid,
     userDataLoaded,
     view,
+    selectedBook,
     lastClaimedPoints,
     userBookData,
     allAvatarConfigs,
@@ -382,6 +384,9 @@ export function useAppValue() {
     favoriteBookIds
   })
   const { persistTimerRef } = persist
+
+  // Native background/foreground presence (X06) — no-op on web.
+  useAppLifecycle(firebaseUid)
 
   // User-data loader lives in useUserDataLoader (Phase B). Runs the post-login
   // getUserProfile cascade and flips userDataLoaded true. Placed here (after the

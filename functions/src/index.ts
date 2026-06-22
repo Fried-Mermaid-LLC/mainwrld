@@ -25,3 +25,4 @@ export {
   createBookCheckoutSession,
 } from './stripeConnect.js'
 export { onBookMonetized } from './monetization.js'
+export { mirrorPresence } from './presence.js'

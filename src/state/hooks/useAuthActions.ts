@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import * as fbService from '@/services/firebaseService'
+import * as presenceService from '@/services/presenceService'
 import { containsBadWord } from '@/config/constants'
 import { sendWelcomeEmail } from '@/config/config'
 import type { User, View } from '@/types'
@@ -119,6 +120,9 @@ export function useAuthActions({
   const handleLogout = async () => {
     // Mark offline in Firestore before logging out
     if (firebaseUid) {
+      // Tear down the RTDB presence connection (X06) so the device stops
+      // counting as online; the mirror flips the Firestore doc offline too.
+      presenceService.goOffline(firebaseUid)
       await fbService
         .updateUserProfile(firebaseUid, {
           isOnline: false,

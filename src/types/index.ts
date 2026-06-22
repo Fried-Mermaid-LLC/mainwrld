@@ -12,6 +12,8 @@ export interface User {
   email?: string;
   isOnline: boolean;
   activity: 'Reading' | 'Writing' | 'Idle';
+  lastOnline?: string;                // ISO timestamp, mirrored from presence (X06)
+  currentBookId?: string | null;      // book actively being read; null/absent when not reading (X06)
   position: [number, number, number];
   isMutual: boolean;
   points: number;

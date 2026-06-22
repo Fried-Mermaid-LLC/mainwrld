@@ -66,7 +66,9 @@ export const signUp = async (
     mutualsCount: 0,
     admiringCount: 0,
     strikes: 0,
-    isOnline: true,
+    // Presence is owned by the RTDB mirror (X06); seed offline so a user who
+    // signs up but never opens a presence connection isn't shown online.
+    isOnline: false,
     activity: 'Idle',
     isPremium: false,
     premiumSince: null,

@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import * as presenceService from '@/services/presenceService'
 import type { User, Book, BookProgress, AvatarConfig, Coupon, View } from '@/types'
 
 type UserBookDataMap = Record<
@@ -22,6 +23,7 @@ interface PersistDeps {
   firebaseUid: string | null
   userDataLoaded: boolean
   view: View
+  selectedBook: Book | null
   lastClaimedPoints: number | null
   userBookData: UserBookDataMap
   allAvatarConfigs: Record<string, AvatarConfig>
@@ -46,6 +48,7 @@ export function usePersist({
   firebaseUid,
   userDataLoaded,
   view,
+  selectedBook,
   lastClaimedPoints,
   userBookData,
   allAvatarConfigs,
@@ -218,46 +221,23 @@ export function usePersist({
     }
   })
 
-  // Online/offline presence: only on open/close, not tab switching
+  // Online/offline presence via RTDB onDisconnect (X06). The RTDB server runs
+  // the offline write itself when the socket drops, so a force-quit/crash/
+  // network loss reliably flips the user offline even when no JS runs — which
+  // beforeunload/pagehide could never guarantee (especially on iOS). A Cloud
+  // Function mirrors /status/{uid} into Firestore users/{uid}.
   useEffect(() => {
     if (!firebaseUid || !user.username) return
-
-    const setOnline = () => {
-      setUser(prev => ({ ...prev, isOnline: true }))
-
-      fbService
-        .updateUserProfile(firebaseUid, {
-          isOnline: true,
-          lastOnline: new Date().toISOString()
-        })
-        .catch(console.error)
-    }
-
-    const setOffline = () => {
-      setUser(prev => ({ ...prev, isOnline: false }))
-
-      fbService
-        .updateUserProfile(firebaseUid, {
-          isOnline: false,
-          lastOnline: new Date().toISOString()
-        })
-        .catch(console.error)
-    }
-
-    // Mark online when this tab/window is active
-    setOnline()
-
-    // Mark offline only when tab/window is closed/refreshed/navigated away
-    window.addEventListener('beforeunload', setOffline)
-    window.addEventListener('pagehide', setOffline)
-
+    // Optimistic self-UI; the mirror will confirm moments later.
+    setUser(prev => ({ ...prev, isOnline: true }))
+    presenceService.goOnline(firebaseUid)
     return () => {
-      window.removeEventListener('beforeunload', setOffline)
-      window.removeEventListener('pagehide', setOffline)
+      presenceService.goOffline(firebaseUid)
     }
   }, [firebaseUid, user.username])
 
-  // Update user activity based on current view
+  // Update user activity (and currentBookId) based on current view, routed
+  // through RTDB so disconnect can clear it and the mirror can publish it.
   useEffect(() => {
     if (!firebaseUid || !user.username) return
 
@@ -268,13 +248,14 @@ export function usePersist({
       newActivity = 'Writing'
     }
 
+    const currentBookId =
+      view === 'reading' ? selectedBook?.id ?? null : null
+    presenceService.setActivity(firebaseUid, newActivity, currentBookId)
+
     if (user.activity !== newActivity) {
       setUser(prev => ({ ...prev, activity: newActivity }))
-      fbService
-        .updateUserProfile(firebaseUid, { activity: newActivity })
-        .catch(console.error)
     }
-  }, [view, firebaseUid, user.username])
+  }, [view, firebaseUid, user.username, selectedBook?.id])
 
   return { persistTimerRef }
 }
