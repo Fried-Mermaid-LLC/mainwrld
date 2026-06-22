@@ -112,7 +112,12 @@ export function useSocial({
         if (u.avatarConfig && u.username) configs[u.username] = u.avatarConfig
         if (u.unlockedItems && u.username)
           unlocked[u.username] = u.unlockedItems
-        if (u.readingActivity && u.username)
+        // Never overwrite the CURRENT user's reading activity from the snapshot:
+        // it is owned locally (useReading) and flushed by usePersist, and the
+        // Firestore copy is stale by up to the 2s debounce. Letting it win here
+        // reverted the user's own Recently Read rail whenever any user's doc
+        // changed. Other users' activity still flows in (powers OtherProfile).
+        if (u.readingActivity && u.username && u.username !== user.username)
           readingAct[u.username] = u.readingActivity
       })
       if (Object.keys(configs).length > 0) {

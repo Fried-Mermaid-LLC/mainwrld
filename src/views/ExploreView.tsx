@@ -209,12 +209,15 @@ export const ExploreView = () => {
   const recentlyRead = useMemo(() => {
     const activities = readingActivity[currentUsername]
     if (!activities || activities.length === 0) return []
-    return activities
+    // Copy before sorting — sorting in place mutates shared state. Keep up to
+    // 10 (the stored array's own cap) so the rail can fill the 6/20 the section
+    // loop shows; the loop no longer re-sorts Recently Read by publishedDate.
+    return [...activities]
       .sort(
         (a, b) =>
           new Date(b.lastRead).getTime() - new Date(a.lastRead).getTime()
       )
-      .slice(0, 3)
+      .slice(0, 10)
       .map(a => books.find((b: Book) => b.id === a.bookId))
       .filter(Boolean)
   }, [books, readingActivity, currentUsername])
@@ -538,12 +541,17 @@ export const ExploreView = () => {
                     selectedGenres.some(g => (b.genres || []).includes(g))
                   )
                 : section.data
-            // Apply sort order
-            sectionData = [...sectionData].sort((a: any, b: any) => {
-              const dateA = new Date(a.publishedDate).getTime()
-              const dateB = new Date(b.publishedDate).getTime()
-              return sortOrder === 'newest' ? dateB - dateA : dateA - dateB
-            })
+            // Apply sort order — but NOT to Recently Read, which must keep the
+            // lastRead-descending order from its memo. Re-sorting it by
+            // publishedDate (and flipping it with the newest/oldest toggle) is
+            // what made the most-recently-read book not show first.
+            if (section.title !== 'Recently Read') {
+              sectionData = [...sectionData].sort((a: any, b: any) => {
+                const dateA = new Date(a.publishedDate).getTime()
+                const dateB = new Date(b.publishedDate).getTime()
+                return sortOrder === 'newest' ? dateB - dateA : dateA - dateB
+              })
+            }
             const isExpanded = expandedSections.has(section.title)
             const displayData = isExpanded
               ? sectionData.slice(0, 20)

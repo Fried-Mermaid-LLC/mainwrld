@@ -177,8 +177,10 @@ export function usePersist({
         admirersCount: user.admirersCount,
         mutualsCount: user.mutualsCount,
         isPremium: user.isPremium || false,
-        isOnline: false,
-        lastOnline: new Date().toISOString(),
+        // NOTE: isOnline/lastOnline intentionally NOT written here — presence is
+        // owned by the dedicated presence effect (and, per X06, by the RTDB
+        // mirror). Writing isOnline:false on every tab-switch/visibility-hidden
+        // would fight it. This flush only persists the data slices below.
         dailyEarnedPoints: user.dailyEarnedPoints || 0,
         lastPointsReset: user.lastPointsReset || null,
         lastClaimedPoints: lastClaimedPoints || null,
@@ -197,18 +199,23 @@ export function usePersist({
       }
       fbService.updateUserProfile(firebaseUid, batchUpdate).catch(() => {})
     }
-    // const handleVisibilityChange = () => {
-    //   if (document.visibilityState === 'hidden') flushToFirestore()
-    // }
-    // const handlePageHide = () => flushToFirestore()
-    // window.addEventListener('beforeunload', flushToFirestore)
-    // document.addEventListener('visibilitychange', handleVisibilityChange)
-    // window.addEventListener('pagehide', handlePageHide)
-    // return () => {
-    //   window.removeEventListener('beforeunload', flushToFirestore)
-    //   document.removeEventListener('visibilitychange', handleVisibilityChange)
-    //   window.removeEventListener('pagehide', handlePageHide)
-    // }
+    // Flush the latest readingActivity/bookProgress when the user leaves or
+    // backgrounds the app, instead of relying solely on the 2s debounce (which
+    // loses the last reads if the app is backgrounded/killed within that window).
+    // On iOS/Capacitor visibilitychange(hidden) is the load-bearing event;
+    // beforeunload/pagehide cover web tab close/refresh.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushToFirestore()
+    }
+    const handlePageHide = () => flushToFirestore()
+    window.addEventListener('beforeunload', flushToFirestore)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pagehide', handlePageHide)
+    return () => {
+      window.removeEventListener('beforeunload', flushToFirestore)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('pagehide', handlePageHide)
+    }
   })
 
   // Online/offline presence: only on open/close, not tab switching
