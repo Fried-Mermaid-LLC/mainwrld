@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MainWRLD</title>
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <!-- Self-hosted fonts (X02): no external Google Fonts / Material Icons CDN,
+         so glyphs render reliably offline / on poor iOS connectivity. -->
+    <link rel="preload" href="/fonts/inter-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/material-icons-round.woff2" as="font" type="font/woff2" crossorigin>
+    <link href="/fonts/fonts.css" rel="stylesheet">
 </head>
 <body class="bg-white dark:bg-black transition-colors duration-300">
     <div id="root"></div>

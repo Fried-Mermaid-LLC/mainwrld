@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
     "dev:ios": "cap run ios -l --host $(grep -E '^HOST=' .env.local | cut -d= -f2) --port 5173",
-    "build:web": "npm run clean:dsstore && vite build",
-    "build:ios": "npm run build:web && cap sync ios && npm run clean:dsstore"
+    "build:web": "vite build",
+    "build:ios": "npm run build:web && cap sync ios"
   },
   "dependencies": {
     "@capacitor-firebase/crashlytics": "^8.3.0",
