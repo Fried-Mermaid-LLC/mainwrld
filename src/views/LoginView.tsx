@@ -1,5 +1,6 @@
 import { BASE } from '@/config/config'
 import { Button, Input } from '@/components/sharedComponents'
+import { SafeImg } from '@/components/SafeImg'
 import { useApp } from '@/state/AppContext'
 
 export const LoginView = () => {
@@ -16,7 +17,7 @@ export const LoginView = () => {
         <span className='material-icons-round'>arrow_back</span>
       </button>
       <div className='min-h-full p-8 pb-[max(2rem,env(keyboard-inset-height))] flex flex-col items-center justify-center'>
-      <img
+      <SafeImg
         src={`${BASE}logo.png`}
         alt='MainWRLD'
         className='w-20 h-20 mb-4'

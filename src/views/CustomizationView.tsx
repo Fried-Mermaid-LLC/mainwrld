@@ -1,6 +1,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { BASE } from '@/config/config';
 import { AvatarLayers, AVATAR_ITEMS, getHairPosition, getFacePosition, HAIR_POSITIONS, FACE_POSITIONS } from '@/components/avatar';
+import { SafeImg } from '@/components/SafeImg';
 import { AvatarCategory, AvatarConfig, AvatarGender, AvatarItem, User } from '@/types';
 import { useApp } from '@/state/AppContext';
 
@@ -205,13 +206,13 @@ export const CustomizationView = () => {
                 <div className="flex-1 flex items-center justify-center gap-8 p-8">
                     <button onClick={() => handleGenderSelect('female')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-56">
                         <div className="w-40 h-56 rounded-2xl overflow-hidden bg-gray-50">
-                            <img src={`${BASE}assets/avatar/body/female/A4.png`} alt="Female" className="w-full h-full object-contain" />
+                            <SafeImg src={`${BASE}assets/avatar/body/female/A4.png`} alt="Female" className="w-full h-full object-contain" />
                         </div>
                         <span className="text-sm font-bold uppercase tracking-widest"></span>
                     </button>
                     <button onClick={() => handleGenderSelect('male')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-56">
                         <div className="w-40 h-56 rounded-2xl overflow-hidden bg-gray-50">
-                            <img src={`${BASE}assets/avatar/body/male/B4.png`} alt="Male" className="w-full h-full object-contain" />
+                            <SafeImg src={`${BASE}assets/avatar/body/male/B4.png`} alt="Male" className="w-full h-full object-contain" />
                         </div>
                         <span className="text-sm font-bold uppercase tracking-widest"></span>
                     </button>
@@ -360,7 +361,7 @@ export const CustomizationView = () => {
                                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{item.id === 'none' ? 'No Hair' : 'No Face'}</span>
                                     </div>
                                 ) : (
-                                    <img
+                                    <SafeImg
                                         src={item.path}
                                         alt={item.label}
                                         className={`w-full h-full ${activeCategory === 'body' ? 'object-cover object-top' : 'object-contain'} ${!isUnlocked ? 'opacity-50' : ''}`}

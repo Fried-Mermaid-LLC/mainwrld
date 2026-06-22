@@ -6,6 +6,8 @@ import { Capacitor } from '@capacitor/core'
 import { WORLD_RADIUS } from '@/config/constants'
 import { BASE } from '@/config/config'
 import { MovingAvatar, Player } from '@/components/three/threeComponents'
+import { SafeImg } from '@/components/SafeImg'
+import { ModelErrorBoundary } from '@/components/three/ModelErrorBoundary'
 import type { User } from '@/types'
 import { useApp } from '@/state/AppContext'
 
@@ -26,6 +28,7 @@ export const HomeView = () => {
   return (
     <div className='fixed inset-0 bg-white'>
       <Canvas shadows>
+        <ModelErrorBoundary>
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault position={[0, 5, 10]} fov={50} />
           {/* These direct lights are the SOLE light source on native (the HDR
@@ -116,6 +119,7 @@ export const HomeView = () => {
             // ONLY SHOW USERS WHO ARE ONLINE & MUTUAL
           })()}
         </Suspense>
+        </ModelErrorBoundary>
         {/* The HDR environment is a web-only nicety: avatar materials are
             non-metallic and textured, so they are fully shaded by the direct
             lights above and gain almost nothing from IBL. On native it is
@@ -133,7 +137,7 @@ export const HomeView = () => {
         style={{ top: 'calc(0.75rem + env(safe-area-inset-top))' }}
       >
         <div>
-          <img
+          <SafeImg
             src={`${BASE}wordlogo.png`}
             alt='MainWRLD'
             className='w-[240px] drop-shadow-md'
