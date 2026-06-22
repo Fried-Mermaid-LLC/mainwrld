@@ -78,7 +78,7 @@ export const AdminDashboard = () => {
   )
 
   return (
-    <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500'>
+    <div className='fixed inset-0 bg-white overflow-y-auto overflow-x-hidden no-scrollbar animate-in slide-in-from-right duration-500'>
       <header className='p-6 flex items-center gap-4'>
         <button
           onClick={onBack}
@@ -118,12 +118,12 @@ export const AdminDashboard = () => {
       </div>
 
       {/* Tab Bar */}
-      <div className='px-6 flex gap-2 mb-6'>
+      <div className='px-6 flex gap-2 mb-6 overflow-x-auto no-scrollbar'>
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 h-12 rounded-2xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+            className={`flex-shrink-0 h-12 px-4 rounded-2xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 whitespace-nowrap transition-all ${
               activeTab === tab.id
                 ? 'bg-accent text-white shadow-lg shadow-accent/20'
                 : 'bg-gray-50 text-gray-400'
