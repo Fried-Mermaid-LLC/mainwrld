@@ -20,7 +20,7 @@ interface ReadingDeps {
   relationships: Relationship[]
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
 }
 
@@ -462,7 +462,11 @@ export function useReading({
                     `"${existingBook.title}" has a new chapter!`,
                     'menu_book',
                     username,
-                    user?.username
+                    user?.username,
+                    currentPublishingId || existingBook.id, // targetId = book id
+                    undefined,
+                    undefined,
+                    'appUpdates'
                   )
                 }
               }
@@ -527,7 +531,11 @@ export function useReading({
               `${user?.displayName} published a new book: "${currentPublishingTitle}"`,
               'auto_stories',
               username,
-              user?.username
+              user?.username,
+              bookId, // targetId = the newly-created book id
+              undefined,
+              undefined,
+              'appUpdates'
             )
           }
         })

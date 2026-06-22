@@ -4,6 +4,7 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
+import * as pushService from '@/services/pushService'
 import { containsBadWord, MIN_SIGNUP_AGE } from '@/config/constants'
 import { ageFromBirthDate } from '@/utils/age'
 import { sendWelcomeEmail } from '@/config/config'
@@ -30,7 +31,7 @@ interface AuthActionsDeps {
   }
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
 }
 
@@ -121,6 +122,8 @@ export function useAuthActions({
   const handleLogout = async () => {
     // Mark offline in Firestore before logging out
     if (firebaseUid) {
+      // Stop receiving push for the signed-out account (X01, native-only).
+      pushService.unregisterPush(firebaseUid).catch(() => {})
       // Tear down the RTDB presence connection (X06) so the device stops
       // counting as online; the mirror flips the Firestore doc offline too.
       presenceService.goOffline(firebaseUid)
@@ -281,7 +284,12 @@ export function useAuthActions({
         'Welcome to MainWRLD!',
         `Hey ${displayName}, start exploring stories and connecting with other readers!`,
         'celebration',
-        username
+        username,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'system'
       )
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {

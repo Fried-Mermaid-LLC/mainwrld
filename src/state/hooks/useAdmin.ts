@@ -12,7 +12,7 @@ interface AdminDeps {
   showToast: (message: string, icon?: string) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
   registeredUsers: any[]
   setRegisteredUsers: Dispatch<SetStateAction<any[]>>
@@ -92,7 +92,13 @@ export function useAdmin({
     addNotification(
       'Report Filed',
       `Your report for ${type.toLowerCase()} has been submitted.`,
-      'flag'
+      'flag',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'system'
     )
     showToast(`${type} reported successfully!`, 'flag')
   }

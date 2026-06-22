@@ -23,7 +23,7 @@ interface BooksDeps {
   }) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
   awardPoints: (amount: number, reason: string) => void
   rewardedItems: Set<string>
@@ -195,7 +195,9 @@ export function useBooks({
         authorUsername,
         user.username,
         targetBook.id,
-        chapterIndex
+        chapterIndex,
+        undefined,
+        'bookLikes'
       )
 
       // Earned points: award book author 2 pts when chapter hits like threshold
@@ -377,7 +379,13 @@ export function useBooks({
       addNotification(
         'Link Copied',
         'Link copied to clipboard!',
-        'content_copy'
+        'content_copy',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'system'
       )
     }
   }

@@ -189,6 +189,16 @@ export const updateUserProfile = async (uid: string, data: Partial<DocumentData>
   await updateDoc(doc(db, 'users', uid), data);
 };
 
+// Push device tokens (X01). One per device; the sendPushOnNotification trigger
+// fans out to all and prunes stale ones server-side.
+export const addFcmToken = async (uid: string, token: string) => {
+  await updateDoc(doc(db, 'users', uid), { fcmTokens: arrayUnion(token) });
+};
+
+export const removeFcmToken = async (uid: string, token: string) => {
+  await updateDoc(doc(db, 'users', uid), { fcmTokens: arrayRemove(token) });
+};
+
 // Atomic array operations for library (order-independent, no race conditions).
 //
 // Ownership model (F01):

@@ -13,7 +13,7 @@ interface ChatDeps {
   showToast: (message: string, icon?: string) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
 }
 
@@ -85,7 +85,12 @@ export function useChat({
           text.length > 50 ? '...' : ''
         }`,
         'chat',
-        toUsername
+        toUsername,
+        user.username, // sender — recipient deep-links back to the sender's chat
+        undefined,
+        undefined,
+        undefined,
+        'messages'
       )
     }
   }

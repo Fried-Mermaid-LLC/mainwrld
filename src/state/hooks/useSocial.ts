@@ -27,7 +27,7 @@ interface SocialDeps {
   }) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
   setAllAvatarConfigs: Dispatch<SetStateAction<Record<string, AvatarConfig>>>
   setAllUnlockedItems: Dispatch<SetStateAction<Record<string, string[]>>>
@@ -233,7 +233,12 @@ export function useSocial({
       'New Admirer',
       `${user.displayName} is now admiring you!`,
       'person_add',
-      targetUser.username
+      targetUser.username,
+      user.username, // sender — recipient deep-links to the admirer's profile
+      undefined,
+      undefined,
+      undefined,
+      'newAdmirers'
     )
 
     // Check if this creates a mutual (target already admires current user)
@@ -246,13 +251,23 @@ export function useSocial({
         'Mutual Connection!',
         `You and ${targetUser.displayName} are now mutuals!`,
         'people',
-        user.username
+        user.username,
+        undefined,
+        targetUser.username, // targetId — the OTHER party's profile to open
+        undefined,
+        undefined,
+        'newAdmirers'
       )
       addNotification(
         'Mutual Connection!',
         `You and ${user.displayName} are now mutuals!`,
         'people',
-        targetUser.username
+        targetUser.username,
+        undefined,
+        user.username,
+        undefined,
+        undefined,
+        'newAdmirers'
       )
     } else {
       // Firestore fallback: local relationships state might not have the reverse relationship yet
@@ -264,13 +279,23 @@ export function useSocial({
               'Mutual Connection!',
               `You and ${targetUser.displayName} are now mutuals!`,
               'people',
-              user.username
+              user.username,
+              undefined,
+              targetUser.username,
+              undefined,
+              undefined,
+              'newAdmirers'
             )
             addNotification(
               'Mutual Connection!',
               `You and ${user.displayName} are now mutuals!`,
               'people',
-              targetUser.username
+              targetUser.username,
+              undefined,
+              user.username,
+              undefined,
+              undefined,
+              'newAdmirers'
             )
           }
         })
@@ -288,7 +313,13 @@ export function useSocial({
     addNotification(
       'User Blocked',
       `You blocked @${targetUsername}. You will no longer see their content.`,
-      'block'
+      'block',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'system'
     )
     setView('home')
   }

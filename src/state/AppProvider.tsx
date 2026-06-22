@@ -1,6 +1,7 @@
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useRef, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { AppContext } from './AppContext'
+import * as pushService from '@/services/pushService'
 import { useUI } from './hooks/useUI'
 import { useAuth } from './hooks/useAuth'
 import { useRewards } from './hooks/useRewards'
@@ -34,7 +35,8 @@ type AddNotification = (
   sender?: string,
   targetId?: string,
   targetChapterIndex?: number,
-  commentId?: string
+  commentId?: string,
+  category?: string
 ) => void
 
 type ReadingActivityMap = Record<
@@ -237,8 +239,16 @@ export function useAppValue() {
     setSelectedProfileUser,
     setSelectedChatUser
   })
-  const { notifications, setNotifications, addNotification, handleNotificationClick } = notif
+  const { notifications, setNotifications, addNotification, handleNotificationClick, routeFromPushData } = notif
   addNotificationRef.current = addNotification
+
+  // Register for push once auth + user resolve (native-only, fail-soft on web).
+  // Deep-links push taps through the same notification router. Re-registers on
+  // each cold start since the token can rotate.
+  useEffect(() => {
+    if (!firebaseUid || !userDataLoaded) return
+    pushService.registerForPush(firebaseUid, routeFromPushData)
+  }, [firebaseUid, userDataLoaded, routeFromPushData])
 
 
   // Reading domain lives in useReading (Phase B). Placed after useBooks,
