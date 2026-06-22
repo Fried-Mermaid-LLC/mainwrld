@@ -128,6 +128,7 @@ export function useUserDataLoader({
             dailyEarnedPoints: profile.dailyEarnedPoints || 0,
             lastPointsReset: profile.lastPointsReset || null,
             membershipStartDate: profile.membershipStartDate || null,
+            premiumSince: profile.premiumSince || null,
             lastMembershipRewardDate: profile.lastMembershipRewardDate || null,
             dailyChaptersPublished: profile.dailyChaptersPublished || 0,
             lastChapterPublishReset: profile.lastChapterPublishReset || 0

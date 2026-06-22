@@ -237,15 +237,17 @@ export const DailyRewardsView = () => {
                 <div className="pt-3 text-center">
                   <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">
                     Member since{" "}
-                    {user.premiumSince
-                      ? new Date(user.premiumSince).toLocaleDateString(
-                          "en-US",
-                          {
-                            month: "short",
+                    {(() => {
+                      const since =
+                        user.premiumSince || user.membershipStartDate;
+                      const d = since ? new Date(since) : null;
+                      return d && !isNaN(d.getTime())
+                        ? d.toLocaleDateString("en-US", {
+                            month: "long",
                             year: "numeric",
-                          },
-                        )
-                      : "today"}
+                          })
+                        : "today";
+                    })()}
                   </span>
                 </div>
               </div>

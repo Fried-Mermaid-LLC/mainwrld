@@ -82,7 +82,7 @@ export function useAuthActions({
                 strikes: (profile as any).strikes || 0,
                 isPremium: (profile as any).isPremium || false,
                 admiringCount: (profile as any).admiringCount || 0,
-                premiumSince: (profile as any).premiumSince || 0
+                premiumSince: (profile as any).premiumSince || undefined
               })
               // Ensure the username custom claim is on the token before the
               // username-scoped subscriptions (chat, notifications) start —
