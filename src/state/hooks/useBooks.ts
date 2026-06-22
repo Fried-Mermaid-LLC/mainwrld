@@ -57,7 +57,6 @@ export function useBooks({
   const [likedBooks, setLikedBooks] = useState<Set<string>>(new Set())
   const [favoriteBookIds, setFavoriteBookIds] = useState<Set<string>>(new Set())
   const likedBooksInteracted = useRef(false)
-  const [spotlightInit, setSpotlightInit] = useState(false)
 
   // Helper to get total likes for a book (handles both old number and new number[] format)
   const getTotalLikes = (likes: number | number[]): number => {
@@ -122,6 +121,9 @@ export function useBooks({
     return () => unsubscribe()
   }, [favoriteBookIds, firebaseUid])
 
+  // Read-only subscription to the server-selected Star of the Week. Selection
+  // is owned by the scheduled rotateSpotlight Cloud Function (X04); the client
+  // no longer computes or writes the spotlight.
   useEffect(() => {
     const unsubscribe = fbService.subscribeToGlobalSpotlight(
       (spotlight: any) => {
@@ -130,14 +132,6 @@ export function useBooks({
     )
     return () => unsubscribe()
   }, [])
-
-  useEffect(() => {
-    if (books.length === 0 || spotlightInit) return
-    setSpotlightInit(true)
-    fbService.ensureGlobalSpotlight(books).catch((err: any) => {
-      console.warn('[MainWRLD] Spotlight disabled:', err?.message || err)
-    })
-  }, [books, spotlightInit])
 
   useEffect(() => {
     setBooks(prev =>
@@ -259,6 +253,12 @@ export function useBooks({
         })
         .catch(console.error)
     }
+
+    // Best-effort per-book favorites counter for the spotlight ranking (X04).
+    // Fire-and-forget — never blocks the favorite UX.
+    fbService
+      .adjustBookFavorite(bookId, isFavorited ? -1 : 1)
+      .catch(() => {})
   }
 
   const handleUnpublish = async (bookId: string) => {
@@ -393,8 +393,6 @@ export function useBooks({
     favoriteBookIds,
     setFavoriteBookIds,
     likedBooksInteracted,
-    spotlightInit,
-    setSpotlightInit,
     getTotalLikes,
     getChapterLikes,
     isBookFavorited,

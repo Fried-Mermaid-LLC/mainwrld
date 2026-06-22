@@ -253,14 +253,13 @@ service cloud.firestore {
     }
 
     // ---- appConfig ----
-    // Global config (spotlight book of the week). Public read so the
-    // home screen can show it before sign-in if desired. Writes go
-    // through the ensureGlobalSpotlight transaction client-side, but
-    // they should really be a Cloud Function in a follow-up — leaving
-    // signed-in write for now to keep the existing flow working.
+    // Global config (spotlight book of the week). Public read so the home
+    // screen can show it before sign-in. The Star of the Week is now written
+    // ONLY by the scheduled rotateSpotlight / rotateSpotlightNow Cloud Functions
+    // (admin SDK, which bypasses rules), so clients may not write it (X04).
     match /appConfig/{docId} {
       allow read: if true;
-      allow write: if isSignedIn();
+      allow write: if false;
     }
 
     // Deny everything else by default.

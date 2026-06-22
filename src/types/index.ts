@@ -182,7 +182,8 @@ export interface Book {
   // the published-prefix length.
   chapterMeta?: ChapterMeta[];
   schemaVersion?: number;
-  favoritesLastWeek?: number;
+  favoritesLastWeek?: number;       // legacy/mock-only; superseded by favoritesTotal (X04)
+  favoritesTotal?: number;          // running per-book favorites count; spotlight ranking signal (X04)
   monetizationAttempts?: number;
   isMonetized?: boolean;
   wasMonetizedBefore?: boolean;
