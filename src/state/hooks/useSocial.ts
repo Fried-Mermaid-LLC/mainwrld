@@ -110,14 +110,18 @@ export function useSocial({
       const unlocked: Record<string, string[]> = {}
       const readingAct: Record<string, any[]> = {}
       users.forEach((u: any) => {
-        if (u.avatarConfig && u.username) configs[u.username] = u.avatarConfig
-        if (u.unlockedItems && u.username)
+        // Never overwrite the CURRENT user's avatarConfig / unlockedItems /
+        // reading activity from the snapshot: all three are owned locally
+        // (useAvatar / useReading) and flushed by usePersist, whose write is
+        // stale by up to the 2s debounce. Letting the snapshot win here reverted
+        // the user's own changes whenever ANY user's doc changed — e.g. saving a
+        // new look in CustomizationView would immediately snap back to the old
+        // config. The current user's own data is seeded at login by
+        // useUserDataLoader. Other users' data still flows in (powers profiles).
+        if (u.avatarConfig && u.username && u.username !== user.username)
+          configs[u.username] = u.avatarConfig
+        if (u.unlockedItems && u.username && u.username !== user.username)
           unlocked[u.username] = u.unlockedItems
-        // Never overwrite the CURRENT user's reading activity from the snapshot:
-        // it is owned locally (useReading) and flushed by usePersist, and the
-        // Firestore copy is stale by up to the 2s debounce. Letting it win here
-        // reverted the user's own Recently Read rail whenever any user's doc
-        // changed. Other users' activity still flows in (powers OtherProfile).
         if (u.readingActivity && u.username && u.username !== user.username)
           readingAct[u.username] = u.readingActivity
       })
