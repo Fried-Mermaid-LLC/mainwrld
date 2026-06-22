@@ -10,6 +10,7 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import App from './App'
+import { playLaunchChime } from './launchChime'
 import './index.css'
 
 // Shared-book deep links on native (F09). The bundled iOS app loads from
@@ -50,6 +51,11 @@ root.render(
     <App />
   </React.StrictMode>
 )
+
+// Fire the launch jingle as early as possible so it overlaps the splash. On
+// native this plays through AVAudioPlayer (immune to WebView autoplay rules);
+// on web it arms on the first gesture. Fail-soft — never blocks the launch.
+playLaunchChime()
 
 // On Capacitor we pick a status-bar style that contrasts with the bg-white
 // app shell. No-op on web, so the guard is just a fast bail-out. The native

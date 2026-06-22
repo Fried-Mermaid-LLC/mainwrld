@@ -10,6 +10,7 @@
     "build:ios": "npm run build:web && cap sync ios"
   },
   "dependencies": {
+    "@capacitor-community/native-audio": "^8.0.0",
     "@capacitor-firebase/crashlytics": "^8.3.0",
     "@capacitor-firebase/messaging": "^8.3.0",
     "@capacitor/app": "^8.1.0",
