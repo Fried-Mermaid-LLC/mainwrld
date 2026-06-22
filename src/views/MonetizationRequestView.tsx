@@ -60,6 +60,10 @@ export const MonetizationRequestView = () => {
   const status = selectedBook?.monetizationStatus
   const isPending = status === 'pending'
   const isDenied = status === 'denied'
+  const isMonetized = !!selectedBook?.isMonetized
+  // Hide the request form whenever the book is already in a terminal/active
+  // monetization state — pending review, or live (monetized).
+  const hideForm = isPending || isMonetized
 
   const eligibility = useMemo(() => {
     if (!selectedBook) return { met: false, reasons: ['No works selected'] }
@@ -180,6 +184,25 @@ export const MonetizationRequestView = () => {
                   style={{ backgroundColor: b.coverColor }}
                 >
                   <CoverImg book={b} />
+                  {(b.isMonetized ||
+                    b.monetizationStatus === 'pending' ||
+                    b.monetizationStatus === 'denied') && (
+                    <div
+                      className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold uppercase tracking-wider text-white ${
+                        b.isMonetized
+                          ? 'bg-green-500'
+                          : b.monetizationStatus === 'pending'
+                          ? 'bg-amber-500'
+                          : 'bg-red-500'
+                      }`}
+                    >
+                      {b.isMonetized
+                        ? 'Live'
+                        : b.monetizationStatus === 'pending'
+                        ? 'Pending'
+                        : 'Denied'}
+                    </div>
+                  )}
                 </div>
                 <p className='text-[10px] font-bold truncate'>{b.title}</p>
               </button>
@@ -202,6 +225,21 @@ export const MonetizationRequestView = () => {
           </div>
         )}
 
+        {/* Already monetized — live on the store, no re-submit. */}
+        {selectedBook && isMonetized && (
+          <div className='p-6 bg-green-50 rounded-3xl border border-green-100'>
+            <h3 className='text-xs font-bold text-green-600 uppercase tracking-widest mb-2 flex items-center gap-2'>
+              <span className='material-icons-round text-sm'>paid</span>
+              Monetized
+            </h3>
+            <p className='text-[11px] text-green-700 font-bold'>
+              "{selectedBook.title}" is live at $
+              {(selectedBook.price ?? selectedBook.requestedPrice ?? price).toFixed(2)}
+              . Readers can buy it now.
+            </p>
+          </div>
+        )}
+
         {/* Denied — show reason; author may re-request within the attempt cap. */}
         {selectedBook && isDenied && (
           <div className='p-6 bg-red-50 rounded-3xl border border-red-100'>
@@ -216,7 +254,7 @@ export const MonetizationRequestView = () => {
           </div>
         )}
 
-        {selectedBook && !isPending && isAdmin && eligibility.reasons.length > 0 && (
+        {selectedBook && !hideForm && isAdmin && eligibility.reasons.length > 0 && (
           <div className='p-6 bg-indigo-50 rounded-3xl border border-indigo-100'>
             <h3 className='text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 flex items-center gap-2'>
               <span className='material-icons-round text-sm'>shield</span>
@@ -229,7 +267,7 @@ export const MonetizationRequestView = () => {
           </div>
         )}
 
-        {selectedBook && !isPending && !eligibility.met && (
+        {selectedBook && !hideForm && !eligibility.met && (
           <div className='p-6 bg-red-50 rounded-3xl border border-red-100'>
             <h3 className='text-xs font-bold text-red-500 uppercase tracking-widest mb-3'>
               Ineligible
@@ -248,7 +286,7 @@ export const MonetizationRequestView = () => {
           </div>
         )}
 
-        {!isPending && (
+        {!hideForm && (
           <section
             className={`space-y-6 ${
               !eligibility.met ? 'opacity-30 pointer-events-none' : ''

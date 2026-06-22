@@ -259,6 +259,12 @@ export const submitMonetizationRequest = onCall<
   if (book.authorUid !== uid) {
     throw new HttpsError('permission-denied', 'Not your book.')
   }
+  // A draft can't be read or sold, so it can never be monetized — applies to
+  // everyone, including admins (this is a fundamental constraint, not an
+  // eligibility prerequisite).
+  if (book.isDraft === true) {
+    throw new HttpsError('failed-precondition', 'Publish the book before monetizing.')
+  }
 
   // Admins bypass the eligibility prerequisites (testing + special cases); the
   // ownership check, payout gate and pending guard below still apply to them.
@@ -347,15 +353,19 @@ export const reviewMonetization = onCall<
   const nowIso = new Date().toISOString()
 
   if (decision === 'approve') {
+    // A draft can't be sold; never monetize one (publish first).
+    if (book.isDraft === true) {
+      throw new HttpsError('failed-precondition', 'Book is a draft — publish it first.')
+    }
     const price = book.requestedPrice
     if (typeof price !== 'number' || price <= 0) {
       throw new HttpsError('failed-precondition', 'No requested price on this book.')
     }
-    if (!allowedPriceTiers(book.chaptersCount || 0).includes(price)) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Requested price no longer valid for the chapter count.'
-      )
+    // The reviewer is always an admin, so gate on "is a real tier" rather than
+    // the chapter-count tier (consistent with the admin submit path, which
+    // bypasses chapter gating).
+    if (!PRICE_TIERS.includes(price)) {
+      throw new HttpsError('failed-precondition', 'Invalid requested price tier.')
     }
     if (!book.sellerStripeAccountId) {
       throw new HttpsError(

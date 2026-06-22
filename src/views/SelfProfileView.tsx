@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { AvatarLayers, getHairPosition } from '@/components/avatar'
 import { Button, CoverImg } from '@/components/sharedComponents'
 import { useApp } from '@/state/AppContext'
@@ -27,9 +28,30 @@ export const SelfProfileView = () => {
     setLastSelectedChapterIndex,
     setWriteReturnView,
     relationships,
-    avatarConfig
+    avatarConfig,
+    handleDeleteBook
   } = useApp()
+  // Distinguish a tap (open draft) from a long-press (action menu). A timer
+  // armed on press opens the dropdown; any tap shorter than the delay cancels
+  // it and opens the draft instead.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFired = useRef(false)
+  const [menuBookId, setMenuBookId] = useState<string | null>(null)
+  const startLongPress = (bookId: string) => {
+    longPressFired.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      setMenuBookId(bookId)
+    }, 500)
+  }
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
   const openDraft = (bookId: string) => {
+    if (longPressFired.current) return
     setLastSelectedBookId(bookId)
     setLastSelectedChapterIndex('0')
     setWriteReturnView('self-profile')
@@ -171,6 +193,14 @@ export const SelfProfileView = () => {
                     style={{ backgroundColor: b.coverColor }}
                   >
                     <CoverImg book={b} />
+                    {b.isMonetized && (
+                      <div className='absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full bg-green-500 text-white text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5 shadow'>
+                        <span className='material-icons-round text-[10px]'>
+                          paid
+                        </span>
+                        Monetized
+                      </div>
+                    )}
                   </div>
                   <div className='px-1'>
                     <p className='text-xs font-bold truncate'>
@@ -202,7 +232,12 @@ export const SelfProfileView = () => {
               <div
                 key={b.id}
                 onClick={() => openDraft(b.id)}
-                className='flex-shrink-0 w-32 cursor-pointer space-y-2'
+                onPointerDown={() => startLongPress(b.id)}
+                onPointerUp={cancelLongPress}
+                onPointerLeave={cancelLongPress}
+                onPointerCancel={cancelLongPress}
+                onContextMenu={e => e.preventDefault()}
+                className='flex-shrink-0 w-32 cursor-pointer space-y-2 select-none relative'
               >
                 <div
                   className='aspect-[2/3] shadow-md overflow-hidden relative'
@@ -219,6 +254,32 @@ export const SelfProfileView = () => {
                     {b.author.displayName}
                   </p>
                 </div>
+                {menuBookId === b.id && (
+                  <>
+                    <div
+                      className='fixed inset-0 z-[59]'
+                      onClick={e => {
+                        e.stopPropagation()
+                        setMenuBookId(null)
+                      }}
+                    />
+                    <div className='absolute top-2 left-2 z-[60] min-w-[9rem] bg-white rounded-xl shadow-xl ring-1 ring-black/5 overflow-hidden animate-in fade-in zoom-in-95 duration-150'>
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          setMenuBookId(null)
+                          handleDeleteBook(b.id)
+                        }}
+                        className='w-full flex items-center gap-2 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50'
+                      >
+                        <span className='material-icons-round text-base'>
+                          delete
+                        </span>
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
             {booksLoading && <BookSkeletons />}
