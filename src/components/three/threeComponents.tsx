@@ -129,6 +129,14 @@ export const AvatarModel: React.FC<{
     const bodyNodeName =
       avatarConfig.gender === 'male' ? 'ManBody' : 'WomanBody'
 
+    // Track which avatar IDs actually matched a GLB mesh node, so we can warn
+    // (dev only) about IDs that render nothing — i.e. a mismatch between an
+    // AVATAR_ITEMS id and the node names the modeller used in the .glb. This is
+    // the "node-name vs avatar-ID consistency check" (X02): file loading is
+    // fine, but a renamed/missing node silently hides the item.
+    const matchedIds = new Set<string>()
+    let bodyMatched = false
+
     scene.traverse((child: any) => {
       if (!child.isMesh) return
 
@@ -137,6 +145,7 @@ export const AvatarModel: React.FC<{
 
       if (child.name.includes(bodyNodeName)) {
         child.visible = true
+        bodyMatched = true
         styleMesh(child, targetColor)
         return
       }
@@ -144,11 +153,25 @@ export const AvatarModel: React.FC<{
       for (let id of activeIds) {
         if (child.name.includes(id)) {
           child.visible = true
+          matchedIds.add(id)
           styleMesh(child)
           break
         }
       }
     })
+
+    if (import.meta.env.DEV) {
+      const orphanIds = activeIds.filter(id => !matchedIds.has(id))
+      if (!bodyMatched)
+        console.warn(
+          `[avatar] body node "${bodyNodeName}" not found in GLB — body will not render`
+        )
+      if (orphanIds.length)
+        console.warn(
+          `[avatar] avatar IDs with no matching GLB mesh node (item won't render):`,
+          orphanIds
+        )
+    }
   }, [scene, avatarConfig, targetColor])
 
   // -----------------------------

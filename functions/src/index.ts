@@ -10,6 +10,8 @@ export {
   moderateCommentOnCreate,
   moderateBookOnWrite,
   moderateChapterOnWrite,
+  moderateChatMessageOnCreate,
+  moderateUsername,
 } from './moderate.js'
 export { getChapterContent } from './chapters.js'
 export { verifyAppleReceipt } from './verifyAppleReceipt.js'

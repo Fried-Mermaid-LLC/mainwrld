@@ -5,7 +5,7 @@ import { auth } from '@/lib/firebase'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as pushService from '@/services/pushService'
-import { containsBadWord, MIN_SIGNUP_AGE } from '@/config/constants'
+import { MIN_SIGNUP_AGE } from '@/config/constants'
 import { ageFromBirthDate } from '@/utils/age'
 import { sendWelcomeEmail } from '@/config/config'
 import type { User, View } from '@/types'
@@ -208,8 +208,11 @@ export function useAuthActions({
       )
       return
     }
-    if (containsBadWord(username) || containsBadWord(displayName)) {
-      setAuthError('Username or display name contains inappropriate language.')
+    // Moderate username + display name via OpenAI (server-side) before creating
+    // the account, so a flagged name is rejected up front rather than torn down
+    // afterwards. Fail-open: a moderation hiccup must not block signup.
+    if (await fbService.moderateUsername(username, displayName)) {
+      setAuthError('Username or display name contains inappropriate content.')
       return
     }
 

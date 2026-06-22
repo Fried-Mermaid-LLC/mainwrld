@@ -3,6 +3,7 @@ import {
   onDocumentUpdated,
   onDocumentWritten,
 } from 'firebase-functions/v2/firestore'
+import { onCall } from 'firebase-functions/v2/https'
 import { defineSecret } from 'firebase-functions/params'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions/v2'
@@ -73,7 +74,7 @@ const moderateText = async (
 }
 
 const logFlag = async (
-  kind: 'Comment' | 'Book',
+  kind: 'Comment' | 'Book' | 'Chat',
   targetId: string,
   authorUsername: string | undefined,
   reason: string,
@@ -230,5 +231,63 @@ export const moderateChapterOnWrite = onDocumentWritten(
       })
       return
     }
+  }
+)
+
+// ---- Chat messages ----
+//
+// The client no longer pre-filters chat with a word list (X08); moderation is
+// fully OpenAI-driven here. Post-moderation: a flagged message is deleted right
+// after the write, mirroring comment moderation. (Revise-not-delete UX is F08's
+// concern.)
+
+export const moderateChatMessageOnCreate = onDocumentCreated(
+  {
+    region: 'us-central1',
+    document: 'chatMessages/{messageId}',
+    secrets: [OPENAI_API_KEY],
+  },
+  async (event) => {
+    const key = OPENAI_API_KEY.value()
+    if (!key) {
+      logger.warn('OPENAI_API_KEY unset — skipping chat moderation')
+      return
+    }
+    const snap = event.data
+    if (!snap) return
+    const data = snap.data()
+    const text = String(data?.text ?? '')
+    const author = data?.from as string | undefined
+    const verdict = await moderateText(text, key)
+    if (!verdict.flagged) return
+    await snap.ref.delete()
+    await logFlag('Chat', event.params.messageId, author, verdict.topCategory ?? 'unknown', verdict.score)
+    logger.info('moderated chat message removed', {
+      id: event.params.messageId,
+      category: verdict.topCategory,
+      score: verdict.score,
+    })
+  }
+)
+
+// ---- Signup username / display name ----
+//
+// OpenAI can't see the signup form, and there is no content doc to moderate
+// post-hoc, so the client calls this synchronously BEFORE creating the account
+// and rejects a flagged name (instead of tearing down a created account on a
+// false positive). Unauthenticated by design (the user has no account yet).
+// Fail-open: if the key is unset, returns flagged:false so signup is never
+// blocked by a misconfiguration.
+
+export const moderateUsername = onCall(
+  { region: 'us-central1', secrets: [OPENAI_API_KEY] },
+  async (req) => {
+    const key = OPENAI_API_KEY.value()
+    if (!key) return { flagged: false }
+    const username = String((req.data as any)?.username ?? '')
+    const displayName = String((req.data as any)?.displayName ?? '')
+    const combined = `${username} ${displayName}`.trim()
+    const verdict = await moderateText(combined, key)
+    return { flagged: verdict.flagged, category: verdict.topCategory ?? null }
   }
 )
