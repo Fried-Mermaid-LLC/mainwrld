@@ -1,6 +1,7 @@
 import React from 'react';
 import { AvatarConfig, AvatarItem, AvatarCategory, AvatarGender } from '@/types';
 import { BASE } from '@/config/config';
+import { SafeImg } from '@/components/SafeImg';
 
 export const DEFAULT_HAIR_POSITIONS: Record<string, { width: string; left: string; top: string }> = {
   W_Hair_1:    { width: '33%', left: '33.5%', top: '-2.5%' },
@@ -201,10 +202,10 @@ export const AvatarLayers = ({
 
   return (
     <div className={containerClassName} style={containerStyle}>
-      {bodySrc && <img src={bodySrc} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 1 }} />}
-      {avatarConfig.faceId !== 'no_face' && faceSrc && <img src={faceSrc} className="absolute" style={{ zIndex: 2, ...faceStyle}} />}
-      {outfitSrc && <img src={outfitSrc} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 3 }} />}
-      {avatarConfig.hairId !== 'none' && hairSrc && <img src={hairSrc} className="absolute" style={{ zIndex: 4, ...hairStyle}} />}
+      {bodySrc && <SafeImg src={bodySrc} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 1 }} />}
+      {avatarConfig.faceId !== 'no_face' && faceSrc && <SafeImg src={faceSrc} className="absolute" style={{ zIndex: 2, ...faceStyle}} />}
+      {outfitSrc && <SafeImg src={outfitSrc} className="absolute inset-0 w-full h-full object-contain" style={{ zIndex: 3 }} />}
+      {avatarConfig.hairId !== 'none' && hairSrc && <SafeImg src={hairSrc} className="absolute" style={{ zIndex: 4, ...hairStyle}} />}
     </div>
   );
 };

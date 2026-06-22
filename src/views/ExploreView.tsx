@@ -27,7 +27,6 @@ export const ExploreView = () => {
       !b.isDraft &&
       !(userIsUnder16 && b.isExplicit)
   )
-  const spotlightSourceBooks = rawBooks.filter((b: Book) => !b.isDraft)
   const spotlightBookId = globalSpotlightBookId
   const onSelect = (b: Book) => {
     setSelectedBook(b)
@@ -135,35 +134,14 @@ export const ExploreView = () => {
       .slice(0, 5) // Limit to 5 results
   }, [users, cleanQuery, isHashtagSearch, blockedUsers])
 
+  // Star of the Week is selected SERVER-SIDE (X04). The client is a pure reader:
+  // look the server's chosen id up in the visible (non-draft, age-gated,
+  // unblocked) books list. If it is unset or not visible (taken down / draft /
+  // blocked author / explicit-for-minor), render nothing — never invent a pick.
   const spotlightBook = useMemo(() => {
-    const sourceBooks: Book[] =
-      (spotlightSourceBooks as Book[]).length > 0
-        ? (spotlightSourceBooks as Book[])
-        : books
-    const publicBooks = sourceBooks.filter((b: Book) => !b.isDraft)
-    if (publicBooks.length === 0) return null
-
-    const sortedByFaves = [...publicBooks].sort((a, b) => {
-      const diff = (b.favoritesLastWeek || 0) - (a.favoritesLastWeek || 0)
-      if (diff !== 0) return diff
-      return (
-        new Date(b.publishedDate).getTime() -
-        new Date(a.publishedDate).getTime()
-      )
-    })
-
-    if (spotlightBookId) {
-      const persisted = publicBooks.find((b: Book) => b.id === spotlightBookId)
-      if (persisted) return persisted
-    }
-
-    const WEEK_MS = 7 * 24 * 60 * 60 * 1000
-    const weekEpoch = Math.floor(Date.now() / WEEK_MS)
-    const spotlightIndex =
-      ((weekEpoch % sortedByFaves.length) + sortedByFaves.length) %
-      sortedByFaves.length
-    return sortedByFaves[spotlightIndex]
-  }, [books, spotlightSourceBooks, spotlightBookId])
+    if (!spotlightBookId) return null
+    return books.find((b: Book) => b.id === spotlightBookId) || null
+  }, [books, spotlightBookId])
 
   const topAuthors = useMemo(() => {
     const authorMap: Record<string, { user: User; totalLikes: number }> = {}
@@ -209,12 +187,15 @@ export const ExploreView = () => {
   const recentlyRead = useMemo(() => {
     const activities = readingActivity[currentUsername]
     if (!activities || activities.length === 0) return []
-    return activities
+    // Copy before sorting — sorting in place mutates shared state. Keep up to
+    // 10 (the stored array's own cap) so the rail can fill the 6/20 the section
+    // loop shows; the loop no longer re-sorts Recently Read by publishedDate.
+    return [...activities]
       .sort(
         (a, b) =>
           new Date(b.lastRead).getTime() - new Date(a.lastRead).getTime()
       )
-      .slice(0, 3)
+      .slice(0, 10)
       .map(a => books.find((b: Book) => b.id === a.bookId))
       .filter(Boolean)
   }, [books, readingActivity, currentUsername])
@@ -538,12 +519,17 @@ export const ExploreView = () => {
                     selectedGenres.some(g => (b.genres || []).includes(g))
                   )
                 : section.data
-            // Apply sort order
-            sectionData = [...sectionData].sort((a: any, b: any) => {
-              const dateA = new Date(a.publishedDate).getTime()
-              const dateB = new Date(b.publishedDate).getTime()
-              return sortOrder === 'newest' ? dateB - dateA : dateA - dateB
-            })
+            // Apply sort order — but NOT to Recently Read, which must keep the
+            // lastRead-descending order from its memo. Re-sorting it by
+            // publishedDate (and flipping it with the newest/oldest toggle) is
+            // what made the most-recently-read book not show first.
+            if (section.title !== 'Recently Read') {
+              sectionData = [...sectionData].sort((a: any, b: any) => {
+                const dateA = new Date(a.publishedDate).getTime()
+                const dateB = new Date(b.publishedDate).getTime()
+                return sortOrder === 'newest' ? dateB - dateA : dateA - dateB
+              })
+            }
             const isExpanded = expandedSections.has(section.title)
             const displayData = isExpanded
               ? sectionData.slice(0, 20)

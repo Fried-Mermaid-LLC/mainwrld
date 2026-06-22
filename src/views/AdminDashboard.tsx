@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { CoverImg } from '@/components/sharedComponents'
+import { SafeImg } from '@/components/SafeImg'
 import { AVATAR_ITEMS } from '@/components/avatar'
 import type { Report, Book, UserRecord, Comment, AvatarItem } from '@/types'
 import { useApp } from '@/state/AppContext'
@@ -574,7 +575,7 @@ export const AdminDashboard = () => {
                       <div className='flex items-center gap-3 flex-1 min-w-0'>
                         <div className='w-12 h-12 rounded-xl bg-white border border-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center'>
                           {item.path ? (
-                            <img
+                            <SafeImg
                               src={item.path}
                               className='w-full h-full object-contain'
                             />

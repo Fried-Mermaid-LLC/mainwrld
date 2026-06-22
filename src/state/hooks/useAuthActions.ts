@@ -3,7 +3,10 @@ import type { Dispatch, SetStateAction } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import * as fbService from '@/services/firebaseService'
-import { containsBadWord } from '@/config/constants'
+import * as presenceService from '@/services/presenceService'
+import * as pushService from '@/services/pushService'
+import { containsBadWord, MIN_SIGNUP_AGE } from '@/config/constants'
+import { ageFromBirthDate } from '@/utils/age'
 import { sendWelcomeEmail } from '@/config/config'
 import type { User, View } from '@/types'
 
@@ -28,7 +31,7 @@ interface AuthActionsDeps {
   }
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
 }
 
@@ -82,7 +85,7 @@ export function useAuthActions({
                 strikes: (profile as any).strikes || 0,
                 isPremium: (profile as any).isPremium || false,
                 admiringCount: (profile as any).admiringCount || 0,
-                premiumSince: (profile as any).premiumSince || 0
+                premiumSince: (profile as any).premiumSince || undefined
               })
               // Ensure the username custom claim is on the token before the
               // username-scoped subscriptions (chat, notifications) start —
@@ -119,6 +122,11 @@ export function useAuthActions({
   const handleLogout = async () => {
     // Mark offline in Firestore before logging out
     if (firebaseUid) {
+      // Stop receiving push for the signed-out account (X01, native-only).
+      pushService.unregisterPush(firebaseUid).catch(() => {})
+      // Tear down the RTDB presence connection (X06) so the device stops
+      // counting as online; the mirror flips the Firestore doc offline too.
+      presenceService.goOffline(firebaseUid)
       await fbService
         .updateUserProfile(firebaseUid, {
           isOnline: false,
@@ -205,6 +213,19 @@ export function useAuthActions({
       return
     }
 
+    // COPPA: block under-13 signups (X09). UX gate only — the real enforcement
+    // is server-side in blockUnderageSignup, which tears down any account that
+    // bypasses this check.
+    const age = ageFromBirthDate(signUpForm.birthDate)
+    if (age === null) {
+      setAuthError('Please enter your birth date.')
+      return
+    }
+    if (age < MIN_SIGNUP_AGE) {
+      setAuthError('You must be at least 13 years old to create an account.')
+      return
+    }
+
     // Check username uniqueness via Firestore
     try {
       const usernameAvailable = await fbService.checkUsernameAvailable(username)
@@ -263,7 +284,12 @@ export function useAuthActions({
         'Welcome to MainWRLD!',
         `Hey ${displayName}, start exploring stories and connecting with other readers!`,
         'celebration',
-        username
+        username,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'system'
       )
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {

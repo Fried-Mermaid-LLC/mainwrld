@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import { ageFromBirthDate } from '@/utils/age'
+import { EXPLICIT_MIN_AGE } from '@/config/constants'
 import type { User, Relationship, AvatarConfig, View } from '@/types'
 
 type ReadingActivityMap = Record<
@@ -25,7 +27,7 @@ interface SocialDeps {
   }) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
   setAllAvatarConfigs: Dispatch<SetStateAction<Record<string, AvatarConfig>>>
   setAllUnlockedItems: Dispatch<SetStateAction<Record<string, string[]>>>
@@ -87,13 +89,12 @@ export function useSocial({
     const userRecord = registeredUsers.find(
       u => u.username === user.username
     ) as any
-    if (!userRecord?.birthDate) return false
-    const birth = new Date(userRecord.birthDate)
-    const today = new Date()
-    let age = today.getFullYear() - birth.getFullYear()
-    const m = today.getMonth() - birth.getMonth()
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
-    return age < 16
+    const age = ageFromBirthDate(userRecord?.birthDate)
+    // FAIL-CLOSED for explicit reads (X09 §5.1.a recommendation): an unknown/
+    // missing birth date is treated as under-16, so explicit content is hidden
+    // until a valid date is on file. Safer for the Apple-review / legal angle;
+    // flip to `age !== null && age < EXPLICIT_MIN_AGE` for fail-open.
+    return age === null || age < EXPLICIT_MIN_AGE
   }, [registeredUsers, user.username])
   // Blocked users state (loaded from Firestore user doc)
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
@@ -112,7 +113,12 @@ export function useSocial({
         if (u.avatarConfig && u.username) configs[u.username] = u.avatarConfig
         if (u.unlockedItems && u.username)
           unlocked[u.username] = u.unlockedItems
-        if (u.readingActivity && u.username)
+        // Never overwrite the CURRENT user's reading activity from the snapshot:
+        // it is owned locally (useReading) and flushed by usePersist, and the
+        // Firestore copy is stale by up to the 2s debounce. Letting it win here
+        // reverted the user's own Recently Read rail whenever any user's doc
+        // changed. Other users' activity still flows in (powers OtherProfile).
+        if (u.readingActivity && u.username && u.username !== user.username)
           readingAct[u.username] = u.readingActivity
       })
       if (Object.keys(configs).length > 0) {
@@ -227,7 +233,12 @@ export function useSocial({
       'New Admirer',
       `${user.displayName} is now admiring you!`,
       'person_add',
-      targetUser.username
+      targetUser.username,
+      user.username, // sender — recipient deep-links to the admirer's profile
+      undefined,
+      undefined,
+      undefined,
+      'newAdmirers'
     )
 
     // Check if this creates a mutual (target already admires current user)
@@ -240,13 +251,23 @@ export function useSocial({
         'Mutual Connection!',
         `You and ${targetUser.displayName} are now mutuals!`,
         'people',
-        user.username
+        user.username,
+        undefined,
+        targetUser.username, // targetId — the OTHER party's profile to open
+        undefined,
+        undefined,
+        'newAdmirers'
       )
       addNotification(
         'Mutual Connection!',
         `You and ${user.displayName} are now mutuals!`,
         'people',
-        targetUser.username
+        targetUser.username,
+        undefined,
+        user.username,
+        undefined,
+        undefined,
+        'newAdmirers'
       )
     } else {
       // Firestore fallback: local relationships state might not have the reverse relationship yet
@@ -258,13 +279,23 @@ export function useSocial({
               'Mutual Connection!',
               `You and ${targetUser.displayName} are now mutuals!`,
               'people',
-              user.username
+              user.username,
+              undefined,
+              targetUser.username,
+              undefined,
+              undefined,
+              'newAdmirers'
             )
             addNotification(
               'Mutual Connection!',
               `You and ${user.displayName} are now mutuals!`,
               'people',
-              targetUser.username
+              targetUser.username,
+              undefined,
+              user.username,
+              undefined,
+              undefined,
+              'newAdmirers'
             )
           }
         })
@@ -282,7 +313,13 @@ export function useSocial({
     addNotification(
       'User Blocked',
       `You blocked @${targetUsername}. You will no longer see their content.`,
-      'block'
+      'block',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'system'
     )
     setView('home')
   }

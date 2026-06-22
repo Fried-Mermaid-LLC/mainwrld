@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { ChapterAdBanner } from '@/components/ChapterAdBanner'
 import { renderFormattedContent } from '@/utils/renderFormattedContent'
 import type { BookProgress } from '@/types'
 import { useApp } from '@/state/AppContext'
@@ -22,7 +21,8 @@ export const ReadingView = () => {
     readingChapterIndex,
     handleBookProgressUpdate,
     handleShareBook,
-    getUserBookProgress
+    getUserBookProgress,
+    userIsUnder16
   } = useApp()
   const currentUser = user
   const book = selectedBook
@@ -465,6 +465,27 @@ export const ReadingView = () => {
     setLocalScrollProgress(0)
   }, [currentChapterIdx])
 
+  // Defense in depth (X09): an under-16 reader must never open an explicit book,
+  // even if it reached here via a stale selectedBook / shared link / spotlight.
+  if (userIsUnder16 && book?.isExplicit) {
+    return (
+      <div className='fixed inset-0 bg-white flex flex-col items-center justify-center px-10 text-center'>
+        <span className='material-icons-round text-gray-300 text-5xl mb-4'>
+          lock
+        </span>
+        <p className='text-sm font-bold text-gray-500 mb-2'>
+          This book isn’t available for your account
+        </p>
+        <button
+          onClick={() => setView('explore')}
+          className='mt-6 text-xs font-bold uppercase tracking-widest text-accent'
+        >
+          Back to Explore
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div
       className={`fixed inset-0 animate-in fade-in duration-500 overflow-hidden flex flex-col ${
@@ -657,10 +678,6 @@ export const ReadingView = () => {
                 renderFormattedContent(chapterContent)
               )}
             </div>
-            <ChapterAdBanner
-              isPremium={currentUser?.isPremium}
-              inverted={settings.inverted}
-            />
             {/* Chapter navigation buttons for scroll mode */}
             {visibleChapters.length > 1 && (
               <div className='flex justify-between items-center pt-8 pb-4'>
@@ -752,10 +769,6 @@ export const ReadingView = () => {
                   renderFormattedContent(chapterContent)
                 )}
               </div>
-              <ChapterAdBanner
-                isPremium={currentUser?.isPremium}
-                inverted={settings.inverted}
-              />
             </div>
           </div>
         </div>

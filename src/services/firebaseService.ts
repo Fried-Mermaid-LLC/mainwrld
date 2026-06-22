@@ -30,7 +30,7 @@ import {
   where,
   orderBy,
   addDoc,
-  runTransaction,
+  increment,
   writeBatch,
   deleteField,
   serverTimestamp,
@@ -66,7 +66,9 @@ export const signUp = async (
     mutualsCount: 0,
     admiringCount: 0,
     strikes: 0,
-    isOnline: true,
+    // Presence is owned by the RTDB mirror (X06); seed offline so a user who
+    // signs up but never opens a presence connection isn't shown online.
+    isOnline: false,
     activity: 'Idle',
     isPremium: false,
     premiumSince: null,
@@ -185,6 +187,16 @@ export const getUserProfile = async (uid: string) => {
 
 export const updateUserProfile = async (uid: string, data: Partial<DocumentData>) => {
   await updateDoc(doc(db, 'users', uid), data);
+};
+
+// Push device tokens (X01). One per device; the sendPushOnNotification trigger
+// fans out to all and prunes stale ones server-side.
+export const addFcmToken = async (uid: string, token: string) => {
+  await updateDoc(doc(db, 'users', uid), { fcmTokens: arrayUnion(token) });
+};
+
+export const removeFcmToken = async (uid: string, token: string) => {
+  await updateDoc(doc(db, 'users', uid), { fcmTokens: arrayRemove(token) });
 };
 
 // Atomic array operations for library (order-independent, no race conditions).
@@ -570,20 +582,14 @@ type SpotlightDoc = {
   spotlightBookId?: string;
   weekEpoch?: number;
   chosenIds?: string[];
+  score?: number;
+  source?: string;
 };
 
-const SPOTLIGHT_MS = 7 * 24 * 60 * 60 * 1000;
-
-const getWeekEpoch = () => Math.floor(Date.now() / SPOTLIGHT_MS);
-
-const sortSpotlightCandidates = (books: any[]) => {
-  return [...books].sort((a, b) => {
-    const favDiff = (b.favoritesLastWeek || 0) - (a.favoritesLastWeek || 0);
-    if (favDiff !== 0) return favDiff;
-    return new Date(b.publishedDate || 0).getTime() - new Date(a.publishedDate || 0).getTime();
-  });
-};
-
+// The Star of the Week is now selected SERVER-SIDE by the scheduled
+// rotateSpotlight Cloud Function (functions/src/spotlight.ts), which is the
+// single writer of appConfig/spotlight. The client only reads it via this
+// subscription — there is no client-side selection / transaction anymore.
 export const subscribeToGlobalSpotlight = (
   callback: (spotlight: SpotlightDoc | null) => void
 ): Unsubscribe => {
@@ -603,51 +609,14 @@ export const subscribeToGlobalSpotlight = (
   );
 };
 
-export const ensureGlobalSpotlight = async (books: any[]) => {
-  const candidates = sortSpotlightCandidates(books.filter((b: any) => b?.id && !b.isDraft));
-  if (candidates.length === 0) return null;
-
-  const spotlightRef = doc(db, 'appConfig', 'spotlight');
-  const candidateIds = new Set(candidates.map((b: any) => b.id));
-  const currentWeekEpoch = getWeekEpoch();
-
-  return runTransaction(db, async (tx) => {
-    const snapshot = await tx.get(spotlightRef);
-    const data = snapshot.exists() ? (snapshot.data() as SpotlightDoc) : {};
-
-    const chosenIds = Array.isArray(data.chosenIds)
-      ? data.chosenIds.filter((id: string) => candidateIds.has(id))
-      : [];
-    const storedWeekEpoch = typeof data.weekEpoch === 'number' ? data.weekEpoch : -1;
-    const storedSpotlightBookId = typeof data.spotlightBookId === 'string' ? data.spotlightBookId : '';
-    const storedStillValid = !!storedSpotlightBookId && candidateIds.has(storedSpotlightBookId);
-
-    if (storedWeekEpoch === currentWeekEpoch && storedStillValid) {
-      return {
-        spotlightBookId: storedSpotlightBookId,
-        weekEpoch: storedWeekEpoch,
-        chosenIds,
-      };
-    }
-
-    let nextChosenIds = [...chosenIds];
-    let unchosen = candidates.filter((b: any) => !nextChosenIds.includes(b.id));
-    if (unchosen.length === 0) {
-      nextChosenIds = [];
-      unchosen = [...candidates];
-    }
-
-    const chosen = unchosen[0] || candidates[0];
-    const nextState = {
-      spotlightBookId: chosen.id,
-      weekEpoch: currentWeekEpoch,
-      chosenIds: [...nextChosenIds, chosen.id],
-      updatedAt: serverTimestamp(),
-    };
-
-    tx.set(spotlightRef, nextState, { merge: true });
-    return nextState;
-  });
+// Best-effort per-book favorites counter so the spotlight ranking has a real
+// signal (favorites are otherwise stored only per-user). Fire-and-forget — must
+// never gate the favorite UX. Mirrors the where('id','==') lookup used elsewhere.
+export const adjustBookFavorite = async (bookId: string, delta: 1 | -1) => {
+  const q = query(collection(db, 'books'), where('id', '==', bookId));
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return;
+  await updateDoc(snapshot.docs[0].ref, { favoritesTotal: increment(delta) });
 };
 
 // ==================== RELATIONSHIPS ====================

@@ -79,7 +79,7 @@ export const AvatarModel: React.FC<{
   isMoving = false
 }) => {
   // Animated avatar models are served from public/characters_animated/. useGLTF
-  // caches by URL, so the ~58MB man / ~11MB woman models load once and are
+  // caches by URL, so the ~16MB man / ~11MB woman models load once and are
   // shared across every avatar in the 3D world.
   const modelPath = avatarConfig
     ? `${BASE}characters_animated/animated_models/${

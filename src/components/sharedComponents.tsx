@@ -1,5 +1,6 @@
 import React from 'react';
 import { Book } from '@/types';
+import { BASE } from '@/config/config';
 
 export const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }: any) => {
   const base = "h-14 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2";
@@ -38,10 +39,13 @@ export const Input = ({ label, type = 'text', value, onChange, placeholder, desc
 export const CoverImg = ({ book }: { book: Book }) => book.coverImage ? (
   <img src={book.coverImage} className="absolute inset-0 w-full h-full object-cover z-0" />
 ) : (
-  <div className="absolute inset-0 flex items-center justify-center p-4 z-0">
-    <span className="text-white text-center font-bold text-lg leading-tight drop-shadow-lg" style={{ textShadow: '0 2px 6px rgba(0,0,0,0.3)' }}>
-      {book.title}
-    </span>
+  <div className="absolute inset-0 flex items-center justify-center p-6 z-0">
+    <img
+      src={`${BASE}logo.png`}
+      alt={book.title}
+      className="w-3/5 max-w-[88px] h-auto object-contain opacity-95"
+      style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.35))' }}
+    />
   </div>
 );
 

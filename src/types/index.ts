@@ -12,6 +12,10 @@ export interface User {
   email?: string;
   isOnline: boolean;
   activity: 'Reading' | 'Writing' | 'Idle';
+  lastOnline?: string;                // ISO timestamp, mirrored from presence (X06)
+  currentBookId?: string | null;      // book actively being read; null/absent when not reading (X06)
+  notificationPrefs?: NotificationPrefs;  // per-category in-app/push prefs (X01); default all-on
+  fcmTokens?: string[];               // registered device push tokens (X01)
   position: [number, number, number];
   isMutual: boolean;
   points: number;
@@ -53,6 +57,28 @@ export interface UserRecord extends User {
   birthDate?: string;
 }
 
+// Notification preference categories (X01, shared with F06 settings).
+// Label -> category mapping:
+//   newAdmirers -> "New Admirer", "Mutual Connection!"
+//   bookLikes   -> "Chapter Liked"
+//   comments    -> "New Comment", "Comment Liked"
+//   appUpdates  -> "New Book", "New Chapter" (author broadcasts)
+export interface NotificationPrefs {
+  newAdmirers: boolean;
+  bookLikes: boolean;
+  comments: boolean;
+  appUpdates: boolean;
+  push?: boolean;          // master push toggle; false/undefined = push off
+}
+
+export type NotificationCategory =
+  | 'newAdmirers'
+  | 'bookLikes'
+  | 'comments'
+  | 'appUpdates'
+  | 'messages'
+  | 'system';
+
 export interface NotificationItem {
   id: string;
   title: string;
@@ -65,6 +91,7 @@ export interface NotificationItem {
   targetId?: string;
   targetChapterIndex?: number;
   commentId?: string;
+  category?: NotificationCategory;
 }
 
 export interface ChatMessage {
@@ -180,7 +207,8 @@ export interface Book {
   // the published-prefix length.
   chapterMeta?: ChapterMeta[];
   schemaVersion?: number;
-  favoritesLastWeek?: number;
+  favoritesLastWeek?: number;       // legacy/mock-only; superseded by favoritesTotal (X04)
+  favoritesTotal?: number;          // running per-book favorites count; spotlight ranking signal (X04)
   monetizationAttempts?: number;
   isMonetized?: boolean;
   wasMonetizedBefore?: boolean;

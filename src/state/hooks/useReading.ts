@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { MAX_DAILY_CHAPTERS, containsBadWord } from '@/config/constants'
 import type { User, Book, BookProgress, View, Relationship } from '@/types'
@@ -19,7 +20,7 @@ interface ReadingDeps {
   relationships: Relationship[]
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
 }
 
@@ -461,7 +462,11 @@ export function useReading({
                     `"${existingBook.title}" has a new chapter!`,
                     'menu_book',
                     username,
-                    user?.username
+                    user?.username,
+                    currentPublishingId || existingBook.id, // targetId = book id
+                    undefined,
+                    undefined,
+                    'appUpdates'
                   )
                 }
               }
@@ -526,7 +531,11 @@ export function useReading({
               `${user?.displayName} published a new book: "${currentPublishingTitle}"`,
               'auto_stories',
               username,
-              user?.username
+              user?.username,
+              bookId, // targetId = the newly-created book id
+              undefined,
+              undefined,
+              'appUpdates'
             )
           }
         })
@@ -783,14 +792,16 @@ export function useReading({
         })
       return { ...prev, [user.username]: userActivity.slice(0, 10) }
     })
-    // Update user activity status to "Reading"
+    // Update user activity status to "Reading" via RTDB presence (X06) so the
+    // live "currently reading" signal carries the book id and self-clears on
+    // disconnect; the mirror Cloud Function writes it back to Firestore. (Do
+    // NOT write activity to Firestore directly here — that would fight the
+    // mirror.)
+    if (firebaseUid) {
+      presenceService.setActivity(firebaseUid, 'Reading', bookId)
+    }
     if (user.activity !== 'Reading') {
       setUser(prev => ({ ...prev, activity: 'Reading' }))
-      if (firebaseUid) {
-        fbService
-          .updateUserProfile(firebaseUid, { activity: 'Reading' })
-          .catch(console.error)
-      }
     }
   }
 

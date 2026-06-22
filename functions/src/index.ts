@@ -25,3 +25,7 @@ export {
   createBookCheckoutSession,
 } from './stripeConnect.js'
 export { onBookMonetized } from './monetization.js'
+export { mirrorPresence } from './presence.js'
+export { rotateSpotlight, rotateSpotlightNow } from './spotlight.js'
+export { blockUnderageSignup } from './blockUnderageSignup.js'
+export { sendPushOnNotification } from './sendPushOnNotification.js'

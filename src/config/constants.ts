@@ -7,6 +7,10 @@ export const COMMENT_LIKES_THRESHOLD = 50;
 export const CHAPTER_LIKES_THRESHOLD = 10;
 export const MAX_DAILY_CHAPTERS = 7;
 export const MAX_WORD_COUNT = 11000;
+// Age gates (X09). MIN_SIGNUP_AGE: COPPA hard floor for account creation.
+// EXPLICIT_MIN_AGE: below this, explicit books are hidden everywhere.
+export const MIN_SIGNUP_AGE = 13;
+export const EXPLICIT_MIN_AGE = 16;
 export const GENRE_LIST = ['Mystery', 'Sci-Fi', 'Romance', 'Horror', 'Dystopian', 'Fantasy', 'Action', 'Drama', 'Western', 'Fiction', 'Non-Fiction', 'Thriller', 'FanFic', 'Poetry', 'Religious', 'Erotica', 'LGBTQ+', 'Self-Help', 'Sports'];
 
 // ---- Monetization pricing (F01) ----
@@ -65,10 +69,20 @@ export function minLikesPerPublishedChapter(book: {
 }
 
 export const BAD_WORDS = ['fuck','dick','cock','bastard','slut','cunt','nigger','nigga','n1gger','nigg3r','fag','faggot','retard','rape','penis','vagina','anal','porn','hentai','cum','jizz','sex','xxx','tits','kys','kms','stfu'];
-export const containsBadWord = (text: string): boolean => {
-  const lower = text.toLowerCase().replace(/[^a-z]/g, '');
-  return BAD_WORDS.some(word => lower.includes(word));
-};
+// Whole-word, boundary-aware matching. The previous implementation stripped all
+// non-letters and did a substring match, which over-blocked innocent words
+// ("grape" → "rape", "Sussex" → "sex", "Hancock" → "cock", "document" → "cum")
+// and, by stripping digits, also let the leetspeak entries (n1gger/nigg3r)
+// slip through. \b isolates whole tokens; matching the raw text preserves
+// digits so the leetspeak entries match literally. Compiled once at module load.
+// NOTE: keep this list in sync with any server-side mirror (functions/).
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const BAD_WORD_REGEX = new RegExp(
+  `\\b(?:${BAD_WORDS.map(escapeRegExp).join('|')})\\b`,
+  'i'
+);
+export const containsBadWord = (text: string): boolean =>
+  BAD_WORD_REGEX.test(text ?? '');
 
 export const SKIN_TONE_COLORS: Record<string, string> = {
   A1: '#FDDCC4', A2: '#F2C4A0', A3: '#D9A87C', A4: '#C68E5B', A5: '#A0714A', A5_5: '#9B6B45', A6: '#7A5539', A7: '#4A3228',
@@ -85,6 +99,8 @@ export default {
   CHAPTER_LIKES_THRESHOLD,
   MAX_DAILY_CHAPTERS,
   MAX_WORD_COUNT,
+  MIN_SIGNUP_AGE,
+  EXPLICIT_MIN_AGE,
   GENRE_LIST,
   PRICE_TIERS,
   allowedPriceTiers,

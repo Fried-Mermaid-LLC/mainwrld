@@ -12,7 +12,7 @@ interface CommentsDeps {
   showToast: (message: string, icon?: string) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
   ) => void
   awardPoints: (amount: number, reason: string) => void
   rewardedItems: Set<string>
@@ -95,7 +95,8 @@ export function useComments({
         user.username,
         selectedBook.id,
         chapterIndex,
-        createdCommentId || newComment.id
+        createdCommentId || newComment.id,
+        'comments'
       )
 
       showToast('Your comment has been successfully added.')
@@ -151,7 +152,8 @@ export function useComments({
       user.username,
       comment.bookId,
       comment.chapterIndex,
-      comment.id
+      comment.id,
+      'comments'
     )
 
     // Earned points: award comment author 1 pt when comment hits like threshold

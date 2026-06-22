@@ -12,6 +12,7 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
+import { getDatabase } from 'firebase/database'
 
 const requireEnv = (key: keyof ImportMetaEnv): string => {
   const value = import.meta.env[key]
@@ -31,6 +32,9 @@ const firebaseConfig = {
   messagingSenderId: requireEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
   appId: requireEnv('VITE_FIREBASE_APP_ID'),
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  // Realtime Database backs presence (onDisconnect). The JS URL and the native
+  // GoogleService-Info.plist must point at the SAME RTDB instance/region.
+  databaseURL: requireEnv('VITE_FIREBASE_DATABASE_URL'),
 }
 
 const app = initializeApp(firebaseConfig)
@@ -73,4 +77,6 @@ const initFirestore = (): Firestore => {
 
 export const db = initFirestore()
 export const storage = getStorage(app)
+// Realtime Database — used only for presence (.info/connected + onDisconnect).
+export const rtdb = getDatabase(app)
 export default app

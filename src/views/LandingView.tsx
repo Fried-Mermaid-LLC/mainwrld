@@ -1,5 +1,6 @@
 import { BASE } from '@/config/config'
 import { Button } from '@/components/sharedComponents'
+import { SafeImg } from '@/components/SafeImg'
 import { useApp } from '@/state/AppContext'
 
 export const LandingView = () => {
@@ -9,12 +10,12 @@ export const LandingView = () => {
       <div className='min-h-dvh flex flex-col px-8 pt-safe-top pb-safe-bottom'>
         {/* Hero */}
         <div className='flex-1 flex flex-col items-center justify-center text-center py-16'>
-          <img
+          <SafeImg
             src={`${BASE}logo.png`}
             alt='MainWRLD'
             className='w-24 h-24 mb-6 drop-shadow-xl'
           />
-          <img
+          <SafeImg
             src={`${BASE}wordlogo.png`}
             alt='MainWRLD'
             className='h-7 mb-8'
