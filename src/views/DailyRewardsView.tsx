@@ -8,6 +8,20 @@ import {
 } from "@/config/config";
 import { useApp } from "@/state/AppContext";
 
+// Single source of truth for the MainWRLD+ benefit list, rendered in both the
+// active-member and upsell states (and intended for reuse by the F05 "thank you
+// for becoming a member" email so the card and the email never drift).
+// Ad-removal claims are gone (the site hosts no ads), and only truly-wired
+// entitlements are listed: 2x daily points (useRewards.ts) and the annual
+// 200-point bonus (awardMembershipBonus). The previously-advertised "No More
+// Ads", "Compete in book contests" (no gating) and "Save Chat Messages Forever"
+// (deleted after 1 year regardless of isPremium) were false promises and were
+// removed pending an owner decision on real replacement perks (X11 §7/§10).
+export const PREMIUM_BENEFITS: string[] = [
+  "2x daily points (6 pts/day)",
+  "Annual 200-point bonus",
+];
+
 export const DailyRewardsView = () => {
   const {
     setView,
@@ -196,44 +210,17 @@ export const DailyRewardsView = () => {
 
             {user.isPremium ? (
               <div className="w-full space-y-3">
-                <div className="flex items-center gap-2 text-amber-700">
-                  <span className="material-icons-round text-sm">
-                    check_circle
-                  </span>
-                  <span className="text-xs font-bold">No More Ads</span>
-                </div>
-                <div className="flex items-center gap-2 text-amber-700">
-                  <span className="material-icons-round text-sm">
-                    check_circle
-                  </span>
-                  <span className="text-xs font-bold">
-                    2x daily points (6 pts/day)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-amber-700">
-                  <span className="material-icons-round text-sm">
-                    check_circle
-                  </span>
-                  <span className="text-xs font-bold">
-                    Compete in MainWRLD book contests
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-amber-700">
-                  <span className="material-icons-round text-sm">
-                    check_circle
-                  </span>
-                  <span className="text-xs font-bold">
-                    Save Chat Messages Forever
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-amber-700">
-                  <span className="material-icons-round text-sm">
-                    check_circle
-                  </span>
-                  <span className="text-xs font-bold">
-                    Annual 200 Point Bonus
-                  </span>
-                </div>
+                {PREMIUM_BENEFITS.map((benefit) => (
+                  <div
+                    key={benefit}
+                    className="flex items-center gap-2 text-amber-700"
+                  >
+                    <span className="material-icons-round text-sm">
+                      check_circle
+                    </span>
+                    <span className="text-xs font-bold">{benefit}</span>
+                  </div>
+                ))}
                 <div className="pt-3 text-center">
                   <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">
                     Member since{" "}
@@ -254,44 +241,17 @@ export const DailyRewardsView = () => {
             ) : (
               <>
                 <div className="w-full space-y-3">
-                  <div className="flex items-center gap-2 text-amber-700">
-                    <span className="material-icons-round text-sm">
-                      auto_awesome
-                    </span>
-                    <span className="text-xs font-bold">No More Ads</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-amber-700">
-                    <span className="material-icons-round text-sm">
-                      auto_awesome
-                    </span>
-                    <span className="text-xs font-bold">
-                      2x daily points (6 pts/day)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-amber-700">
-                    <span className="material-icons-round text-sm">
-                      auto_awesome
-                    </span>
-                    <span className="text-xs font-bold">
-                      Compete in MainWRLD book contests
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-amber-700">
-                    <span className="material-icons-round text-sm">
-                      auto_awesome
-                    </span>
-                    <span className="text-xs font-bold">
-                      Save Chat Messages Forever
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-amber-700">
-                    <span className="material-icons-round text-sm">
-                      auto_awesome
-                    </span>
-                    <span className="text-xs font-bold">
-                      Annual 200 Point Bonus
-                    </span>
-                  </div>
+                  {PREMIUM_BENEFITS.map((benefit) => (
+                    <div
+                      key={benefit}
+                      className="flex items-center gap-2 text-amber-700"
+                    >
+                      <span className="material-icons-round text-sm">
+                        auto_awesome
+                      </span>
+                      <span className="text-xs font-bold">{benefit}</span>
+                    </div>
+                  ))}
                 </div>
                 <Button
                   className="w-full h-16 bg-amber-500 hover:bg-amber-600"

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { ChapterAdBanner } from '@/components/ChapterAdBanner'
 import { renderFormattedContent } from '@/utils/renderFormattedContent'
 import type { BookProgress } from '@/types'
 import { useApp } from '@/state/AppContext'
@@ -657,10 +656,6 @@ export const ReadingView = () => {
                 renderFormattedContent(chapterContent)
               )}
             </div>
-            <ChapterAdBanner
-              isPremium={currentUser?.isPremium}
-              inverted={settings.inverted}
-            />
             {/* Chapter navigation buttons for scroll mode */}
             {visibleChapters.length > 1 && (
               <div className='flex justify-between items-center pt-8 pb-4'>
@@ -752,10 +747,6 @@ export const ReadingView = () => {
                   renderFormattedContent(chapterContent)
                 )}
               </div>
-              <ChapterAdBanner
-                isPremium={currentUser?.isPremium}
-                inverted={settings.inverted}
-              />
             </div>
           </div>
         </div>
