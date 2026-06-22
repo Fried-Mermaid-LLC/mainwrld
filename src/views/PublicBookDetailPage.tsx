@@ -3,14 +3,11 @@ import { Button, CoverImg } from '@/components/sharedComponents'
 import type { User } from '@/types'
 import { useApp } from '@/state/AppContext'
 import * as stripeConnect from '@/services/stripeConnect'
-import * as iap from '@/services/iap'
-import * as fbService from '@/services/firebaseService'
 
 export const PublicBookDetailPage = () => {
   const {
     user,
     selectedBook,
-    setSelectedBook,
     allComments,
     getUserOwnedBookIds,
     getUserBookProgress,
@@ -28,10 +25,7 @@ export const PublicBookDetailPage = () => {
     handleMarkCompleted,
     showToast,
     coupons,
-    userIsUnder16,
-    firebaseUid,
-    setUserBookData,
-    userBookDataRef
+    userIsUnder16
   } = useApp()
   const [buying, setBuying] = useState(false)
   const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null)
@@ -77,11 +71,10 @@ export const PublicBookDetailPage = () => {
   const isAuthor = currentUser.username === book.author.username
   // Cash is the ONLY way to buy a book — on web AND iOS (books are not sold for
   // points). On web the tab navigates to Stripe Checkout and returns via the
-  // ?book_purchase_success redirect (handled in usePayments). On iOS the
-  // checkout opens in an in-app browser, so that redirect lands inside the
-  // browser, not the app — we therefore re-sync ownership ourselves once the
-  // browser closes (the webhook has already granted purchasedBookIds).
-  const isNative = iap.isNativeIAPAvailable()
+  // ?book_purchase_success redirect. On iOS openStripeUrl opens it in an in-app
+  // browser whose success/cancel pages deep-link back via mainwrld://, which
+  // closes the browser and re-syncs ownership — all handled centrally in
+  // usePayments, so here we just open the checkout.
   const listPrice = book.price || 9.99
   const availableCoupons = (coupons || []).filter((c: any) => !c.used)
   const selectedCoupon = availableCoupons.find(
@@ -94,42 +87,6 @@ export const PublicBookDetailPage = () => {
     : 0
   const payPrice = listPrice - discountUsd
 
-  // Poll the user doc until the (server-authoritative) purchase lands, then adopt
-  // ownership locally so the page flips to "Read". Mirrors usePayments' web flow.
-  const syncOwnershipAfterPurchase = async () => {
-    if (!firebaseUid) return
-    showToast('Verifying purchase…', 'sync')
-    for (let i = 0; i < 8; i++) {
-      const fresh: any = await fbService
-        .getUserProfile(firebaseUid)
-        .catch(() => null)
-      const purchased: string[] = fresh?.purchasedBookIds || []
-      if (purchased.includes(book.id)) {
-        const username = user.username
-        const current = userBookDataRef.current[username] || {
-          ownedBookIds: [],
-          bookProgress: {},
-          purchasedBookIds: []
-        }
-        const updated = {
-          ...current,
-          ownedBookIds: fresh?.ownedBookIds || [],
-          purchasedBookIds: purchased
-        }
-        userBookDataRef.current = {
-          ...userBookDataRef.current,
-          [username]: updated
-        }
-        setUserBookData((prev: any) => ({ ...prev, [username]: updated }))
-        setSelectedBook({ ...book, isOwned: true })
-        showToast('Purchase complete — enjoy your book!', 'check_circle')
-        return
-      }
-      await new Promise(r => setTimeout(r, 1000))
-    }
-    showToast('Payment confirmed. Your book will appear shortly.', 'sync')
-  }
-
   const onBuyStripe = async () => {
     if (buying) return
     setBuying(true)
@@ -139,15 +96,6 @@ export const PublicBookDetailPage = () => {
         selectedCoupon?.id
       )
       await stripeConnect.openStripeUrl(url)
-      // iOS: the Stripe success redirect stays inside the in-app browser, so
-      // re-sync ownership when the user closes it and returns to the app.
-      if (isNative) {
-        const { Browser } = await import('@capacitor/browser')
-        const sub = await Browser.addListener('browserFinished', async () => {
-          await sub.remove()
-          await syncOwnershipAfterPurchase()
-        })
-      }
     } catch (err: any) {
       showToast(err?.message || 'Could not start checkout.', 'error')
     } finally {

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>MainWRLD</title>
+    <style>
+      :root { --accent: #eb6871; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #ffffff; color: #1f2937;
+        display: flex; align-items: center; justify-content: center;
+        padding: 24px; text-align: center;
+      }
+      .card { max-width: 360px; }
+      .icon {
+        width: 72px; height: 72px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 38px; margin-bottom: 18px;
+        background: rgba(235, 104, 113, 0.12); color: var(--accent);
+      }
+      h1 { font-size: 20px; font-weight: 800; margin: 0 0 8px; }
+      p { font-size: 14px; color: #6b7280; margin: 0 0 24px; line-height: 1.5; }
+      a.btn {
+        display: inline-block; text-decoration: none;
+        background: var(--accent); color: #fff;
+        font-weight: 700; font-size: 14px;
+        padding: 14px 28px; border-radius: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon" id="icon">✓</div>
+      <h1 id="title">Payment complete</h1>
+      <p id="msg">Returning you to MainWRLD…</p>
+      <a class="btn" id="back" href="#">Return to MainWRLD</a>
+    </div>
+    <script>
+      // Bounce page for the iOS in-app-browser checkout (Variant B). Stripe
+      // redirects here; we deep-link back into the native app via the custom
+      // `mainwrld://` scheme, which foregrounds the app — its appUrlOpen handler
+      // then closes this browser (Browser.close) and re-syncs ownership. The
+      // visible button is a fallback in case the auto-redirect is suppressed.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var bookId = q.get('bookId') || '';
+        var cancelled = q.get('cancelled') === 'true';
+        var deep =
+          'mainwrld://book-purchase?bookId=' +
+          encodeURIComponent(bookId) +
+          (cancelled ? '&cancelled=true' : '');
+        if (cancelled) {
+          document.getElementById('icon').textContent = '✕';
+          document.getElementById('icon').style.color = '#9ca3af';
+          document.getElementById('icon').style.background = 'rgba(156,163,175,0.12)';
+          document.getElementById('title').textContent = 'Checkout cancelled';
+          document.getElementById('msg').textContent = 'No charge was made. Returning to MainWRLD…';
+        }
+        document.getElementById('back').setAttribute('href', deep);
+        // Attempt the automatic return.
+        location.href = deep;
+      })();
+    </script>
+  </body>
+</html>

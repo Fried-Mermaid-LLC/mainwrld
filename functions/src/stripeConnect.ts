@@ -446,13 +446,18 @@ export const reviewMonetization = onCall<
 // ============================================================
 
 export const createBookCheckoutSession = onCall<
-  { bookId: string; mode?: string; origin?: string; couponId?: string },
+  { bookId: string; mode?: string; origin?: string; couponId?: string; nativeReturn?: boolean },
   Promise<{ url: string }>
 >(
   { region: REGION, secrets: [STRIPE_SECRET_KEY, STRIPE_TEST_SECRET_KEY] },
   async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.')
     const buyerUid = req.auth.uid
+    // iOS opens checkout in an in-app browser, so the return must deep-link back
+    // into the app. We point success/cancel at a hosted bounce page that
+    // redirects to the `mainwrld://` scheme (handled in usePayments), which
+    // closes the browser + re-syncs ownership. Web keeps the in-tab redirect.
+    const nativeReturn = req.data?.nativeReturn === true
     const { bookId } = req.data || ({} as any)
     if (!bookId) throw new HttpsError('invalid-argument', 'bookId required.')
     const db = getFirestore()
@@ -538,10 +543,16 @@ export const createBookCheckoutSession = onCall<
         // Echoed into the purchase-receipt email by the webhook.
         bookTitle: (book.title as string) || 'your new book',
       },
-      success_url: `${origin}/?book_purchase_success=true&bookId=${encodeURIComponent(
-        bookId
-      )}`,
-      cancel_url: `${origin}/?payment_cancelled=true`,
+      success_url: nativeReturn
+        ? `${origin}/checkout-complete.html?bookId=${encodeURIComponent(bookId)}`
+        : `${origin}/?book_purchase_success=true&bookId=${encodeURIComponent(
+            bookId
+          )}`,
+      cancel_url: nativeReturn
+        ? `${origin}/checkout-complete.html?bookId=${encodeURIComponent(
+            bookId
+          )}&cancelled=true`
+        : `${origin}/?payment_cancelled=true`,
     })
     if (!session.url) {
       throw new HttpsError('internal', 'Stripe did not return a checkout URL.')

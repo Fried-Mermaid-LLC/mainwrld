@@ -128,9 +128,23 @@ export const createBookCheckout = async (
   couponId?: string
 ): Promise<{ url: string }> => {
   const fn = call<
-    { bookId: string; mode: string; origin: string; couponId?: string },
+    {
+      bookId: string
+      mode: string
+      origin: string
+      couponId?: string
+      nativeReturn?: boolean
+    },
     { url: string }
   >('createBookCheckoutSession')
-  const res = await fn({ bookId, mode: MODE, origin: origin(), couponId })
+  const res = await fn({
+    bookId,
+    mode: MODE,
+    origin: origin(),
+    couponId,
+    // On iOS the return must deep-link back into the app (Variant B); the
+    // server then points success/cancel at the mainwrld:// bounce page.
+    nativeReturn: iap.isNativeIAPAvailable(),
+  })
   return res.data
 }

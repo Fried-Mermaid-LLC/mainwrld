@@ -258,4 +258,77 @@ export function usePayments({
       }
     })
   }, [])
+
+  // iOS cash-checkout return (Variant B). The Stripe checkout runs in an in-app
+  // browser; its success/cancel pages deep-link to `mainwrld://book-purchase`,
+  // which foregrounds the app and fires appUrlOpen here. We close the browser
+  // and — on success — poll the user doc until the (webhook-granted) purchase
+  // lands, then adopt ownership so the book flips to "owned".
+  useEffect(() => {
+    if (!iap.isNativeIAPAvailable()) return
+    let handle: { remove: () => void } | undefined
+    let cancelled = false
+
+    const resyncOwnership = async (bookId: string) => {
+      if (!firebaseUid) return
+      showToast('Verifying purchase…', 'sync')
+      for (let i = 0; i < 8; i++) {
+        const fresh = (await fbService
+          .getUserProfile(firebaseUid)
+          .catch(() => null)) as any
+        const purchased: string[] = fresh?.purchasedBookIds || []
+        if (purchased.includes(bookId)) {
+          const username = user.username
+          const current = userBookDataRef.current[username] || {
+            ownedBookIds: [],
+            bookProgress: {},
+            purchasedBookIds: [],
+          }
+          const updated = {
+            ...current,
+            ownedBookIds: fresh?.ownedBookIds || [],
+            purchasedBookIds: purchased,
+          }
+          userBookDataRef.current = {
+            ...userBookDataRef.current,
+            [username]: updated,
+          }
+          setUserBookData((prev) => ({ ...prev, [username]: updated }))
+          showToast('Purchase complete — enjoy your book!', 'check_circle')
+          return
+        }
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+      showToast('Payment confirmed. Your book will appear shortly.', 'sync')
+    }
+
+    ;(async () => {
+      const { App } = await import('@capacitor/app')
+      const h = await App.addListener('appUrlOpen', async ({ url }) => {
+        if (!url || url.indexOf('mainwrld://book-purchase') !== 0) return
+        // Dismiss the in-app checkout browser now that we're back in the app.
+        try {
+          const { Browser } = await import('@capacitor/browser')
+          await Browser.close()
+        } catch {
+          /* browser may already be closed */
+        }
+        const query = new URLSearchParams(url.split('?')[1] || '')
+        if (query.get('cancelled') === 'true') {
+          showToast('Checkout cancelled.', 'info')
+          return
+        }
+        const bookId = query.get('bookId') || ''
+        if (bookId) await resyncOwnership(bookId)
+      })
+      if (cancelled) h.remove()
+      else handle = h
+    })()
+
+    return () => {
+      cancelled = true
+      handle?.remove()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseUid, user.username])
 }
