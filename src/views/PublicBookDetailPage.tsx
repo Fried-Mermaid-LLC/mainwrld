@@ -25,7 +25,8 @@ export const PublicBookDetailPage = () => {
     handleUnpublish,
     handleMarkCompleted,
     showToast,
-    coupons
+    coupons,
+    userIsUnder16
   } = useApp()
   const [buying, setBuying] = useState(false)
   const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null)
@@ -37,6 +38,9 @@ export const PublicBookDetailPage = () => {
   const isOwned = getUserOwnedBookIds().has(book.id)
   const bookProgress: any = getUserBookProgress(book.id)
   const onBack = () => setView('explore')
+  // Defense in depth (X09): an under-16 viewer must never open an explicit
+  // book's detail, even via a shared link / spotlight leak / stale selectedBook.
+  const blockedForAge = userIsUnder16 && !!book.isExplicit
   const onRead = () => {
     setReadingActivity(prev => {
       const ua = [...(prev[user.username] || [])]
@@ -95,6 +99,25 @@ export const PublicBookDetailPage = () => {
     } finally {
       setBuying(false)
     }
+  }
+
+  if (blockedForAge) {
+    return (
+      <div className='fixed inset-0 bg-white flex flex-col items-center justify-center px-10 text-center animate-in fade-in duration-300'>
+        <span className='material-icons-round text-gray-300 text-5xl mb-4'>
+          lock
+        </span>
+        <p className='text-sm font-bold text-gray-500 mb-2'>
+          This book isn’t available for your account
+        </p>
+        <button
+          onClick={onBack}
+          className='mt-6 text-xs font-bold uppercase tracking-widest text-accent'
+        >
+          Back to Explore
+        </button>
+      </div>
+    )
   }
 
   return (

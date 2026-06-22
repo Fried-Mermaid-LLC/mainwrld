@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import { ageFromBirthDate } from '@/utils/age'
+import { EXPLICIT_MIN_AGE } from '@/config/constants'
 import type { User, Relationship, AvatarConfig, View } from '@/types'
 
 type ReadingActivityMap = Record<
@@ -87,13 +89,12 @@ export function useSocial({
     const userRecord = registeredUsers.find(
       u => u.username === user.username
     ) as any
-    if (!userRecord?.birthDate) return false
-    const birth = new Date(userRecord.birthDate)
-    const today = new Date()
-    let age = today.getFullYear() - birth.getFullYear()
-    const m = today.getMonth() - birth.getMonth()
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
-    return age < 16
+    const age = ageFromBirthDate(userRecord?.birthDate)
+    // FAIL-CLOSED for explicit reads (X09 §5.1.a recommendation): an unknown/
+    // missing birth date is treated as under-16, so explicit content is hidden
+    // until a valid date is on file. Safer for the Apple-review / legal angle;
+    // flip to `age !== null && age < EXPLICIT_MIN_AGE` for fail-open.
+    return age === null || age < EXPLICIT_MIN_AGE
   }, [registeredUsers, user.username])
   // Blocked users state (loaded from Firestore user doc)
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())

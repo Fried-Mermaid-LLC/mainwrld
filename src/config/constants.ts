@@ -7,6 +7,10 @@ export const COMMENT_LIKES_THRESHOLD = 50;
 export const CHAPTER_LIKES_THRESHOLD = 10;
 export const MAX_DAILY_CHAPTERS = 7;
 export const MAX_WORD_COUNT = 11000;
+// Age gates (X09). MIN_SIGNUP_AGE: COPPA hard floor for account creation.
+// EXPLICIT_MIN_AGE: below this, explicit books are hidden everywhere.
+export const MIN_SIGNUP_AGE = 13;
+export const EXPLICIT_MIN_AGE = 16;
 export const GENRE_LIST = ['Mystery', 'Sci-Fi', 'Romance', 'Horror', 'Dystopian', 'Fantasy', 'Action', 'Drama', 'Western', 'Fiction', 'Non-Fiction', 'Thriller', 'FanFic', 'Poetry', 'Religious', 'Erotica', 'LGBTQ+', 'Self-Help', 'Sports'];
 
 // ---- Monetization pricing (F01) ----
@@ -95,6 +99,8 @@ export default {
   CHAPTER_LIKES_THRESHOLD,
   MAX_DAILY_CHAPTERS,
   MAX_WORD_COUNT,
+  MIN_SIGNUP_AGE,
+  EXPLICIT_MIN_AGE,
   GENRE_LIST,
   PRICE_TIERS,
   allowedPriceTiers,

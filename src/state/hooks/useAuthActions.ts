@@ -4,7 +4,8 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
-import { containsBadWord } from '@/config/constants'
+import { containsBadWord, MIN_SIGNUP_AGE } from '@/config/constants'
+import { ageFromBirthDate } from '@/utils/age'
 import { sendWelcomeEmail } from '@/config/config'
 import type { User, View } from '@/types'
 
@@ -206,6 +207,19 @@ export function useAuthActions({
     }
     if (containsBadWord(username) || containsBadWord(displayName)) {
       setAuthError('Username or display name contains inappropriate language.')
+      return
+    }
+
+    // COPPA: block under-13 signups (X09). UX gate only — the real enforcement
+    // is server-side in blockUnderageSignup, which tears down any account that
+    // bypasses this check.
+    const age = ageFromBirthDate(signUpForm.birthDate)
+    if (age === null) {
+      setAuthError('Please enter your birth date.')
+      return
+    }
+    if (age < MIN_SIGNUP_AGE) {
+      setAuthError('You must be at least 13 years old to create an account.')
       return
     }
 
