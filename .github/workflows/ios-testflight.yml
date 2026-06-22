@@ -61,6 +61,10 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+          # Required by lib/firebase.ts (requireEnv) since the RTDB presence
+          # work (X06). Without it the bundle throws at import, React never
+          # mounts, and the native splash hangs forever.
+          VITE_FIREBASE_DATABASE_URL: ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
 
       - name: Capacitor sync iOS
         run: npx cap sync ios
@@ -213,6 +217,27 @@ jobs:
             --file "$IPA" \
             --apiKey "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
             --apiIssuer "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
+
+      # The in-Xcode "Upload Crashlytics dSYMs" build phase only fires a
+      # *background* upload-symbols ("will proceed in the background"); xcodebuild
+      # exits ~10ms later and the ephemeral runner kills that orphan process long
+      # before it finishes — so Crashlytics reports the dSYMs as missing. Upload
+      # the archive's already-generated dSYMs synchronously here instead.
+      - name: Upload dSYMs to Firebase Crashlytics
+        run: |
+          UPLOAD_SYMBOLS=$(find ~/Library/Developer/Xcode/DerivedData \
+            -path '*/firebase-ios-sdk/Crashlytics/upload-symbols' -type f 2>/dev/null | head -1)
+          if [ -z "$UPLOAD_SYMBOLS" ]; then
+            echo "::error::upload-symbols not found in DerivedData SourcePackages"
+            exit 1
+          fi
+          chmod +x "$UPLOAD_SYMBOLS" 2>/dev/null || true
+          DSYM_DIR="$ARCHIVE_PATH/dSYMs"
+          echo "upload-symbols: $UPLOAD_SYMBOLS"
+          echo "dSYMs to upload:"; ls -1 "$DSYM_DIR"
+          # Synchronous (blocking) upload — fails the job loudly if it can't reach
+          # Crashlytics, instead of silently dropping symbols like the build phase.
+          "$UPLOAD_SYMBOLS" -gsp ios/App/App/GoogleService-Info.plist -p ios "$DSYM_DIR"
 
       - name: Cleanup signing material
         if: always()

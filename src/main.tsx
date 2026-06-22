@@ -1,33 +1,16 @@
+// MUST be the first import: registers error handlers + a native splash
+// backstop as import side-effects, BEFORE ./App (→ lib/firebase.ts) evaluates.
+// If a later import throws (e.g. a missing VITE_ env var), this is the only
+// code guaranteed to have run, so it's what prevents an invisible frozen-splash
+// boot crash. See bootGuard.ts.
+import './bootGuard'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { StatusBar, Style } from '@capacitor/status-bar'
-import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics'
 import App from './App'
 import './index.css'
-
-// On Capacitor native, forward uncaught JS errors to Firebase Crashlytics
-// so they show up alongside native crashes. The plugin is a no-op on web,
-// and we wrap each call in a catch so a Crashlytics failure never cascades
-// into the error path it's reporting. Native crashes (memory, threading,
-// IAP/Firebase native code) are auto-collected by the SDK after
-// FirebaseApp.configure() in AppDelegate — this only adds the JS layer.
-if (Capacitor.isNativePlatform()) {
-  window.addEventListener('error', (event) => {
-    FirebaseCrashlytics.recordException({
-      message: event.message,
-      stacktrace: event.error?.stack ?? '',
-    }).catch(() => {})
-  })
-  window.addEventListener('unhandledrejection', (event) => {
-    const reason = event.reason
-    FirebaseCrashlytics.recordException({
-      message: `Unhandled promise rejection: ${reason?.message ?? String(reason)}`,
-      stacktrace: reason?.stack ?? '',
-    }).catch(() => {})
-  })
-}
 
 // Shared-book deep links on native (F09). The bundled iOS app loads from
 // capacitor://localhost, so window.location is never the tapped share URL — a
