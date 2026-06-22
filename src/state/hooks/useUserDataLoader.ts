@@ -121,7 +121,8 @@ export function useUserDataLoader({
           profile.lastPointsReset !== undefined ||
           profile.membershipStartDate !== undefined ||
           profile.lastMembershipRewardDate !== undefined ||
-          profile.dailyChaptersPublished !== undefined
+          profile.dailyChaptersPublished !== undefined ||
+          profile.chatDailyCounts !== undefined
         ) {
           setUser(prev => ({
             ...prev,
@@ -131,7 +132,8 @@ export function useUserDataLoader({
             premiumSince: profile.premiumSince || null,
             lastMembershipRewardDate: profile.lastMembershipRewardDate || null,
             dailyChaptersPublished: profile.dailyChaptersPublished || 0,
-            lastChapterPublishReset: profile.lastChapterPublishReset || 0
+            lastChapterPublishReset: profile.lastChapterPublishReset || 0,
+            chatDailyCounts: profile.chatDailyCounts || {}
           }))
         }
         if (profile.isPremium && !profile.membershipStartDate) {

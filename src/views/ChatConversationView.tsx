@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { AvatarLayers, getAvatarItemPath } from '@/components/avatar'
 import type { ChatMessage } from '@/types'
 import { useApp } from '@/state/AppContext'
+import { MAX_MESSAGE_LENGTH } from '@/config/constants'
 
 export const ChatConversationView = () => {
   const {
@@ -34,8 +35,8 @@ export const ChatConversationView = () => {
       (m.from === user.username && m.to === selectedChatUser) ||
       (m.from === selectedChatUser && m.to === user.username)
   )
-  const onSend = (text: string) =>
-    selectedChatUser && handleSendMessage(selectedChatUser, text)
+  const onSend = (text: string): boolean =>
+    selectedChatUser ? handleSendMessage(selectedChatUser, text) : false
   const onBack = () => setView('chat')
   const avatarConfig = selectedChatUser
     ? allAvatarConfigs[selectedChatUser] || null
@@ -50,10 +51,10 @@ export const ChatConversationView = () => {
   }, [messages])
 
   const handleSend = () => {
-    if (newMessage.trim()) {
-      onSend(newMessage)
-      setNewMessage('')
-    }
+    if (!newMessage.trim()) return
+    // Only clear the input when the send actually succeeded; on a blocked send
+    // (profanity / length / daily limit) keep the text so the user can revise.
+    if (onSend(newMessage)) setNewMessage('')
   }
 
   // Sort messages by timestamp, then group by date
@@ -175,21 +176,29 @@ export const ChatConversationView = () => {
 
       {/* Input — only shown if still mutuals */}
       {isMutual !== false ? (
-        <div className='p-4 bg-white border-t border-gray-100 flex gap-3'>
-          <input
-            placeholder='Type a message...'
-            value={newMessage}
-            onChange={e => setNewMessage(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
-            className='flex-1 bg-gray-50 rounded-2xl px-5 py-4 text-sm outline-none shadow-inner'
-          />
-          <button
-            onClick={handleSend}
-            disabled={!newMessage.trim()}
-            className='w-14 h-14 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg transition-transform active:scale-90 disabled:opacity-40'
-          >
-            <span className='material-icons-round'>send</span>
-          </button>
+        <div className='p-4 bg-white border-t border-gray-100'>
+          <div className='flex gap-3'>
+            <input
+              placeholder='Type a message...'
+              value={newMessage}
+              onChange={e => setNewMessage(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSend()}
+              maxLength={MAX_MESSAGE_LENGTH}
+              className='flex-1 bg-gray-50 rounded-2xl px-5 py-4 text-sm outline-none shadow-inner'
+            />
+            <button
+              onClick={handleSend}
+              disabled={!newMessage.trim()}
+              className='w-14 h-14 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg transition-transform active:scale-90 disabled:opacity-40'
+            >
+              <span className='material-icons-round'>send</span>
+            </button>
+          </div>
+          {newMessage.length >= MAX_MESSAGE_LENGTH - 50 && (
+            <p className='text-[10px] text-gray-400 text-right mt-1 pr-1'>
+              {MAX_MESSAGE_LENGTH - newMessage.length} characters left
+            </p>
+          )}
         </div>
       ) : (
         <div className='p-4 bg-gray-50 border-t border-gray-100 text-center'>

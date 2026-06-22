@@ -32,5 +32,7 @@ export {
 export { onBookMonetized } from './monetization.js'
 export { mirrorPresence } from './presence.js'
 export { rotateSpotlight, rotateSpotlightNow } from './spotlight.js'
+export { enforceChatRateLimit } from './chatRateLimit.js'
+export { pruneExpiredMessages } from './pruneMessages.js'
 export { blockUnderageSignup } from './blockUnderageSignup.js'
 export { sendPushOnNotification } from './sendPushOnNotification.js'

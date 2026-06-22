@@ -40,6 +40,7 @@ import {
   type QuerySnapshot,
   type Unsubscribe as FsUnsubscribe
 } from 'firebase/firestore';
+import { MAX_MESSAGE_LENGTH } from '@/config/constants';
 
 // ==================== AUTH FUNCTIONS ====================
 
@@ -695,14 +696,22 @@ export const subscribeToRelationships = (callback: (rels: any[]) => void): Unsub
 
 // ==================== CHAT MESSAGES ====================
 
-export const sendChatMessage = async (from: string, to: string, text: string) => {
+export const sendChatMessage = async (
+  from: string,
+  to: string,
+  text: string,
+  senderIsPremium = false
+) => {
   const msg = {
     id: Math.random().toString(36).substr(2, 9),
     from,
     to,
-    text,
+    // Defensive cap (F08): the input maxLength + handleSendMessage guard + the
+    // firestore.rules text.size() <= 500 check are the other enforcement layers.
+    text: text.slice(0, MAX_MESSAGE_LENGTH),
     timestamp: new Date().toISOString(),
-    read: false
+    read: false,
+    senderIsPremium
   };
   await addDoc(collection(db, 'chatMessages'), msg);
   return msg;
@@ -716,27 +725,12 @@ export const markMessagesRead = async (from: string, to: string) => {
   }
 };
 
-// Expire the current user's old DMs. A read/delete over the whole collection
-// is rejected by the rules (only a participant may read/delete a message), so
-// scope to messages the user sent or received — keyed by username.
-export const deleteChatMessagesOlderThan = async (
-  username: string,
-  cutoffDate: string
-) => {
-  const queries = [
-    query(collection(db, 'chatMessages'), where('from', '==', username)),
-    query(collection(db, 'chatMessages'), where('to', '==', username))
-  ];
-  const seen = new Set<string>();
-  for (const q of queries) {
-    const snapshot = await getDocs(q);
-    for (const d of snapshot.docs) {
-      if (seen.has(d.ref.path)) continue;
-      seen.add(d.ref.path);
-      if (d.data().timestamp < cutoffDate) await deleteDoc(d.ref);
-    }
-  }
-};
+// Retention is now membership-aware and owned by the pruneExpiredMessages
+// scheduled Cloud Function (F08): members' messages are kept forever, non-
+// members' messages are deleted ~1 year after `timestamp`. The previous
+// client-side mass-delete (deleteChatMessagesOlderThan) deleted everyone's
+// messages at 1 year and scanned the whole collection on every app load, so it
+// was removed.
 
 // Real-time listener for the current user's DMs.
 //

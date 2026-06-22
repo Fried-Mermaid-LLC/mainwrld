@@ -45,6 +45,9 @@ export interface User {
   lastMembershipRewardDate?: number;
   dailyChaptersPublished?: number;
   lastChapterPublishReset?: number;
+  /** Per-conversation outgoing-message daily counters (F08), keyed by convoId
+   *  (`[from, to].sort().join('__')`). Reset when `resetAt` is >24h old. */
+  chatDailyCounts?: Record<string, { count: number; resetAt: number }>;
   // Mirrored from the Firebase Auth custom claim by the setAdmin
   // Cloud Function (Stage 2c). UI-only — the security source of truth
   // is the token's `admin` claim, enforced by firestore.rules.
@@ -112,6 +115,10 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   read: boolean;
+  // Snapshot of sender.isPremium at send time (F08). Drives membership-aware
+  // retention: the pruneExpiredMessages scheduled function deletes non-member
+  // messages ~1 year after `timestamp`; member messages are kept forever.
+  senderIsPremium?: boolean;
 }
 
 export interface Relationship {

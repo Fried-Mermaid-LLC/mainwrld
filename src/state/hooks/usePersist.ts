@@ -100,6 +100,7 @@ export function usePersist({
         lastMembershipRewardDate: user.lastMembershipRewardDate || null,
         dailyChaptersPublished: user.dailyChaptersPublished || 0,
         lastChapterPublishReset: user.lastChapterPublishReset || 0,
+        chatDailyCounts: user.chatDailyCounts || {},
         // Book data (ownedBookIds/purchasedBookIds managed atomically via arrayUnion/arrayRemove)
         ...(ud
           ? {
@@ -142,6 +143,7 @@ export function usePersist({
     user.lastMembershipRewardDate,
     user.dailyChaptersPublished,
     user.lastChapterPublishReset,
+    user.chatDailyCounts,
     lastClaimedPoints,
     userBookData,
     allAvatarConfigs,
@@ -191,6 +193,7 @@ export function usePersist({
         lastMembershipRewardDate: user.lastMembershipRewardDate || null,
         dailyChaptersPublished: user.dailyChaptersPublished || 0,
         lastChapterPublishReset: user.lastChapterPublishReset || 0,
+        chatDailyCounts: user.chatDailyCounts || {},
         ...(ud ? { bookProgress: ud.bookProgress || {} } : {}),
         ...(cfg ? { avatarConfig: cfg } : {}),
         ...(items ? { unlockedItems: items } : {}),

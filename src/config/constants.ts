@@ -7,6 +7,13 @@ export const COMMENT_LIKES_THRESHOLD = 50;
 export const CHAPTER_LIKES_THRESHOLD = 10;
 export const MAX_DAILY_CHAPTERS = 7;
 export const MAX_WORD_COUNT = 11000;
+// Messaging caps (F08). MAX_MESSAGE_LENGTH is also enforced server-side in
+// firestore.rules (text.size() <= 500) so a crafted client can't bypass it.
+// MAX_MESSAGES_PER_CONVERSATION_PER_DAY is counted per SENDER per conversation
+// per rolling 24h on the client, and backstopped server-side by the
+// enforceChatRateLimit Cloud Function.
+export const MAX_MESSAGE_LENGTH = 500;
+export const MAX_MESSAGES_PER_CONVERSATION_PER_DAY = 25;
 // Age gates (X09). MIN_SIGNUP_AGE: COPPA hard floor for account creation.
 // EXPLICIT_MIN_AGE: below this, explicit books are hidden everywhere.
 export const MIN_SIGNUP_AGE = 13;
@@ -90,6 +97,8 @@ export default {
   CHAPTER_LIKES_THRESHOLD,
   MAX_DAILY_CHAPTERS,
   MAX_WORD_COUNT,
+  MAX_MESSAGE_LENGTH,
+  MAX_MESSAGES_PER_CONVERSATION_PER_DAY,
   MIN_SIGNUP_AGE,
   EXPLICIT_MIN_AGE,
   GENRE_LIST,

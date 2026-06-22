@@ -326,6 +326,7 @@ export function useAppValue() {
   // (handleSendMessage uses addNotification).
   const chat = useChat({
     user,
+    setUser,
     firebaseUid,
     view,
     selectedChatUser,

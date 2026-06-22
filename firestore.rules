@@ -190,8 +190,15 @@ service cloud.firestore {
         || resource.data.to == request.auth.token.username
         || isAdmin()
       );
+      // Create by the sender only, with a server-enforced 500-char cap (F08).
+      // The 25/conversation/day limit can't be expressed in rules (rules can't
+      // count sibling docs) — it's enforced client-side + by the
+      // enforceChatRateLimit Cloud Function backstop.
       allow create: if isSignedIn() && !isBanned()
-        && request.resource.data.from == request.auth.token.username;
+        && request.resource.data.from == request.auth.token.username
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500;
       // Updates limited to marking read by the recipient.
       allow update: if isSignedIn()
         && resource.data.to == request.auth.token.username
