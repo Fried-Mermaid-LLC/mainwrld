@@ -118,3 +118,16 @@ body {
 .reader-content li {
   margin: 0.25em 0;
 }
+
+/* Paragraph spacing (Tailwind preflight removes default block margins).
+   Applied in both the editor and the reader so pressing Enter visibly
+   produces a new paragraph and saved chapters keep the same spacing. */
+.rich-editor p,
+.reader-content p {
+  margin: 0 0 0.75em;
+}
+
+.rich-editor p:last-child,
+.reader-content p:last-child {
+  margin-bottom: 0;
+}

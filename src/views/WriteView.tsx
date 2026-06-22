@@ -213,10 +213,11 @@ export const WriteView = () => {
 
     requestAnimationFrame(() => {
       const selection = window.getSelection()
-      if (!selection || selection.rangeCount === 0) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
-        return
-      }
+      // No selection or an unreadable (0/0) rect: do nothing and let the
+      // browser's native caret-into-view scrolling handle it. Jumping to
+      // scrollHeight here is exactly what made Enter feel like the view
+      // teleports, so those fallbacks are intentionally removed.
+      if (!selection || selection.rangeCount === 0) return
 
       const range = selection.getRangeAt(0).cloneRange()
       range.collapse(false)
@@ -224,11 +225,9 @@ export const WriteView = () => {
       const containerRect = scrollContainer.getBoundingClientRect()
       const padding = 56
 
-      if (rect.top === 0 && rect.bottom === 0) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight
-        return
-      }
+      if (rect.top === 0 && rect.bottom === 0) return
 
+      // Only adjust scroll when the caret is genuinely outside the visible band.
       if (rect.bottom > containerRect.bottom - padding) {
         scrollContainer.scrollTop +=
           rect.bottom - (containerRect.bottom - padding)
@@ -249,6 +248,17 @@ export const WriteView = () => {
 
       if (count > MAX_WORD_COUNT) {
         editorRef.current.innerHTML = lastValidHtmlRef.current
+        // Reassigning innerHTML rebuilds the DOM and collapses the caret to the
+        // start; move it back to the end so over-limit input is not thrown to
+        // the top. (Enter/insertParagraph adds 0 words and never reaches here.)
+        const sel = window.getSelection()
+        if (sel) {
+          const r = document.createRange()
+          r.selectNodeContents(editorRef.current)
+          r.collapse(false)
+          sel.removeAllRanges()
+          sel.addRange(r)
+        }
         setWordCount(lastValidWordCountRef.current)
         if (!hasShownMaxLimitRef.current) {
           onNotify(
@@ -377,11 +387,39 @@ export const WriteView = () => {
     ]
   )
 
-  const handleEditorInput = useCallback(() => {
-    dirtyDraftRef.current = true
-    updateWordCount()
-    ensureCaretVisible()
-  }, [updateWordCount, ensureCaretVisible])
+  const handleEditorInput = useCallback(
+    (event: React.FormEvent<HTMLDivElement>) => {
+      // Flag dirty BEFORE any early return so autosave never misses a change.
+      dirtyDraftRef.current = true
+      updateWordCount()
+      // The browser already scrolls the caret into view on input, so only
+      // run our manual adjustment when a new block/line was created — that is
+      // the one case native scrolling can momentarily get wrong.
+      const inputType = (event.nativeEvent as InputEvent).inputType
+      if (inputType === 'insertParagraph' || inputType === 'insertLineBreak')
+        ensureCaretVisible()
+    },
+    [updateWordCount, ensureCaretVisible]
+  )
+
+  const handleEditorKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Never interfere with IME/dictation/predictive-text composition —
+      // this is the most likely place an over-eager fix breaks iOS typing.
+      if (event.nativeEvent.isComposing) return
+      // Leave Shift+Enter as the browser's native soft line break.
+      if (event.key === 'Enter' && !event.shiftKey) {
+        // Deterministic paragraph insertion on both web and iOS WebKit,
+        // instead of relying on the flaky defaultParagraphSeparator hint.
+        event.preventDefault()
+        document.execCommand('insertParagraph')
+        dirtyDraftRef.current = true
+        updateWordCount()
+        ensureCaretVisible()
+      }
+    },
+    [updateWordCount, ensureCaretVisible]
+  )
 
   const setSavedIndicator = useCallback((state: 'saved' | 'idle' | 'error') => {
     if (saveTimerRef.current) {
@@ -454,9 +492,9 @@ export const WriteView = () => {
     [onSaveDraft, setSavedIndicator, showToast]
   )
 
-  useEffect(() => {
-    document.execCommand('defaultParagraphSeparator', false, 'p')
-  }, [])
+  // Enter is now handled explicitly in handleEditorKeyDown via
+  // execCommand('insertParagraph'), so the brittle defaultParagraphSeparator
+  // hint (poorly supported in the iOS WKWebView) is no longer needed.
 
   useEffect(() => {
     latestStateRef.current = {
@@ -788,6 +826,7 @@ export const WriteView = () => {
                   touchAction: 'manipulation'
                 }}
                 onBeforeInput={handleBeforeInput}
+                onKeyDown={handleEditorKeyDown}
                 onPaste={handlePaste}
                 onInput={handleEditorInput}
                 onFocus={() => setIsWriting(true)}
@@ -811,8 +850,11 @@ export const WriteView = () => {
                   ) {
                     return
                   }
-                  e.currentTarget.focus()
-                  ensureCaretVisible()
+                  // Only grab focus if not already focused; tapping a native
+                  // contentEditable already places the caret. Don't force a
+                  // re-scroll here — it fought iOS IME and native tap-to-place.
+                  if (document.activeElement !== e.currentTarget)
+                    e.currentTarget.focus()
                 }}
               />
               </>
