@@ -39,7 +39,7 @@
 <body>
 <main class="doc">
 <h1>MainWRLD Privacy Policy</h1>
-<p><strong>Effective date / last updated: 2026-06-16</strong></p>
+<p><strong>Effective date / last updated: 2026-06-22</strong></p>
 <p>This Privacy Policy explains how MainWRLD (&quot;MainWRLD,&quot; the &quot;App,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) collects, uses, shares, and protects information when you use the MainWRLD iOS application and the MainWRLD website. By creating an account or using MainWRLD, you agree to the practices described in this Privacy Policy.</p>
 <h2>1. Who We Are and How to Contact Us</h2>
 <p>MainWRLD is operated by <strong>Fried Mermaid LLC</strong>, the controller responsible for your personal data.</p>
@@ -228,7 +228,7 @@
 <td><strong>OpenAI (Moderation API)</strong></td>
 <td>Automated content moderation (when enabled)</td>
 <td>iOS + web (server-side)</td>
-<td>When automated moderation is enabled, the text of your comments, and book titles, synopses/taglines, and chapter content, are sent for automated classification of objectionable content. See Section 8 for when this applies.</td>
+<td>When automated moderation is enabled, the text of your comments, book titles, synopses/taglines, chapter content, and direct (chat) messages — and your username and display name at signup — are sent for automated classification of objectionable content. See Section 8 for when this applies.</td>
 </tr>
 <tr>
 <td><strong>Apple (App Store Server API)</strong></td>
@@ -266,13 +266,8 @@
 <td>Web (server-side)</td>
 <td>Your email address, display name, and username</td>
 </tr>
-<tr>
-<td><strong>Google Fonts</strong></td>
-<td>Serving fonts/icons on the website</td>
-<td>Web only</td>
-<td>When the website loads fonts, Google may receive your IP address and browser user-agent as an inherent part of the request. This does not occur in the native iOS app&#39;s standard operation.</td>
-</tr>
 </tbody></table>
+<p>Fonts and icons are <strong>self-hosted</strong> by the Service and served from our own application; they are not loaded from a third-party font CDN, so no third party receives your IP address or browser user-agent for fonts.</p>
 <p>Because our Firebase backend (Cloud Firestore and Cloud Functions) is operated by Google Cloud, your data is stored and processed on Google&#39;s infrastructure in the United States. As an inherent part of operating these platforms, Google and Apple may log technical information (such as IP addresses) on their own servers; MainWRLD itself does not collect or instrument IP-address, user-agent, session, or behavioral telemetry.</p>
 <p>We may also disclose information if required to do so by law, to respond to lawful requests and legal process, to enforce our Terms, or to protect the rights, property, or safety of MainWRLD, our users, or others.</p>
 <h2>7. Children&#39;s Privacy</h2>
@@ -285,8 +280,7 @@
 <h2>8. Content Moderation and Community Safety</h2>
 <p>To keep MainWRLD safe, we use both automated and human content moderation:</p>
 <ul>
-<li>A client-side word filter screens certain fields (such as usernames, display names, comments, chat messages, and book/chapter titles and taglines) at the time of submission.</li>
-<li>A server-side automated moderation layer, <strong>when enabled</strong>, sends the text of comments and book titles, synopses/taglines, and chapter content to <strong>OpenAI&#39;s Moderation API</strong> for classification, and may remove flagged content. This automated layer is enabled when our service is configured with the relevant credentials; when it is not enabled, this server-side classification does not run and no such content is sent to OpenAI, though the other moderation measures described here still apply.</li>
+<li>A server-side automated moderation layer, <strong>when enabled</strong>, sends the text of comments, book titles, synopses/taglines, chapter content, and direct (chat) messages to <strong>OpenAI&#39;s Moderation API</strong> for classification, and removes flagged content automatically. Your chosen username and display name are screened by the same classifier at signup, before your account is created. This automated layer is enabled when our service is configured with the relevant credentials; when it is not enabled, this server-side classification does not run and no such text is sent to OpenAI, though the other moderation measures described here still apply. We do not use a fixed client-side word list.</li>
 <li>Our team reviews user reports and may remove content, issue strikes, or ban accounts.</li>
 </ul>
 <p>For details on reporting, blocking, and our handling of objectionable content, please see our Terms of Service at <a href="https://mainwrld.com/terms">https://mainwrld.com/terms</a>. The data flows involved in moderation are described in Sections 3, 4, and 6 above.</p>
