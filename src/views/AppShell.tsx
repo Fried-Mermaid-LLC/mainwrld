@@ -1,8 +1,6 @@
 import React, { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { SplashScreen } from '@capacitor/splash-screen'
-import { BASE } from '@/config/config'
-import { SafeImg } from '@/components/SafeImg'
 import type { View } from '@/types'
 import { CustomizationView } from '@/views/CustomizationView'
 import { ExploreView } from '@/views/ExploreView'
@@ -53,23 +51,34 @@ export const AppShell: React.FC = () => {
     }
   }, [view])
 
+  // Failsafe against a stranded launch. With launchAutoHide:false the native
+  // splash only disappears when we call hide() — normally via the [view] effect
+  // above once auth navigates off `splash`. But onAuthStateChanged can fail to
+  // fire (or its awaits can stall) in a production WKWebView — a known cause of
+  // "the splash hangs forever" (see lib/firebase.ts) that no amount of network
+  // fixes can guarantee away. So if we're STILL on `splash` after a few
+  // seconds, force the app forward: hide the native splash and fall back to
+  // `landing`. This is safe because resolveInitialView only yields `splash` on
+  // the normal launch path — reset-password and shared-book deep links start on
+  // their own view — so a stuck `splash` can only be the plain login flow. If
+  // auth resolves later it simply navigates on top (self-healing). Runs once.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (Capacitor.isNativePlatform()) {
+        SplashScreen.hide({ fadeOutDuration: 250 }).catch(() => {})
+      }
+      setView(v => (v === 'splash' ? 'landing' : v))
+    }, 8000)
+    return () => clearTimeout(t)
+  }, [setView])
+
   const renderView = () => {
     switch (view) {
       case 'splash':
-        // The native splash is dismissed by main.tsx one paint after mount, so
-        // this React placeholder (logo on white) is what's actually visible
-        // while auth resolves — keeping the hand-off flash-free instead of
-        // exposing a blank screen.
-        return (
-          <div className='fixed inset-0 bg-white flex flex-col items-center justify-center'>
-            <SafeImg
-              src={`${BASE}logo.png`}
-              alt='MainWRLD'
-              className='w-24 h-24 mb-4'
-            />
-            <SafeImg src={`${BASE}wordlogo.png`} alt='MainWRLD' className='h-8' />
-          </div>
-        )
+        // The native Capacitor splash covers the screen until auth resolves and
+        // we navigate away (dismissed by the effects above). There's no React
+        // splash, so render nothing underneath.
+        return null
 
       case 'landing':
         return <LandingView />

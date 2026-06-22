@@ -168,16 +168,29 @@ export const getCurrentFirebaseUser = (): FirebaseUser | null => {
 export const ensureUsernameClaim = async (): Promise<void> => {
   const current = auth.currentUser;
   if (!current) return;
+  // Bound every network step. The auth listener awaits this BEFORE navigating
+  // off the launch splash, so a hung callable (we've observed
+  // functions/unavailable on cold iOS starts) or a stalled token refresh would
+  // otherwise strand the app on the native splash forever. Fail-soft and
+  // idempotent: timing out just means the claim lands on a later launch, with
+  // at worst a username-scoped listen retrying.
+  const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
+    Promise.race([
+      p,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error('ensureUsernameClaim timeout')), ms)
+      ),
+    ]);
   try {
     const functions = getFunctions();
     const fn = httpsCallable<void, { ok: boolean; changed?: boolean }>(
       functions,
       'ensureUsernameClaim'
     );
-    const res = await fn();
+    const res = await withTimeout(fn(), 6000);
     // Refresh the token so the (possibly new) claim lands in request.auth.
     if (res.data?.ok) {
-      await current.getIdToken(true);
+      await withTimeout(current.getIdToken(true), 3000);
     }
   } catch (err) {
     console.error('[claims] ensureUsernameClaim failed', err);

@@ -2,7 +2,6 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
-import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics'
 import App from './App'
@@ -69,20 +68,11 @@ root.render(
   </React.StrictMode>
 )
 
-// On Capacitor we hide the native splash explicitly and pick a status-bar
-// style that contrasts with the bg-white app shell. Both APIs are no-ops on
-// web, so the guard is just a fast bail-out.
-//
-// The native splash MUST be dismissed unconditionally here, one paint after
-// React mounts — NOT left up until auth resolves. With launchAutoHide:false
-// the native splash never self-dismisses, so tying its removal to the auth
-// listener (which awaits Firestore over the network) means any slow/hung
-// request on a cold iOS start strands the app on the splash forever. The
-// `splash` view renders a React placeholder (logo on white) underneath, so
-// the hand-off is still flash-free while auth resolves.
+// On Capacitor we pick a status-bar style that contrasts with the bg-white
+// app shell. No-op on web, so the guard is just a fast bail-out. The native
+// splash is NOT hidden here — it stays up through the `splash` view and is
+// dismissed by AppShell once auth resolves and the app navigates away (with a
+// failsafe timer in AppShell so it can never hang if auth stalls).
 if (Capacitor.isNativePlatform()) {
-  requestAnimationFrame(() => {
-    SplashScreen.hide({ fadeOutDuration: 250 }).catch(() => {})
-    StatusBar.setStyle({ style: Style.Light }).catch(() => {})
-  })
+  StatusBar.setStyle({ style: Style.Light }).catch(() => {})
 }
