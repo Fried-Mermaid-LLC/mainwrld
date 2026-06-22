@@ -1,7 +1,15 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
-import { defineSecret } from 'firebase-functions/params'
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'
+import { getFirestore } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions/v2'
+import {
+  RESEND_API_KEY,
+  sendEmail,
+  emailLayout,
+  escapeHtml,
+  userContact,
+} from './email.js'
+
+const SITE_URL = 'https://mainwrld-f7acf.web.app'
 
 // MainWRLD monetization side-effects (F01 + F03).
 //
@@ -18,49 +26,6 @@ import { logger } from 'firebase-functions/v2'
 // Emails are best-effort (deferred F05 email system): a missing/failed email
 // never blocks the status change. Recipient is resolved server-side from the
 // author's user doc — never a client-supplied address.
-
-const RESEND_API_KEY = defineSecret('RESEND_API_KEY')
-const FROM = 'MainWRLD <noreply@mainwrld.com>'
-
-async function sendEmail(
-  to: string,
-  subject: string,
-  html: string
-): Promise<void> {
-  const key = RESEND_API_KEY.value()
-  if (!key || !to) {
-    logger.info('monetization email skipped (no key/recipient)')
-    return
-  }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ from: FROM, to, subject, html }),
-    })
-    if (!res.ok) {
-      logger.warn('monetization email non-2xx', { status: res.status })
-    }
-  } catch (err) {
-    logger.warn('monetization email failed', { err })
-  }
-}
-
-async function authorEmail(
-  db: FirebaseFirestore.Firestore,
-  authorUid: string | undefined
-): Promise<string | null> {
-  if (!authorUid) return null
-  try {
-    const snap = await db.collection('users').doc(authorUid).get()
-    return ((snap.data() as any)?.email as string) || null
-  } catch {
-    return null
-  }
-}
 
 export const onBookMonetized = onDocumentUpdated(
   { region: 'us-central1', document: 'books/{bookId}', secrets: [RESEND_API_KEY] },
@@ -130,12 +95,24 @@ export const onBookMonetized = onDocumentUpdated(
         logger.error('onBookMonetized: fan-out failed', { bookId, err })
       }
       // Accept email (best-effort).
-      const to = await authorEmail(db, after.authorUid)
-      if (to) {
+      const author = await userContact(db, after.authorUid)
+      if (author.email) {
         await sendEmail(
-          to,
+          author.email,
           'Your monetization request has been accepted',
-          `<p>Good news — your request to monetize <strong>"${title}"</strong> has been accepted. Readers can now buy it.</p>`
+          emailLayout({
+            preheader: `"${title}" is approved for sale on MainWRLD.`,
+            heading: 'Your monetization request was accepted',
+            bodyHtml: `
+              <p style="margin:0 0 14px">Hi ${escapeHtml(author.displayName)},</p>
+              <p style="margin:0 0 14px">Good news — your request to monetize
+                <strong>"${escapeHtml(title)}"</strong> has been accepted.
+                Readers can now purchase it, and you'll earn 80% of every sale.</p>
+              <p style="margin:0">You can track sales and payouts from your
+                earnings settings.</p>
+            `,
+            cta: { label: 'View your book', url: SITE_URL },
+          })
         )
       }
     }
@@ -157,12 +134,25 @@ export const onBookMonetized = onDocumentUpdated(
       } catch (err) {
         logger.error('onBookMonetized: deny notification failed', { bookId, err })
       }
-      const to = await authorEmail(db, after.authorUid)
-      if (to) {
+      const author = await userContact(db, after.authorUid)
+      if (author.email) {
         await sendEmail(
-          to,
+          author.email,
           'Your monetization request has been denied',
-          `<p>Your request to monetize <strong>"${title}"</strong> was denied because of: ${reason}.</p>`
+          emailLayout({
+            preheader: `An update on your request to monetize "${title}".`,
+            heading: 'Your monetization request was denied',
+            bodyHtml: `
+              <p style="margin:0 0 14px">Hi ${escapeHtml(author.displayName)},</p>
+              <p style="margin:0 0 14px">Your request to monetize
+                <strong>"${escapeHtml(title)}"</strong> was denied because of:
+                <strong>${escapeHtml(reason)}</strong>.</p>
+              <p style="margin:0">If you think this was a mistake or you've
+                addressed the issue, you may be able to submit again from the
+                book's menu.</p>
+            `,
+            cta: { label: 'Open MainWRLD', url: SITE_URL },
+          })
         )
       }
     }

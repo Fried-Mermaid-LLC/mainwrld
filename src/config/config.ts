@@ -84,6 +84,18 @@ export const sendWelcomeEmail = async (
   }
 };
 
+// Sends the branded "forgot password" email via the `sendPasswordReset`
+// callable Cloud Function (Resend + an Admin-SDK reset link, server-side).
+// The server always resolves with success — even for unknown addresses — so it
+// never leaks which emails have accounts; only a transport failure rejects.
+export const sendPasswordReset = async (email: string) => {
+  const fn = httpsCallable<{ email: string }, { success: boolean }>(
+    getFunctions(),
+    "sendPasswordReset",
+  );
+  await fn({ email });
+};
+
 export default {
   BASE,
   STRIPE_PAYMENT_LINKS,
@@ -93,4 +105,5 @@ export default {
   RESEND_FROM_EMAIL,
   RESEND_SUBJECT,
   sendWelcomeEmail,
+  sendPasswordReset,
 };

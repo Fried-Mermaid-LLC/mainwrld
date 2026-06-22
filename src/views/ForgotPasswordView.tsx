@@ -1,16 +1,16 @@
 import React, { useState } from 'react'
 import { Button, Input } from '@/components/sharedComponents'
-import { auth } from '@/lib/firebase'
 import { useApp } from '@/state/AppContext'
+import { sendPasswordReset } from '@/config/config'
 
 export const ForgotPasswordView = () => {
   const { setView, registeredUsers, showToast } = useApp()
   const onBack = () => setView('login')
+  // Branded reset email via the sendPasswordReset callable (Resend). The server
+  // never reveals whether the address has an account, so we always show the
+  // same "check your email" confirmation.
   const onResetPassword = async (email: string) => {
-    try {
-      const { sendPasswordResetEmail } = await import('firebase/auth')
-      await sendPasswordResetEmail(auth, email)
-    } catch {}
+    await sendPasswordReset(email)
   }
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)

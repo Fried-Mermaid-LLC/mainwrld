@@ -8,6 +8,14 @@ import {
   SignedDataVerifier,
   ProductType,
 } from '@apple/app-store-server-library'
+import {
+  RESEND_API_KEY,
+  sendEmail,
+  userContact,
+  membershipWelcomeEmail,
+  pointsPurchaseEmail,
+  couponPurchaseEmail,
+} from './email.js'
 
 // MainWRLD App Store receipt verification (Stage 3c).
 //
@@ -84,6 +92,7 @@ export const verifyAppleReceipt = onCall<VerifyArgs, Promise<VerifyResult>>(
       APPLE_BUNDLE_ID,
       APPLE_PRIVATE_KEY,
       APPLE_ENV,
+      RESEND_API_KEY,
     ],
   },
   async (req) => {
@@ -178,11 +187,15 @@ export const verifyAppleReceipt = onCall<VerifyArgs, Promise<VerifyResult>>(
     const txRef = db.collection('iapTransactions').doc(transactionId)
     const userRef = db.collection('users').doc(uid)
 
-    return db.runTransaction(async (t) => {
+    // Auto-renewable subscription expiry (ms) — the 7-day renewal reminder
+    // (sendRenewalReminders) reads premiumRenewalAt from this.
+    const expiresMs = (payload.expiresDate as number | undefined) ?? 0
+
+    const txOutcome = await db.runTransaction(async (t) => {
       const existing = await t.get(txRef)
       if (existing.exists) {
         // Already credited — treat restore as success without re-adding.
-        return { credited: true, pointsAdded: 0 }
+        return { result: { credited: true, pointsAdded: 0 } as VerifyResult, newly: false }
       }
       const userSnap = await t.get(userRef)
       if (!userSnap.exists) {
@@ -203,6 +216,9 @@ export const verifyAppleReceipt = onCall<VerifyArgs, Promise<VerifyResult>>(
           isPremium: true,
           premiumSince: new Date().toISOString(),
           membershipStartDate: Date.now(),
+          premiumProvider: 'apple',
+          premiumCancelAtPeriodEnd: false,
+          ...(expiresMs ? { premiumRenewalAt: expiresMs } : {}),
         })
         result.isPremium = true
       }
@@ -228,7 +244,27 @@ export const verifyAppleReceipt = onCall<VerifyArgs, Promise<VerifyResult>>(
         env: envRaw,
       })
       logger.info('verifyAppleReceipt: credited', { uid, productId, transactionId, ...result })
-      return result
+      return { result, newly: true }
     })
+
+    // Confirmation email (best-effort; only on first credit so a restore/replay
+    // never re-sends). Locked to the signed-in user's own address.
+    if (txOutcome.newly) {
+      const buyer = await userContact(db, uid)
+      const to = req.auth.token.email ?? buyer.email
+      if (to) {
+        let mail
+        if (txOutcome.result.isPremium) {
+          mail = membershipWelcomeEmail(buyer.displayName)
+        } else if (txOutcome.result.pointsAdded) {
+          mail = pointsPurchaseEmail(buyer.displayName, txOutcome.result.pointsAdded)
+        } else if (txOutcome.result.couponAdded) {
+          mail = couponPurchaseEmail(buyer.displayName, txOutcome.result.couponAdded.value)
+        }
+        if (mail) await sendEmail(to, mail.subject, mail.html)
+      }
+    }
+
+    return txOutcome.result
   }
 )

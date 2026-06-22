@@ -496,6 +496,8 @@ export const createBookCheckoutSession = onCall<
         buyerUid,
         kind: 'book_purchase',
         couponId: stripeCouponId ? couponId! : '',
+        // Echoed into the purchase-receipt email by the webhook.
+        bookTitle: (book.title as string) || 'your new book',
       },
       success_url: `${origin}/?book_purchase_success=true&bookId=${encodeURIComponent(
         bookId
