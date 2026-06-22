@@ -4,5 +4,14 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Universal Links (F09): lets a tapped https://mainwrld-f7acf.web.app/book/<id>
+	     link open THIS app instead of Safari, matched against the hosted
+	     /.well-known/apple-app-site-association. The MainWRLD provisioning
+	     profile grants com.apple.developer.associated-domains, so this is
+	     compatible with the existing manual signing. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:mainwrld-f7acf.web.app</string>
+	</array>
 </dict>
 </plist>

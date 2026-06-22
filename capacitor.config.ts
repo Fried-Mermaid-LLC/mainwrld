@@ -1,11 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-// PLACEHOLDER bundle ID. Must be replaced with the real ID assigned in
-// App Store Connect before TestFlight upload. The choice affects the
-// generated Xcode project's PRODUCT_BUNDLE_IDENTIFIER, the iOS
-// `applicationId`, and the App Store Connect record. Renaming after
-// `npx cap add ios` requires re-initialising the iOS project, so this
-// must be confirmed with the client before Stage 8.
+// Real App Store bundle ID (Team 2C7AJQ5G4C). Drives the Xcode project's
+// PRODUCT_BUNDLE_IDENTIFIER, the iOS `applicationId`, and the App Store Connect
+// record — and the AASA `appID` (2C7AJQ5G4C.com.mainwrld) for Universal Links.
 const config: CapacitorConfig = {
   appId: "com.mainwrld",
   appName: "MainWrld",

@@ -1,4 +1,13 @@
 export const ACCENT_COLOR = '#eb6871';
+
+// Public share links (F09). The canonical, outside-the-app URL for a book is
+// `${SHARE_BASE}/book/<id>`. SHARE_BASE is the single source of truth shared by
+// web + iOS; the `/book/**` Hosting rewrite routes it to the `ogBook` Cloud
+// Function (per-book OG tags for link unfurling + a redirect into the SPA).
+// Swap to the custom domain here once it's live (also update the AASA host).
+export const SHARE_BASE = 'https://mainwrld-f7acf.web.app';
+export const buildBookShareUrl = (id: string) => `${SHARE_BASE}/book/${id}`;
+
 export const WORLD_RADIUS = 50;
 export const MAX_LIBRARY_SIZE = 35;
 export const MIN_WORD_COUNT = 150;

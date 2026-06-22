@@ -2,6 +2,8 @@ import React, { useCallback, useRef, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { AppContext } from './AppContext'
 import * as pushService from '@/services/pushService'
+import * as fbService from '@/services/firebaseService'
+import { convertFirestoreBook } from '@/utils/bookConverter'
 import { useUI } from './hooks/useUI'
 import { useAuth } from './hooks/useAuth'
 import { useRewards } from './hooks/useRewards'
@@ -399,6 +401,35 @@ export function useAppValue() {
   // Native background/foreground presence (X06) — no-op on web.
   useAppLifecycle(firebaseUid)
 
+  // Shared-book deep-link taps on native (F09). main.tsx's appUrlOpen listener
+  // dispatches `mainwrld:open-book` with the tapped book id (the bundled iOS app
+  // loads from capacitor://localhost, so window.location is never the share
+  // URL). An already-authenticated user goes straight to book-detail; a
+  // signed-out one lands on the public preview, which reads the id stashed in
+  // sessionStorage. Covers warm taps; cold-start taps are handled by
+  // resolveInitialView reading the same sessionStorage key.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent).detail as string
+      if (!id) return
+      if (firebaseUid) {
+        fbService
+          .getBook(id)
+          .then(fb => {
+            if (fb) {
+              setSelectedBook(convertFirestoreBook(fb, favoriteBookIds))
+              setView('book-detail')
+            }
+          })
+          .catch(() => {})
+      } else {
+        setView('public-book')
+      }
+    }
+    window.addEventListener('mainwrld:open-book', handler)
+    return () => window.removeEventListener('mainwrld:open-book', handler)
+  }, [firebaseUid, favoriteBookIds, setSelectedBook, setView])
+
   // User-data loader lives in useUserDataLoader (Phase B). Runs the post-login
   // getUserProfile cascade and flips userDataLoaded true. Placed here (after the
   // persist effect, before the payment effects) so its effect registers in the
@@ -436,6 +467,7 @@ export function useAppValue() {
     setUser,
     setFirebaseUid,
     setView,
+    setSelectedBook,
     setFavoriteBookIds,
     setAuthLoading,
     setUserDataLoaded,

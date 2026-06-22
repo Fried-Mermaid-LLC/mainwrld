@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
-import { CHAPTER_LIKES_THRESHOLD } from '@/config/constants'
+import { CHAPTER_LIKES_THRESHOLD, buildBookShareUrl } from '@/config/constants'
 import type { User, Book, View } from '@/types'
 
 interface BooksDeps {
@@ -364,18 +364,23 @@ export function useBooks({
   }
 
   const handleShareBook = async (book: Book) => {
+    // Share the canonical, outside-the-app book URL (F09), NOT window.location
+    // (which is always the SPA root and never deep-links to the book). The
+    // `/book/<id>` URL unfurls via the ogBook function and gates reading
+    // behind sign-in for recipients with no account.
+    const shareUrl = buildBookShareUrl(book.id)
     if (navigator.share) {
       try {
         await navigator.share({
           title: book.title,
           text: book.tagline,
-          url: window.location.href
+          url: shareUrl
         })
       } catch (err) {
         console.log('Share failed', err)
       }
     } else {
-      navigator.clipboard.writeText(window.location.href)
+      navigator.clipboard.writeText(shareUrl)
       addNotification(
         'Link Copied',
         'Link copied to clipboard!',

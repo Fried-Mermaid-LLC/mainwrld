@@ -9,12 +9,15 @@ import { MIN_SIGNUP_AGE } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import { ageFromBirthDate } from '@/utils/age'
 import { sendWelcomeEmail } from '@/config/config'
-import type { User, View } from '@/types'
+import { parseShareBookId } from './useUI'
+import { convertFirestoreBook } from '@/utils/bookConverter'
+import type { User, View, Book } from '@/types'
 
 interface AuthActionsDeps {
   setUser: Dispatch<SetStateAction<User>>
   setFirebaseUid: Dispatch<SetStateAction<string | null>>
   setView: Dispatch<SetStateAction<View>>
+  setSelectedBook: Dispatch<SetStateAction<Book | null>>
   setFavoriteBookIds: Dispatch<SetStateAction<Set<string>>>
   setAuthLoading: Dispatch<SetStateAction<boolean>>
   setUserDataLoaded: Dispatch<SetStateAction<boolean>>
@@ -46,6 +49,7 @@ export function useAuthActions({
   setUser,
   setFirebaseUid,
   setView,
+  setSelectedBook,
   setFavoriteBookIds,
   setAuthLoading,
   setUserDataLoaded,
@@ -57,6 +61,31 @@ export function useAuthActions({
   signUpForm,
   addNotification
 }: AuthActionsDeps) {
+  // Post-auth deep-link (F09): if the user arrived via a shared `/book/<id>`
+  // link and then signed in / signed up, land them INSIDE that book rather than
+  // on `home`. The pending id is stashed in sessionStorage by resolveInitialView
+  // (or the "Read" gate on the public landing page). Returns true when it
+  // navigated to the book, so callers fall back to their default view otherwise.
+  const openPendingShareBook = async (): Promise<boolean> => {
+    let id: string | null = null
+    try {
+      id = sessionStorage.getItem('pendingShareBookId')
+    } catch {}
+    if (!id) return false
+    try {
+      sessionStorage.removeItem('pendingShareBookId')
+    } catch {}
+    try {
+      const fb = await fbService.getBook(id)
+      if (fb) {
+        setSelectedBook(convertFirestoreBook(fb))
+        setView('book-detail')
+        return true
+      }
+    } catch {}
+    return false
+  }
+
   // Firebase Auth state listener - handles auto-login
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -68,7 +97,12 @@ export function useAuthActions({
         const signedOutView: View =
           params.get('mode') === 'resetPassword' && params.get('oobCode')
             ? 'reset-password'
-            : 'landing'
+            : // A shared `/book/<id>` deep-link (F09) must keep its public
+              // preview, not get bounced to landing, when the visitor has no
+              // session — mirrors the reset-password guard above.
+              parseShareBookId()
+              ? 'public-book'
+              : 'landing'
         if (firebaseUser) {
           try {
             const profile = await fbService.getUserProfile(firebaseUser.uid)
@@ -105,7 +139,7 @@ export function useAuthActions({
               // otherwise their first listen is rejected by the rules.
               await fbService.ensureUsernameClaim()
               setFirebaseUid(firebaseUser.uid)
-              setView('home')
+              if (!(await openPendingShareBook())) setView('home')
               // Mark user online in Firestore on auth restore
               fbService
                 .updateUserProfile(firebaseUser.uid, {
@@ -184,7 +218,7 @@ export function useAuthActions({
       setFirebaseUid((result as any).uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)
-      setView('home')
+      if (!(await openPendingShareBook())) setView('home')
       // Mark user online in Firestore
       fbService
         .updateUserProfile((result as any).uid, {
@@ -291,7 +325,7 @@ export function useAuthActions({
       setFirebaseUid(result.uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)
-      setView('home')
+      if (!(await openPendingShareBook())) setView('home')
 
       // Refresh registered users list
       fbService

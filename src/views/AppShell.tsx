@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { SplashScreen } from '@capacitor/splash-screen'
+import { BASE } from '@/config/config'
+import { SafeImg } from '@/components/SafeImg'
 import type { View } from '@/types'
 import { CustomizationView } from '@/views/CustomizationView'
 import { ExploreView } from '@/views/ExploreView'
 import { OtherProfileView } from '@/views/OtherProfileView'
 import { PublicBookDetailPage } from '@/views/PublicBookDetailPage'
+import { PublicBookLandingPage } from '@/views/PublicBookLandingPage'
 import { ReadingView } from '@/views/ReadingView'
 import { MonetizationRequestView } from '@/views/MonetizationRequestView'
 import { PublishingView } from '@/views/PublishingView'
@@ -53,8 +56,20 @@ export const AppShell: React.FC = () => {
   const renderView = () => {
     switch (view) {
       case 'splash':
-        // Native splash covers the screen here; render nothing underneath.
-        return null
+        // The native splash is dismissed by main.tsx one paint after mount, so
+        // this React placeholder (logo on white) is what's actually visible
+        // while auth resolves — keeping the hand-off flash-free instead of
+        // exposing a blank screen.
+        return (
+          <div className='fixed inset-0 bg-white flex flex-col items-center justify-center'>
+            <SafeImg
+              src={`${BASE}logo.png`}
+              alt='MainWRLD'
+              className='w-24 h-24 mb-4'
+            />
+            <SafeImg src={`${BASE}wordlogo.png`} alt='MainWRLD' className='h-8' />
+          </div>
+        )
 
       case 'landing':
         return <LandingView />
@@ -119,6 +134,12 @@ export const AppShell: React.FC = () => {
 
       case 'book-detail':
         return selectedBook ? <PublicBookDetailPage /> : null
+
+      // Public, auth-optional shared-book preview (F09). Unlike book-detail it
+      // must NOT gate on selectedBook — the visitor may be unauthenticated and
+      // the preview is fetched independently from the ogBook function.
+      case 'public-book':
+        return <PublicBookLandingPage />
 
       case 'reading':
         if (!userDataLoaded) {

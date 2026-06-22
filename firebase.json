@@ -5,7 +5,16 @@
     "rewrites": [
       { "source": "/terms", "destination": "/terms.html" },
       { "source": "/privacy", "destination": "/privacy.html" },
+      { "source": "/book/**", "function": "ogBook" },
       { "source": "**", "destination": "/index.html" }
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json" }
+        ]
+      }
     ]
   },
   "firestore": {

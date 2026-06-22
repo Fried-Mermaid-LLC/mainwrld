@@ -13,7 +13,29 @@ function resolveInitialView(): View {
   if (params.get('mode') === 'resetPassword' && params.get('oobCode')) {
     return 'reset-password'
   }
+  // Shared book deep-link (F09): a `/book/<id>` link (or the `?book=<id>` the
+  // ogBook function redirects humans to) resolves into the public preview
+  // before first paint — same precedent as the reset-password link above.
+  const shareBookId = parseShareBookId()
+  if (shareBookId) {
+    try {
+      sessionStorage.setItem('pendingShareBookId', shareBookId)
+    } catch {}
+    return 'public-book'
+  }
   return 'splash'
+}
+
+// Extract the shared book id from the current URL, accepting BOTH the canonical
+// `/book/<id>` path (what crawlers/iOS see) and the `?book=<id>` query the
+// ogBook function redirects real humans to. Exported so useAuthActions can run
+// the SAME check to keep the onAuthStateChanged listener from bouncing a
+// signed-out deep-link visitor to `landing` (F09).
+export function parseShareBookId(): string | null {
+  if (typeof window === 'undefined') return null
+  const pathMatch = window.location.pathname.match(/^\/book\/([A-Za-z0-9_-]+)$/)
+  if (pathMatch) return pathMatch[1]
+  return new URLSearchParams(window.location.search).get('book')
 }
 
 // UI / navigation / coordinating-selection state. Foundation hook with no

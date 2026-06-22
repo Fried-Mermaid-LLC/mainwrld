@@ -4,7 +4,28 @@ export type View =
   | 'monetization-request' | 'self-profile' | 'customization'
   | 'profile' | 'book-detail' | 'reading' | 'notifications'
   | 'notification-settings' | 'settings' | 'comments' | 'blocked-users' | 'admin-dashboard' | 'daily-rewards' | 'cart'
-  | 'chat' | 'chat-conversation';
+  | 'chat' | 'chat-conversation' | 'public-book';
+
+// Allow-listed public preview of a book (F09). Returned by the `ogBook` Cloud
+// Function (Admin SDK, bypasses Firestore rules) so an UNauthenticated visitor
+// can render a shared `/book/<id>` page. Never carries chapter bodies,
+// authorUid, or monetization internals — only what the preview card needs.
+export interface PublicBookPreview {
+  id: string;
+  title: string;
+  authorDisplayName: string;
+  authorUsername: string;
+  coverColor: string;
+  coverImage?: string;        // absolute URL when present (used for OG image)
+  tagline: string;
+  genres: string[];
+  hashtags: string[];
+  chaptersCount: number;
+  totalLikes: number;         // server-summed from the likes number[]
+  isExplicit: boolean;
+  isCompleted: boolean;
+  publishedDate: string;
+}
 
 export interface User {
   username: string;

@@ -20,6 +20,7 @@ export { sendWelcomeEmail } from './sendWelcomeEmail.js'
 export { sendPasswordReset } from './sendPasswordReset.js'
 export { sendRenewalReminders } from './sendRenewalReminders.js'
 export { stripeWebhook } from './stripeWebhook.js'
+export { ogBook } from './publicBook.js'
 export {
   createStripeAccountLink,
   syncStripeAccountStatus,
