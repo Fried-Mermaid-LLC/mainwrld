@@ -98,6 +98,12 @@ export type ApprovedTransaction = {
   // Apple StoreKit raw receipt (base64). Sent to our Cloud Function
   // verifyAppleReceipt for App Store Server API validation.
   appStoreReceipt: string
+  // True only when this approval was triggered by the user buying or
+  // restoring during this session. StoreKit replays unfinished
+  // transactions through the approved handler on every cold launch; for
+  // those replays this is false so the caller can verify silently and
+  // not pop an error toast at startup.
+  userInitiated: boolean
 }
 
 // Caller-supplied callback that performs server-side verification +
@@ -106,6 +112,13 @@ export type ApprovedTransaction = {
 export type VerifyCallback = (tx: ApprovedTransaction) => Promise<boolean>
 
 let registeredVerifyCallback: VerifyCallback | null = null
+
+// Timestamp of the last user-driven purchase/restore. The approved
+// handler fires both for those actions and for transactions StoreKit
+// replays at launch; we treat an approval as user-initiated only if it
+// lands shortly after the user acted, so launch replays verify silently.
+let lastPurchaseIntentAt = 0
+const PURCHASE_INTENT_WINDOW_MS = 60_000
 
 export const setVerifyCallback = async (cb: VerifyCallback) => {
   registeredVerifyCallback = cb
@@ -126,10 +139,13 @@ export const setVerifyCallback = async (cb: VerifyCallback) => {
         store.localReceipts?.[0]?.nativeData?.appStoreReceipt ||
         tx.nativeData?.appStoreReceipt ||
         ''
+      const userInitiated =
+        Date.now() - lastPurchaseIntentAt < PURCHASE_INTENT_WINDOW_MS
       const credited = await registeredVerifyCallback?.({
         productId,
         transactionId: tx.transactionId,
         appStoreReceipt: receipt,
+        userInitiated,
       })
       if (credited) {
         await tx.finish()
@@ -163,6 +179,7 @@ export const purchase = async (sku: IapSku): Promise<void> => {
   if (!offer) {
     throw new Error(`No purchasable offer for ${IAP_PRODUCTS[sku].id}.`)
   }
+  lastPurchaseIntentAt = Date.now()
   await store.order(offer)
 }
 
@@ -172,6 +189,7 @@ export const purchase = async (sku: IapSku): Promise<void> => {
 export const restorePurchases = async (): Promise<void> => {
   const store = await ensureStore()
   if (!store) return
+  lastPurchaseIntentAt = Date.now()
   await store.restorePurchases()
 }
 

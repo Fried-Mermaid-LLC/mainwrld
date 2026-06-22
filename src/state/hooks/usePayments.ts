@@ -219,8 +219,19 @@ export function usePayments({
   // IAP setup (Stage 3b). On iOS, wire the verify callback so any
   // approved StoreKit transaction is sent to verifyAppleReceipt and
   // we credit points / extend premium from the function's response.
+  //
+  // Gated on firebaseUid: wiring the callback runs ensureStore() →
+  // store.initialize(), which makes StoreKit replay any unfinished
+  // transactions through the approved handler. If we wired before auth
+  // restored, verifyAppleReceipt would throw "Not authenticated" client
+  // side (auth.currentUser still null), the transaction would never get
+  // finished, and it would replay — failing — on every cold launch.
+  // Waiting for firebaseUid guarantees auth.currentUser is set when the
+  // replay lands, so a genuine stuck transaction finally credits and
+  // finishes, breaking the loop.
   useEffect(() => {
     if (!iap.isNativeIAPAvailable()) return
+    if (!firebaseUid) return
     iap.setVerifyCallback(async (tx) => {
       try {
         const result = await fbService.verifyAppleReceipt({
@@ -253,11 +264,20 @@ export function usePayments({
         return true
       } catch (err) {
         console.error('[MainWRLD IAP] verify failed:', err)
-        showToast('Could not verify purchase. Please try again.', 'error')
+        // StoreKit replays unfinished transactions through this callback on
+        // every cold launch. Only surface the error when the user actually
+        // bought/restored this session — otherwise a single stuck
+        // transaction would pop this toast on every startup.
+        if (tx.userInitiated) {
+          showToast('Could not verify purchase. Please try again.', 'error')
+        }
         return false
       }
     })
-  }, [])
+    // setUser/setCoupons/showToast are stable; re-running only when the
+    // signed-in user changes is what we want.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseUid])
 
   // iOS cash-checkout return (Variant B). The Stripe checkout runs in an in-app
   // browser; its success/cancel pages deep-link to `mainwrld://book-purchase`,
