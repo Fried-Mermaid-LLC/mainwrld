@@ -65,10 +65,20 @@ export function minLikesPerPublishedChapter(book: {
 }
 
 export const BAD_WORDS = ['fuck','dick','cock','bastard','slut','cunt','nigger','nigga','n1gger','nigg3r','fag','faggot','retard','rape','penis','vagina','anal','porn','hentai','cum','jizz','sex','xxx','tits','kys','kms','stfu'];
-export const containsBadWord = (text: string): boolean => {
-  const lower = text.toLowerCase().replace(/[^a-z]/g, '');
-  return BAD_WORDS.some(word => lower.includes(word));
-};
+// Whole-word, boundary-aware matching. The previous implementation stripped all
+// non-letters and did a substring match, which over-blocked innocent words
+// ("grape" → "rape", "Sussex" → "sex", "Hancock" → "cock", "document" → "cum")
+// and, by stripping digits, also let the leetspeak entries (n1gger/nigg3r)
+// slip through. \b isolates whole tokens; matching the raw text preserves
+// digits so the leetspeak entries match literally. Compiled once at module load.
+// NOTE: keep this list in sync with any server-side mirror (functions/).
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const BAD_WORD_REGEX = new RegExp(
+  `\\b(?:${BAD_WORDS.map(escapeRegExp).join('|')})\\b`,
+  'i'
+);
+export const containsBadWord = (text: string): boolean =>
+  BAD_WORD_REGEX.test(text ?? '');
 
 export const SKIN_TONE_COLORS: Record<string, string> = {
   A1: '#FDDCC4', A2: '#F2C4A0', A3: '#D9A87C', A4: '#C68E5B', A5: '#A0714A', A5_5: '#9B6B45', A6: '#7A5539', A7: '#4A3228',
