@@ -4,11 +4,13 @@ import type { User } from '@/types'
 import { useApp } from '@/state/AppContext'
 import * as stripeConnect from '@/services/stripeConnect'
 import * as iap from '@/services/iap'
+import * as fbService from '@/services/firebaseService'
 
 export const PublicBookDetailPage = () => {
   const {
     user,
     selectedBook,
+    setSelectedBook,
     allComments,
     getUserOwnedBookIds,
     getUserBookProgress,
@@ -26,7 +28,10 @@ export const PublicBookDetailPage = () => {
     handleMarkCompleted,
     showToast,
     coupons,
-    userIsUnder16
+    userIsUnder16,
+    firebaseUid,
+    setUserBookData,
+    userBookDataRef
   } = useApp()
   const [buying, setBuying] = useState(false)
   const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null)
@@ -70,9 +75,12 @@ export const PublicBookDetailPage = () => {
   const onUnpublish = handleUnpublish
   const onMarkCompleted = handleMarkCompleted
   const isAuthor = currentUser.username === book.author.username
-  // Cash purchase (web only). Apple forbids selling in-app digital content via
-  // an external processor, so the Stripe rail is hidden on iOS — there the book
-  // is bought on the website (points purchase stays available on both).
+  // Cash is the ONLY way to buy a book — on web AND iOS (books are not sold for
+  // points). On web the tab navigates to Stripe Checkout and returns via the
+  // ?book_purchase_success redirect (handled in usePayments). On iOS the
+  // checkout opens in an in-app browser, so that redirect lands inside the
+  // browser, not the app — we therefore re-sync ownership ourselves once the
+  // browser closes (the webhook has already granted purchasedBookIds).
   const isNative = iap.isNativeIAPAvailable()
   const listPrice = book.price || 9.99
   const availableCoupons = (coupons || []).filter((c: any) => !c.used)
@@ -85,6 +93,43 @@ export const PublicBookDetailPage = () => {
     ? Math.max(0, Math.min(selectedCoupon.value, listPrice - 0.5))
     : 0
   const payPrice = listPrice - discountUsd
+
+  // Poll the user doc until the (server-authoritative) purchase lands, then adopt
+  // ownership locally so the page flips to "Read". Mirrors usePayments' web flow.
+  const syncOwnershipAfterPurchase = async () => {
+    if (!firebaseUid) return
+    showToast('Verifying purchase…', 'sync')
+    for (let i = 0; i < 8; i++) {
+      const fresh: any = await fbService
+        .getUserProfile(firebaseUid)
+        .catch(() => null)
+      const purchased: string[] = fresh?.purchasedBookIds || []
+      if (purchased.includes(book.id)) {
+        const username = user.username
+        const current = userBookDataRef.current[username] || {
+          ownedBookIds: [],
+          bookProgress: {},
+          purchasedBookIds: []
+        }
+        const updated = {
+          ...current,
+          ownedBookIds: fresh?.ownedBookIds || [],
+          purchasedBookIds: purchased
+        }
+        userBookDataRef.current = {
+          ...userBookDataRef.current,
+          [username]: updated
+        }
+        setUserBookData((prev: any) => ({ ...prev, [username]: updated }))
+        setSelectedBook({ ...book, isOwned: true })
+        showToast('Purchase complete — enjoy your book!', 'check_circle')
+        return
+      }
+      await new Promise(r => setTimeout(r, 1000))
+    }
+    showToast('Payment confirmed. Your book will appear shortly.', 'sync')
+  }
+
   const onBuyStripe = async () => {
     if (buying) return
     setBuying(true)
@@ -94,6 +139,15 @@ export const PublicBookDetailPage = () => {
         selectedCoupon?.id
       )
       await stripeConnect.openStripeUrl(url)
+      // iOS: the Stripe success redirect stays inside the in-app browser, so
+      // re-sync ownership when the user closes it and returns to the app.
+      if (isNative) {
+        const { Browser } = await import('@capacitor/browser')
+        const sub = await Browser.addListener('browserFinished', async () => {
+          await sub.remove()
+          await syncOwnershipAfterPurchase()
+        })
+      }
     } catch (err: any) {
       showToast(err?.message || 'Could not start checkout.', 'error')
     } finally {
@@ -292,10 +346,11 @@ export const PublicBookDetailPage = () => {
               <span className='material-icons-round text-sm'>auto_stories</span>{' '}
               {(bookProgress?.scrollProgress ?? 0) > 0 ? 'Continue' : 'Read'}
             </Button>
-          ) : !isNative ? (
+          ) : (
             <>
-              {/* Money-only purchase (web). Real card payment via Stripe with
-                  the 80/20 split + payout; an optional coupon discounts it. */}
+              {/* Cash-only purchase (web + iOS). Real card payment via Stripe
+                  with the 80/20 split + payout; an optional coupon discounts it.
+                  On iOS openStripeUrl opens it in an in-app browser. */}
               {availableCoupons.length > 0 && (
                 <div className='space-y-2'>
                   <p className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1'>
@@ -341,17 +396,6 @@ export const PublicBookDetailPage = () => {
                 <span className='material-icons-round text-sm'>auto_stories</span>{' '}
                 Preview
               </Button>
-            </>
-          ) : (
-            <>
-              {/* iOS: digital book sales are web-only (Apple IAP rules). */}
-              <Button variant='secondary' className='w-full' onClick={onRead}>
-                <span className='material-icons-round text-sm'>auto_stories</span>{' '}
-                Preview
-              </Button>
-              <p className='text-[10px] text-gray-400 font-bold text-center pt-1'>
-                Buy with card on mainwrld.com
-              </p>
             </>
           )}
           {/* Library button depends strictly on isOwned (visibility in Library tab) */}

@@ -16,6 +16,7 @@ export const AdminDashboard = () => {
     handleAddStrike,
     handleRemoveStrike,
     handleBanUser,
+    handleUnbanUser,
     handleDismissReport,
     handleApproveMonetization,
     handleDenyMonetization,
@@ -31,6 +32,7 @@ export const AdminDashboard = () => {
   const onAddStrike = handleAddStrike
   const onRemoveStrike = handleRemoveStrike
   const onBanUser = handleBanUser
+  const onUnbanUser = handleUnbanUser
   const onDismissReport = handleDismissReport
   const onUpdateItemPrice = handleUpdateItemPrice
   const [activeTab, setActiveTab] = useState<
@@ -255,7 +257,12 @@ export const AdminDashboard = () => {
                   <div>
                     <p className='text-sm font-bold'>{u.displayName}</p>
                     <p className='text-[10px] text-gray-400'>@{u.username}</p>
-                    {u.strikes > 0 && (
+                    {u.isBanned && (
+                      <p className='text-[9px] font-bold text-red-500 uppercase tracking-widest mt-1'>
+                        Banned
+                      </p>
+                    )}
+                    {!u.isBanned && u.strikes > 0 && (
                       <div className='flex items-center gap-2 mt-1'>
                         <p className='text-[9px] font-bold text-orange-500 uppercase tracking-widest'>
                           {u.strikes} Strike{u.strikes > 1 ? 's' : ''}
@@ -269,28 +276,37 @@ export const AdminDashboard = () => {
                       </div>
                     )}
                   </div>
-                  {!u.isAdmin && (
-                    <div className='flex gap-2'>
+                  {!u.isAdmin &&
+                    (u.isBanned ? (
                       <button
-                        onClick={() => onAddStrike(u.username)}
-                        className='w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center'
-                        title='Add Strike'
+                        onClick={() => onUnbanUser(u.username)}
+                        className='h-10 px-4 rounded-xl bg-emerald-500/10 text-emerald-600 text-[10px] font-bold uppercase tracking-widest'
+                        title='Unban User'
                       >
-                        <span className='material-icons-round text-base'>
-                          warning
-                        </span>
+                        Unban
                       </button>
-                      <button
-                        onClick={() => onBanUser(u.username)}
-                        className='w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center'
-                        title='Ban User'
-                      >
-                        <span className='material-icons-round text-base'>
-                          block
-                        </span>
-                      </button>
-                    </div>
-                  )}
+                    ) : (
+                      <div className='flex gap-2'>
+                        <button
+                          onClick={() => onAddStrike(u.username)}
+                          className='w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center'
+                          title='Add Strike'
+                        >
+                          <span className='material-icons-round text-base'>
+                            warning
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => onBanUser(u.username)}
+                          className='w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center'
+                          title='Ban User'
+                        >
+                          <span className='material-icons-round text-base'>
+                            block
+                          </span>
+                        </button>
+                      </div>
+                    ))}
                 </div>
               ))}
             </div>

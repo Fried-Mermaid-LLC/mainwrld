@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { AVATAR_ITEMS } from '@/components/avatar'
-import type { Report, User, Book } from '@/types'
+import type { Report, User, Book, Comment } from '@/types'
 
 interface AdminDeps {
   user: User
@@ -17,6 +17,7 @@ interface AdminDeps {
   registeredUsers: any[]
   setRegisteredUsers: Dispatch<SetStateAction<any[]>>
   books: Book[]
+  allComments: Comment[]
 }
 
 // Moderation / admin domain (Phase B). Owns reports + their (admin-gated)
@@ -34,7 +35,8 @@ export function useAdmin({
   addNotification,
   registeredUsers,
   setRegisteredUsers,
-  books
+  books,
+  allComments
 }: AdminDeps) {
   // Reports state (Firestore real-time)
   const [reports, setReports] = useState<Report[]>([])
@@ -103,39 +105,114 @@ export function useAdmin({
     showToast(`${type} reported successfully!`, 'flag')
   }
 
+  // ---- Strike core (F04) ----
+  // Single funnel for every strike path: removing a reported book/comment/
+  // profile, and the manual "Strike" button. Adds one strike, notifies the
+  // user in-app, and auto-bans on the third. `reportId` makes the strike
+  // idempotent so one report can never strike twice (double-click, or a
+  // content-removal path firing alongside a manual Strike on the same report).
+  const applyStrike = (username: string, reportId?: string) => {
+    const targetUser = registeredUsers.find(u => u.username === username)
+    if (!targetUser?.uid) return
+    // Admins are never struck or auto-banned (the User-report Strike button
+    // and the content-removal path don't otherwise guard this).
+    if (targetUser.isAdmin) return
+    // Idempotency: this report already produced a strike for this user.
+    if (reportId && (targetUser.struckByReportIds || []).includes(reportId))
+      return
+
+    const newStrikes = (targetUser.strikes || 0) + 1
+    fbService.addStrikeToUser(targetUser.uid, reportId).catch(console.error)
+    addNotification(
+      'Strike Received',
+      `You received a strike (${newStrikes}/3) for violating community guidelines. 3 strikes permanently suspend your account.`,
+      'warning',
+      username,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'system'
+    )
+
+    if (newStrikes >= 3) {
+      // Third strike → permanent ban via the admin SDK (disable Auth + claim).
+      fbService.banUser(targetUser.uid).catch(console.error)
+      showToast(`@${username} banned (3 strikes)`, 'block')
+    } else {
+      showToast(`Strike ${newStrikes}/3 issued to @${username}`, 'warning')
+    }
+
+    setRegisteredUsers(prev =>
+      prev.map(u =>
+        u.username === username
+          ? {
+              ...u,
+              strikes: newStrikes,
+              isBanned: newStrikes >= 3 ? true : u.isBanned,
+              struckByReportIds: reportId
+                ? [...(u.struckByReportIds || []), reportId]
+                : u.struckByReportIds
+            }
+          : u
+      )
+    )
+  }
+
   const handleRemoveBook = (bookId: string) => {
-    fbService.deleteBook(bookId).catch(console.error)
-    reports
-      .filter(r => r.targetId === bookId && r.type === 'Book')
-      .forEach(r => {
-        fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
+    // SOFT take-down (no hard delete — there are no Firestore backups, so a
+    // deleted book is unrecoverable). Demonetize + hide as a draft + stamp the
+    // terminal `takenDown` flag. The book can then never be read (chapters.ts
+    // blocks taken-down books), re-published or re-monetized (firestore.rules +
+    // submitMonetizationRequest enforce permanence). The isMonetized true→false
+    // transition also fires onBookMonetized → stamps the permanence flags.
+    fbService
+      .updateBook(bookId, {
+        takenDown: true,
+        takenDownAt: new Date().toISOString(),
+        isMonetized: false,
+        isFree: false,
+        isDraft: true
       })
+      .catch(console.error)
+    const bookReports = reports.filter(
+      r => r.targetId === bookId && r.type === 'Book'
+    )
+    bookReports.forEach(r => {
+      fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
+    })
+    // Strike the author once for the removal (keyed on the first report id so
+    // N reports on one book = one strike, and a re-run won't double-strike).
+    const authorUsername = books.find(b => b.id === bookId)?.author.username
+    if (authorUsername && bookReports[0])
+      applyStrike(authorUsername, bookReports[0].id)
   }
 
   const handleRemoveComment = (commentId: string) => {
     fbService.removeCommentDoc(commentId).catch(console.error)
-    // Resolve any reports for this comment
-    reports
-      .filter(r => r.targetId === commentId && r.type === 'Comment')
-      .forEach(r => {
-        fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
-      })
+    const commentReports = reports.filter(
+      r => r.targetId === commentId && r.type === 'Comment'
+    )
+    commentReports.forEach(r => {
+      fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
+    })
+    // Comments carry `authorUsername` on the doc (read into allComments).
+    const authorUsername = allComments.find(c => c.id === commentId)
+      ?.authorUsername
+    if (authorUsername && commentReports[0])
+      applyStrike(authorUsername, commentReports[0].id)
   }
 
+  // Manual "Strike" button (Users tab + User-report). For a User report we
+  // also resolve the open report(s) so the queue clears.
   const handleAddStrike = (username: string) => {
-    const targetUser = registeredUsers.find(u => u.username === username)
-    if (targetUser?.uid) {
-      fbService
-        .updateUserProfile(targetUser.uid, {
-          strikes: (targetUser.strikes || 0) + 1
-        })
-        .catch(console.error)
-    }
-    setRegisteredUsers(prev =>
-      prev.map(u =>
-        u.username === username ? { ...u, strikes: (u.strikes || 0) + 1 } : u
-      )
+    const userReports = reports.filter(
+      r => r.targetId === username && r.type === 'User'
     )
+    userReports.forEach(r => {
+      fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
+    })
+    applyStrike(username, userReports[0]?.id)
   }
 
   const handleRemoveStrike = (username: string) => {
@@ -154,32 +231,44 @@ export function useAdmin({
     )
   }
 
+  // Manual immediate ban (admin "Ban User" button), bypassing the strike
+  // ladder for severe violations. Delegates to the admin-only banUser Cloud
+  // Function, which disables the Auth record + sets the `banned` claim (only
+  // the Admin SDK can). Content is retained, not scrubbed — the ban is
+  // reversible via handleUnbanUser. Reports for the user are resolved here so
+  // the queue clears optimistically.
   const handleBanUser = (username: string) => {
-    // Remove user's comments from Firestore
-    fbService.removeCommentsByAuthor(username).catch(console.error)
-    // Remove user's relationships from Firestore
-    fbService.removeAllRelationshipsForUser(username).catch(console.error)
-    // Resolve reports for this user
+    const targetUser = registeredUsers.find(u => u.username === username)
+    if (!targetUser?.uid) return
+    if (targetUser.isAdmin) return // never ban an admin
     reports
       .filter(r => r.targetId === username && r.type === 'User')
       .forEach(r => {
         fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
       })
-    // Delete user's books from Firestore
-    books
-      .filter(b => b.author.username === username)
-      .forEach(b => {
-        fbService.deleteBook(b.id).catch(console.error)
-      })
-    // Note: User account deletion from Firebase Auth would require admin SDK
-    // For now, just update their profile with a banned flag
-    const bannedUser = registeredUsers.find(u => u.username === username)
-    if (bannedUser?.uid) {
-      fbService
-        .updateUserProfile(bannedUser.uid, { isBanned: true })
-        .catch(console.error)
-    }
-    setRegisteredUsers(prev => prev.filter(u => u.username !== username))
+    fbService.banUser(targetUser.uid).catch(console.error)
+    showToast(`@${username} banned`, 'block')
+    // Mark banned in place (don't drop from the list) so the row can offer
+    // Unban for reversal.
+    setRegisteredUsers(prev =>
+      prev.map(u => (u.username === username ? { ...u, isBanned: true } : u))
+    )
+  }
+
+  // Reverse a ban (admin action): re-enables Auth, clears the claim, resets
+  // strikes. Content was never scrubbed, so the account comes back intact.
+  const handleUnbanUser = (username: string) => {
+    const targetUser = registeredUsers.find(u => u.username === username)
+    if (!targetUser?.uid) return
+    fbService.unbanUser(targetUser.uid).catch(console.error)
+    showToast(`@${username} reinstated`, 'check_circle')
+    setRegisteredUsers(prev =>
+      prev.map(u =>
+        u.username === username
+          ? { ...u, isBanned: false, strikes: 0, struckByReportIds: [] }
+          : u
+      )
+    )
   }
 
   const handleDismissReport = (reportId: string) => {
@@ -227,6 +316,7 @@ export function useAdmin({
     handleAddStrike,
     handleRemoveStrike,
     handleBanUser,
+    handleUnbanUser,
     handleDismissReport,
     handleApproveMonetization,
     handleDenyMonetization

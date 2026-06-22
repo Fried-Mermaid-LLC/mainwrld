@@ -23,6 +23,17 @@ export interface User {
   admirersCount_unlocked?: boolean;
   mutualsCount: number;
   strikes: number;
+  // ---- Moderation: strikes → auto-ban at 3 (F04) ----
+  // Strikes accrue from admin moderation actions (removing a reported book/
+  // comment/profile, or a manual "Strike"). At 3 the account is banned: the
+  // `banned` Auth custom claim is set + the Auth user is disabled. isBanned is
+  // the profile mirror enforced at the session edge (useAuthActions + logIn).
+  // Reversible via the admin Unban action — content is retained, not scrubbed.
+  isBanned?: boolean;                 // true once the account is banned
+  bannedAt?: string;                  // ISO timestamp of the ban
+  banReason?: string;                 // e.g. "3 strikes"
+  lastStrikeAt?: string;              // ISO timestamp of most recent strike (audit)
+  struckByReportIds?: string[];       // report ids already converted to a strike (idempotency)
   admiringCount?: number;
   avatar?: AvatarConfig;
   avatarConfig?: AvatarConfig;
@@ -114,6 +125,7 @@ export interface Comment {
   bookId: string;
   chapterIndex?: number;
   author: string;
+  authorUsername?: string;   // username of the commenter (on the doc; used for moderation strikes)
   text: string;
   likes: number;
   likedBy?: string[];

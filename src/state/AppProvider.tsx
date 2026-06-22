@@ -349,7 +349,8 @@ export function useAppValue() {
     addNotification,
     registeredUsers,
     setRegisteredUsers,
-    books
+    books,
+    allComments
   })
   const {
     reports,
@@ -364,6 +365,7 @@ export function useAppValue() {
     handleAddStrike,
     handleRemoveStrike,
     handleBanUser,
+    handleUnbanUser,
     handleDismissReport,
     handleApproveMonetization,
     handleDenyMonetization
@@ -469,7 +471,7 @@ export function useAppValue() {
     setLastSelectedBookId, lastSelectedChapterIndex, setLastSelectedChapterIndex, addNotification,
     handleUnpublishChapter, handleDeleteChapter, handleLogout, handleNotificationClick, handleLogin, handleSignup,
     handleSendMessage, handleLike, handleAdmire, handleReport, handleRemoveBook, handleRemoveComment,
-    handleAddStrike, handleRemoveStrike, handleBanUser, handleDismissReport, handleApproveMonetization, handleDenyMonetization, handleBlockUser, handleUnblockUser,
+    handleAddStrike, handleRemoveStrike, handleBanUser, handleUnbanUser, handleDismissReport, handleApproveMonetization, handleDenyMonetization, handleBlockUser, handleUnblockUser,
     handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, handleToggleFavorite, handleAddToCart, awardPoints,
     awardMembershipBonus, handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
     handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,

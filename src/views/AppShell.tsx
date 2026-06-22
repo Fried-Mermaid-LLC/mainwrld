@@ -4,7 +4,6 @@ import { CustomizationView } from '@/views/CustomizationView'
 import { ExploreView } from '@/views/ExploreView'
 import { OtherProfileView } from '@/views/OtherProfileView'
 import { PublicBookDetailPage } from '@/views/PublicBookDetailPage'
-import { CartView } from '@/views/CartView'
 import { ReadingView } from '@/views/ReadingView'
 import { MonetizationRequestView } from '@/views/MonetizationRequestView'
 import { PublishingView } from '@/views/PublishingView'
@@ -70,9 +69,6 @@ export const AppShell: React.FC = () => {
 
       case 'daily-rewards':
         return <DailyRewardsView />
-
-      case 'cart':
-        return <CartView />
 
       case 'explore':
         return <ExploreView />

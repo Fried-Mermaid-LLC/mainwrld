@@ -1,6 +1,5 @@
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import * as iap from '@/services/iap'
-import type { Coupon } from '@/types'
 
 // Opens a Stripe-hosted URL (onboarding / checkout / dashboard). On web we
 // navigate the tab so Stripe can redirect back to our return/success URL. On
@@ -119,9 +118,11 @@ export const reviewMonetization = async (
 
 // ---- Reader checkout ----
 
-// Cash purchase (web only). Returns a Stripe Checkout URL with the 80/20
-// split baked in (application_fee_amount + transfer_data.destination). An
-// optional in-app coupon is applied as a one-time Stripe discount.
+// Cash purchase — the ONLY way to buy a book (web + iOS). Returns a Stripe
+// Checkout URL with the 80/20 split baked in (application_fee_amount +
+// transfer_data.destination); an optional in-app coupon is applied as a
+// one-time Stripe discount. On web the tab navigates to it; on iOS it opens in
+// an in-app browser (openStripeUrl). Books are NOT purchasable with points.
 export const createBookCheckout = async (
   bookId: string,
   couponId?: string
@@ -131,31 +132,5 @@ export const createBookCheckout = async (
     { url: string }
   >('createBookCheckoutSession')
   const res = await fn({ bookId, mode: MODE, origin: origin(), couponId })
-  return res.data
-}
-
-// Points purchase (web + iOS). Atomic server transaction: deducts the buyer's
-// points, credits each author 80% of their book's points, consumes the coupon,
-// grants permanent ownership, and records the sale. Returns the authoritative
-// post-purchase state so the client can adopt it (avoids forging / clobbering).
-export const purchaseBooksWithPoints = async (
-  bookIds: string[],
-  couponId?: string
-): Promise<{
-  points: number
-  ownedBookIds: string[]
-  purchasedBookIds: string[]
-  coupons: Coupon[]
-}> => {
-  const fn = call<
-    { bookIds: string[]; couponId?: string },
-    {
-      points: number
-      ownedBookIds: string[]
-      purchasedBookIds: string[]
-      coupons: Coupon[]
-    }
-  >('purchaseBooksWithPoints')
-  const res = await fn({ bookIds, couponId })
   return res.data
 }

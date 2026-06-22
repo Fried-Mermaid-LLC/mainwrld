@@ -1,5 +1,5 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { logger } from 'firebase-functions/v2'
 import {
   RESEND_API_KEY,
@@ -54,9 +54,19 @@ export const onBookMonetized = onDocumentUpdated(
           .collection('users')
           .where('ownedBookIds', 'array-contains', bookId)
           .get()
+        const authorUid: string | undefined = after.authorUid
         const writes: Promise<unknown>[] = []
         owners.forEach((doc) => {
           const u = doc.data() as any
+          // Skip the author — they already have full access as the author.
+          if (doc.id === authorUid) return
+          // GRANDFATHER: anyone who had this book in their library BEFORE it
+          // became paid keeps permanent read access. The paywall now trusts
+          // purchasedBookIds only (ownedBookIds = library is client-writable),
+          // so promote existing library holders into purchasedBookIds here.
+          writes.push(
+            doc.ref.update({ purchasedBookIds: FieldValue.arrayUnion(bookId) })
+          )
           if (!u.username || u.username === authorUsername) return
           writes.push(
             db.collection('notifications').add({

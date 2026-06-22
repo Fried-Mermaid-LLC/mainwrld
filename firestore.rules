@@ -40,6 +40,14 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.admin == true;
     }
 
+    // F04 — a banned account carries the `banned` custom claim (set by the
+    // banUser Cloud Function). Secondary guard: the Auth record is also
+    // disabled + tokens revoked, but this blocks writes from a still-valid
+    // stale token in the window before the claim propagates / token expires.
+    function isBanned() {
+      return isSignedIn() && request.auth.token.banned == true;
+    }
+
     // ---- users ----
     // Profile docs. Anyone signed in can read profiles (the app shows
     // them in lists, the 3D world, comments). Only the owner can write,
@@ -48,13 +56,18 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isUser(uid);
       // The owner may update their own profile, EXCEPT the Stripe Connect payout
-      // mirror fields — those are written only by Cloud Functions (Admin SDK,
-      // which bypasses rules) so a client can never forge payouts-enabled.
+      // mirror fields (written only by Cloud Functions) and purchasedBookIds —
+      // the permanent paid-entitlement record the chapter paywall trusts. Only
+      // the Admin SDK (Stripe webhook / purchaseBooksWithPoints) may grant it,
+      // so a client can never self-grant or delete it (that would let anyone
+      // read paid books for free). ownedBookIds stays client-writable — it is
+      // just library membership (save/remove), NOT a read entitlement.
       allow update: if isAdmin()
         || (isUser(uid)
             && !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['stripeAccountId', 'payoutsEnabled', 'chargesEnabled',
                           'detailsSubmitted', 'stripeAccountUpdatedAt',
+                          'purchasedBookIds',
                           // Subscription / renewal mirror — written only by the
                           // Stripe webhook, Apple verifier and reminder cron
                           // (Admin SDK), so a client can't forge membership or
@@ -93,7 +106,7 @@ service cloud.firestore {
       // collection can't satisfy this condition and is rejected wholesale.
       allow read: if isSignedIn()
         && (resource.data.isDraft != true || resource.data.authorUid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && !isBanned()
         && request.resource.data.authorUid == request.auth.uid;
       // Authors may edit their own books, but monetization state is
       // privilege-gated (Phase 2). The submit / review callables write the
@@ -106,6 +119,7 @@ service cloud.firestore {
         isAdmin()
         || (
           resource.data.authorUid == request.auth.uid
+          && !isBanned()
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
                'monetizationStatus', 'requestedPrice', 'monetizationRequestedAt',
                'monetizationDenialReason', 'monetizationReviewedAt',
@@ -121,6 +135,12 @@ service cloud.firestore {
                && request.resource.data.get('permanentlyDemonetized', false) != true)
           && !(resource.data.get('wasMonetizedBefore', false) == true
                && request.resource.data.get('wasMonetizedBefore', false) != true)
+          // Admin take-down is terminal: a non-admin author may neither clear
+          // the takenDown flag nor re-publish a taken-down book (un-draft it).
+          && !(resource.data.get('takenDown', false) == true
+               && request.resource.data.get('takenDown', true) != true)
+          && !(resource.data.get('takenDown', false) == true
+               && request.resource.data.get('isDraft', true) == false)
         )
       );
       allow delete: if isSignedIn()
@@ -151,7 +171,7 @@ service cloud.firestore {
     // author or admin.
     match /comments/{commentId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && !isBanned()
         && request.resource.data.authorUid == request.auth.uid;
       allow update: if isSignedIn()
         && (resource.data.authorUid == request.auth.uid || isAdmin());
@@ -170,7 +190,7 @@ service cloud.firestore {
         || resource.data.to == request.auth.token.username
         || isAdmin()
       );
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && !isBanned()
         && request.resource.data.from == request.auth.token.username;
       // Updates limited to marking read by the recipient.
       allow update: if isSignedIn()
@@ -190,7 +210,7 @@ service cloud.firestore {
     // the admirer can create or delete their own relationship.
     match /relationships/{relId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && !isBanned()
         && request.resource.data.admirer == request.auth.token.username;
       allow update: if false;
       allow delete: if isSignedIn() && (
@@ -226,7 +246,7 @@ service cloud.firestore {
     // change status.
     match /reports/{reportId} {
       allow read: if isAdmin();
-      allow create: if isSignedIn()
+      allow create: if isSignedIn() && !isBanned()
         && request.resource.data.reportedBy == request.auth.token.username;
       allow update: if isAdmin();
       allow delete: if isAdmin();

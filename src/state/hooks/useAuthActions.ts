@@ -72,6 +72,17 @@ export function useAuthActions({
         if (firebaseUser) {
           try {
             const profile = await fbService.getUserProfile(firebaseUser.uid)
+            // Ban gate (F04): a mid-session-banned account (Auth disable +
+            // revoked tokens only stop NEW sign-ins) is bounced to landing on
+            // the next cold start. iOS especially persists the WebView session,
+            // so this is the path that actually evicts a banned native user.
+            if (profile && (profile as any).isBanned === true) {
+              await fbService.logOut().catch(() => {})
+              setFavoriteBookIds(new Set())
+              setView('landing')
+              setAuthLoading(false)
+              return
+            }
             if (profile) {
               setUser({
                 username: (profile as any).username,
@@ -84,6 +95,7 @@ export function useAuthActions({
                 admirersCount: (profile as any).admirersCount || 0,
                 mutualsCount: (profile as any).mutualsCount || 0,
                 strikes: (profile as any).strikes || 0,
+                isBanned: (profile as any).isBanned || false,
                 isPremium: (profile as any).isPremium || false,
                 admiringCount: (profile as any).admiringCount || 0,
                 premiumSince: (profile as any).premiumSince || undefined
@@ -162,6 +174,7 @@ export function useAuthActions({
         admirersCount: (result as any).admirersCount || 0,
         mutualsCount: (result as any).mutualsCount || 0,
         strikes: (result as any).strikes || 0,
+        isBanned: (result as any).isBanned || false,
         isPremium: (result as any).isPremium || false,
         admiringCount: (result as any).admiringCount || 0
       })

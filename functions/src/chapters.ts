@@ -41,6 +41,14 @@ export const getChapterContent = onCall<
 
   const isAdmin = req.auth.token.admin === true
   const isAuthor = book.authorUid === uid
+
+  // Admin take-down is terminal: a taken-down book is never readable by anyone
+  // but the author/admin (it is demonetized, so the paywall below would
+  // otherwise treat it as "free" and serve it to existing library holders).
+  if (book.takenDown === true && !isAuthor && !isAdmin) {
+    throw new HttpsError('permission-denied', 'This book is no longer available.')
+  }
+
   // Position in the book = index in chapterMeta (the source of truth for order),
   // so deleting a middle chapter never requires renumbering chapter docs.
   const meta: Array<{ id: string }> = book.chapterMeta || []
@@ -61,11 +69,15 @@ export const getChapterContent = onCall<
     if (!isFreeOrUnmonetized && !isPreview) {
       const userSnap = await db.collection('users').doc(uid).get()
       const u = (userSnap.data() as any) || {}
-      const owned = new Set<string>([
-        ...(u.ownedBookIds || []),
-        ...(u.purchasedBookIds || []),
-      ])
-      owns = owned.has(bookId)
+      // Paid access keys ONLY off purchasedBookIds — the permanent entitlement
+      // granted exclusively by the Stripe webhook / purchaseBooksWithPoints
+      // (Admin SDK) and locked client-unwritable in firestore.rules. We do NOT
+      // trust ownedBookIds here: that array is library membership and is
+      // client-writable (save-to-library), so honouring it would let anyone
+      // read a paid book for free by adding it to their library. Library
+      // holders from BEFORE monetization are grandfathered into purchasedBookIds
+      // server-side by the onBookMonetized trigger, so they keep access.
+      owns = (u.purchasedBookIds || []).includes(bookId)
     }
     if (!isFreeOrUnmonetized && !isPreview && !owns) {
       throw new HttpsError('permission-denied', 'Purchase required to read this chapter.')

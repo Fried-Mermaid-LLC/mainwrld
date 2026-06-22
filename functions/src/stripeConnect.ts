@@ -266,15 +266,36 @@ export const submitMonetizationRequest = onCall<
     throw new HttpsError('failed-precondition', 'Publish the book before monetizing.')
   }
 
-  // Admins bypass the eligibility prerequisites (testing + special cases); the
-  // ownership check, payout gate and pending guard below still apply to them.
-  // Everyone else is re-verified server-side (never trust the client UI).
   const isAdmin = req.auth.token.admin === true
+
+  // Terminal blocks apply to EVERYONE, admins included: a book that was ever
+  // monetized then demonetized, or was taken down by an admin, can NEVER be
+  // monetized again (this is the un-monetize/take-down permanence guarantee,
+  // not an eligibility prerequisite that admins may bypass).
+  if (!canMonetize(book)) {
+    throw new HttpsError('failed-precondition', 'This book can’t be monetized again.')
+  }
+  if (book.takenDown === true) {
+    throw new HttpsError('failed-precondition', 'This book was taken down and can’t be monetized.')
+  }
+
+  // Server-truth chapter count. chaptersCount on the book doc is client-writable,
+  // so a forged value could unlock a higher price tier (or the 5-chapter floor).
+  // Cap it by the real number of chapter docs in the subcollection — the price
+  // tier the server validates against can never exceed what actually exists.
+  const realChapters = (
+    await found.ref.collection('chapters').count().get()
+  ).data().count
+  const effectiveChapters = Math.min(book.chaptersCount || 0, realChapters)
+
+  // Admins bypass the eligibility prerequisites (testing + special cases); the
+  // ownership check, payout gate, pending guard and the terminal blocks above
+  // still apply to them. Everyone else is re-verified server-side.
   if (!isAdmin) {
     if (!book.isCompleted) {
       throw new HttpsError('failed-precondition', 'Book must be completed.')
     }
-    if ((book.chaptersCount || 0) < 5) {
+    if (effectiveChapters < 5) {
       throw new HttpsError('failed-precondition', 'Need at least 5 chapters.')
     }
     if (minLikesPerPublishedChapter(book) < 100) {
@@ -287,13 +308,10 @@ export const submitMonetizationRequest = onCall<
     if (days < 21) {
       throw new HttpsError('failed-precondition', 'Must be published 21+ days.')
     }
-    if (!canMonetize(book)) {
-      throw new HttpsError('failed-precondition', 'This book can’t be monetized again.')
-    }
     if ((book.monetizationAttempts || 0) >= 2) {
       throw new HttpsError('failed-precondition', 'Maximum 2 attempts reached.')
     }
-    if (!allowedPriceTiers(book.chaptersCount || 0).includes(priceUsd)) {
+    if (!allowedPriceTiers(effectiveChapters).includes(priceUsd)) {
       throw new HttpsError(
         'failed-precondition',
         'Price not allowed for this chapter count.'
@@ -326,6 +344,9 @@ export const submitMonetizationRequest = onCall<
     monetizationAttempts: (book.monetizationAttempts || 0) + 1,
     sellerUid: uid,
     sellerStripeAccountId: userData.stripeAccountId,
+    // Records whether chapter-tier gating was bypassed (admin submit). The
+    // reviewer uses it to decide whether to re-validate the tier on approval.
+    monetizationAdminBypass: isAdmin,
     monetizationDenialReason: FieldValue.delete(),
     updatedAt: FieldValue.serverTimestamp(),
   })
@@ -357,15 +378,33 @@ export const reviewMonetization = onCall<
     if (book.isDraft === true) {
       throw new HttpsError('failed-precondition', 'Book is a draft — publish it first.')
     }
+    // Terminal blocks still apply at approval time (the book may have been
+    // demonetized or taken down after the request was filed).
+    if (!canMonetize(book) || book.takenDown === true) {
+      throw new HttpsError('failed-precondition', 'This book can’t be monetized again.')
+    }
     const price = book.requestedPrice
     if (typeof price !== 'number' || price <= 0) {
       throw new HttpsError('failed-precondition', 'No requested price on this book.')
     }
-    // The reviewer is always an admin, so gate on "is a real tier" rather than
-    // the chapter-count tier (consistent with the admin submit path, which
-    // bypasses chapter gating).
     if (!PRICE_TIERS.includes(price)) {
       throw new HttpsError('failed-precondition', 'Invalid requested price tier.')
+    }
+    // For a NON-admin-submitted request, re-validate the price tier against the
+    // server-truth chapter count at approval time too (closes the window where a
+    // book's chapters shrank between a valid submit and approval). Admin-bypass
+    // submissions intentionally skip chapter-tier gating.
+    if (book.monetizationAdminBypass !== true) {
+      const realChapters = (
+        await found.ref.collection('chapters').count().get()
+      ).data().count
+      const effectiveChapters = Math.min(book.chaptersCount || 0, realChapters)
+      if (!allowedPriceTiers(effectiveChapters).includes(price)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Requested price is no longer valid for this book’s chapter count.'
+        )
+      }
     }
     if (!book.sellerStripeAccountId) {
       throw new HttpsError(

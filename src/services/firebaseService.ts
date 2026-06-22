@@ -131,6 +131,15 @@ export const logIn = async (emailOrUsername: string, password: string) => {
     throw new Error('User profile not found');
   }
 
+  // Ban gate (F04), defense-in-depth: stop a banned user before any
+  // home-screen state loads, even if a caller forgets the hook-level check.
+  // The Auth record is also disabled server-side, but that only blocks NEW
+  // sign-ins after token revocation; this catches the stale-session case.
+  if (userDoc.data().isBanned === true) {
+    await signOut(auth).catch(() => {});
+    throw new Error('This account has been suspended for repeated community guideline violations.');
+  }
+
   return { uid, ...userDoc.data() };
 };
 
@@ -897,4 +906,44 @@ export const subscribeToReports = (callback: (reports: any[]) => void): Unsubscr
   return onSnapshot(collection(db, 'reports'), (snapshot: QuerySnapshot) => {
     callback(snapshot.docs.map(d => ({ ...d.data() })));
   });
+};
+
+// ==================== MODERATION: STRIKES & BANS (F04) ====================
+
+// Increment a user's strike count by one (server-side increment() so two
+// concurrent strikes can't clobber each other). `reportId`, when given, is
+// recorded on the doc so the same report can't strike twice (idempotency,
+// read back in useAdmin.applyStrike). Admin-path write — allowed by the
+// `isAdmin()` branch of the users update rule.
+export const addStrikeToUser = async (uid: string, reportId?: string) => {
+  await updateDoc(doc(db, 'users', uid), {
+    strikes: increment(1),
+    lastStrikeAt: new Date().toISOString(),
+    ...(reportId ? { struckByReportIds: arrayUnion(reportId) } : {}),
+  });
+};
+
+// Permanently ban a user via the admin-only `banUser` Cloud Function. The
+// function (Admin SDK) sets the `banned` custom claim, disables the Auth
+// record, revokes refresh tokens and writes the profile mirror — none of
+// which a client can do. Content is retained (no scrub); reversible via
+// unbanUser. Mirrors the deleteCurrentAccount callable pattern.
+export const banUser = async (uid: string): Promise<{ bannedUid: string }> => {
+  const fn = httpsCallable<{ targetUid: string }, { bannedUid: string }>(
+    getFunctions(),
+    'banUser'
+  );
+  const res = await fn({ targetUid: uid });
+  return res.data;
+};
+
+// Reverse a ban: clears the `banned` claim, re-enables the Auth record and
+// resets strikes/ban fields on the profile. Admin-only (server-enforced).
+export const unbanUser = async (uid: string): Promise<{ unbannedUid: string }> => {
+  const fn = httpsCallable<{ targetUid: string }, { unbannedUid: string }>(
+    getFunctions(),
+    'unbanUser'
+  );
+  const res = await fn({ targetUid: uid });
+  return res.data;
 };

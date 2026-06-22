@@ -6,6 +6,7 @@ initializeApp()
 
 export { deleteAccount } from './deleteAccount.js'
 export { setUsernameClaim, setAdmin, ensureUsernameClaim } from './userClaims.js'
+export { banUser, unbanUser, strikeWatch } from './banUser.js'
 export {
   moderateCommentOnCreate,
   moderateBookOnWrite,
