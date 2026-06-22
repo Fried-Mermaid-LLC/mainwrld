@@ -26,6 +26,17 @@ const config: CapacitorConfig = {
     // so this only kills the page-level drag, not in-view scroll.
     scrollEnabled: false,
   },
+  plugins: {
+    SplashScreen: {
+      // Don't let the native splash auto-hide on a timer. If it does,
+      // Capacitor logs the "automatically hidden after default timeout"
+      // warning and we lose control of the hand-off to the React splash.
+      // Instead main.tsx calls SplashScreen.hide() once React has painted,
+      // so the native splash stays up until the web app is actually ready.
+      launchAutoHide: false,
+      backgroundColor: "#ffffff",
+    },
+  },
 };
 
 export default config;

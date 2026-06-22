@@ -29,8 +29,8 @@ body {
    its top chrome (close button, title, etc.). Adding the inset to those
    headers in one place beats patching ~18 views individually.
    Views that intentionally extend under the notch (HomeView's 3D
-   <Canvas>, SplashView's full-bleed splash) don't have a header child,
-   so this rule is a safe no-op for them. */
+   <Canvas>) don't have a header child, so this rule is a safe no-op
+   for them. */
 .fixed.inset-0 > header,
 .fixed.inset-0 > header[class*='p-'] {
   padding-top: max(1.5rem, env(safe-area-inset-top));

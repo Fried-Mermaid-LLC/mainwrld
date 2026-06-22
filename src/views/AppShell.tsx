@@ -1,4 +1,6 @@
-import React from 'react'
+import React, { useEffect } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { SplashScreen } from '@capacitor/splash-screen'
 import type { View } from '@/types'
 import { CustomizationView } from '@/views/CustomizationView'
 import { ExploreView } from '@/views/ExploreView'
@@ -23,7 +25,6 @@ import { SelfProfileView } from '@/views/SelfProfileView'
 import { NotificationsView } from '@/views/NotificationsView'
 import { NotificationSettingsView } from '@/views/NotificationSettingsView'
 import { BlockedUsersView } from '@/views/BlockedUsersView'
-import { SplashView } from '@/views/SplashView'
 import { LandingView } from '@/views/LandingView'
 import { LoginView } from '@/views/LoginView'
 import { SignupView } from '@/views/SignupView'
@@ -40,10 +41,20 @@ export const AppShell: React.FC = () => {
     selectedBook, selectedProfileUser, isWriting, setWriteReturnView
   } = useApp()
 
+  // Keep the native Capacitor splash up through the initial `splash` view and
+  // dismiss it the moment auth resolves and we navigate away. There's no React
+  // splash anymore, so this hand-off is what avoids a white flash on launch.
+  useEffect(() => {
+    if (view !== 'splash' && Capacitor.isNativePlatform()) {
+      SplashScreen.hide({ fadeOutDuration: 250 }).catch(() => {})
+    }
+  }, [view])
+
   const renderView = () => {
     switch (view) {
       case 'splash':
-        return <SplashView />
+        // Native splash covers the screen here; render nothing underneath.
+        return null
 
       case 'landing':
         return <LandingView />

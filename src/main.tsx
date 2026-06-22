@@ -1,7 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
-import { SplashScreen } from '@capacitor/splash-screen'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { FirebaseCrashlytics } from '@capacitor-firebase/crashlytics'
 import App from './App'
@@ -41,14 +40,10 @@ root.render(
   </React.StrictMode>
 )
 
-// On Capacitor we need to hide the native splash explicitly and pick a
-// status-bar style that contrasts with the bg-white app shell. Both APIs
-// are no-ops on web, so the guard is just a fast bail-out.
+// On Capacitor we pick a status-bar style that contrasts with the bg-white
+// app shell. No-op on web, so the guard is just a fast bail-out. The native
+// splash is NOT hidden here — it stays up through the `splash` view and is
+// dismissed by AppShell once auth resolves and the app navigates away.
 if (Capacitor.isNativePlatform()) {
-  // Give React one paint to mount the splash view so the native splash
-  // cross-fades into the React splash instead of flashing to blank.
-  requestAnimationFrame(() => {
-    SplashScreen.hide({ fadeOutDuration: 250 }).catch(() => {})
-    StatusBar.setStyle({ style: Style.Light }).catch(() => {})
-  })
+  StatusBar.setStyle({ style: Style.Light }).catch(() => {})
 }

@@ -23,7 +23,8 @@ export const HomeView = () => {
     setSelectedProfileUser,
     setView,
     notifications,
-    setMoveDir
+    setMoveDir,
+    userDataLoaded
   } = useApp()
   return (
     <div className='fixed inset-0 bg-white'>
@@ -52,7 +53,14 @@ export const HomeView = () => {
             args={[100, 50, 0xeeeeee, 0xf5f5f5]}
             position={[0, -0.01, 0]}
           />
-          <Player moveDir={moveDir} avatarConfig={avatarConfig} />
+          {/* Hold the player avatar until the Firestore profile resolves. Before
+              that, avatarConfig is null and Player would briefly render the
+              generic avatar.glb (the red blob). userDataLoaded flips true in the
+              same batched setState that populates avatarConfig, so gating here
+              means the correct, configured model is the first thing shown. */}
+          {userDataLoaded && (
+            <Player moveDir={moveDir} avatarConfig={avatarConfig} />
+          )}
           {(() => {
             // Get usernames of actual mutuals (both directions exist)
             const myAdmiring = relationships
