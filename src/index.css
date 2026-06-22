@@ -78,6 +78,13 @@ body {
   width: 100%;
 }
 
+/* Placeholder for the empty contentEditable rich editor */
+.rich-editor:empty:before {
+  content: attr(data-placeholder);
+  color: #d1d5db; /* gray-300 */
+  pointer-events: none;
+}
+
 /* Rich editor list styles (Tailwind preflight removes defaults) */
 .rich-editor ul {
   list-style-type: disc;

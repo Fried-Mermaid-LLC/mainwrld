@@ -738,10 +738,17 @@ export const WriteView = () => {
         </div>
         )}
 
-        <div className='relative'>
+        <div className='relative space-y-1.5'>
+          {!isWriting && !(selectedBook && selectedBook.isCompleted) && (
+            <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
+              Chapter Content
+            </label>
+          )}
           <div
             className={`relative transition-all ${
-              isWriting ? 'min-h-[70vh]' : 'min-h-[400px]'
+              isWriting
+                ? 'min-h-[70vh]'
+                : 'min-h-[400px] bg-gray-50 rounded-2xl shadow-sm focus-within:ring-2 focus-within:ring-accent/10'
             }`}
           >
             {selectedBook && selectedBook.isCompleted ? (
@@ -770,8 +777,9 @@ export const WriteView = () => {
                 role='textbox'
                 aria-multiline='true'
                 spellCheck='true'
-                className={`w-full bg-transparent border-none outline-none text-base leading-relaxed placeholder:text-gray-200 resize-none no-scrollbar focus:ring-0 rich-editor ${
-                  isWriting ? 'min-h-[70vh]' : 'min-h-[400px]'
+                data-placeholder='Start writing your chapter…'
+                className={`w-full bg-transparent border-none outline-none text-base leading-relaxed resize-none no-scrollbar focus:ring-0 rich-editor ${
+                  isWriting ? 'min-h-[70vh]' : 'min-h-[400px] px-6 py-5'
                 }`}
                 style={{
                   WebkitUserSelect: 'text',
