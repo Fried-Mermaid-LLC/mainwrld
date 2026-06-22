@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
-import { MAX_DAILY_CHAPTERS, containsBadWord } from '@/config/constants'
+import { MAX_DAILY_CHAPTERS } from '@/config/constants'
 import type { User, Book, BookProgress, View, Relationship } from '@/types'
 
 interface ReadingDeps {
@@ -345,17 +345,9 @@ export function useReading({
         )
         return
       }
-      if (
-        containsBadWord(currentPublishingTitle || '') ||
-        containsBadWord(data.tagline || '') ||
-        containsBadWord(currentPublishingChapterTitle || '')
-      ) {
-        showToast(
-          'Your book title, chapter title, or tagline contains inappropriate language. Please revise before publishing.',
-          'warning'
-        )
-        return
-      }
+      // Moderation is server-side (OpenAI): moderateBookOnWrite /
+      // moderateChapterOnWrite take down flagged titles/synopsis/chapters after
+      // the write. No client-side word list.
       if (currentPublishingId) {
         // Update existing book - preserve existing metadata when just adding/updating chapters
         const existingBook = books.find(b => b.id === currentPublishingId)

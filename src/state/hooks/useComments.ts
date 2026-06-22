@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
-import { containsBadWord, COMMENT_LIKES_THRESHOLD } from '@/config/constants'
+import { COMMENT_LIKES_THRESHOLD } from '@/config/constants'
 import type { Comment, User, Book } from '@/types'
 
 interface CommentsDeps {
@@ -59,10 +59,8 @@ export function useComments({
       showToast('No book selected for comment.', 'error')
       return
     }
-    if (containsBadWord(text)) {
-      showToast('Your comment contains inappropriate language.', 'warning')
-      return
-    }
+    // Moderation is server-side (OpenAI): moderateCommentOnCreate removes
+    // flagged comments after the write. No client-side word list.
 
     const newComment = {
       id: Math.random().toString(36).substr(2, 9),

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import * as fbService from '@/services/firebaseService'
-import { containsBadWord } from '@/config/constants'
 import type { ChatMessage, User, View } from '@/types'
 
 interface ChatDeps {
@@ -66,10 +65,8 @@ export function useChat({
 
   const handleSendMessage = (toUsername: string, text: string) => {
     if (!text.trim()) return
-    if (containsBadWord(text)) {
-      showToast('Your message contains inappropriate language.', 'warning')
-      return
-    }
+    // Moderation is server-side (OpenAI): moderateChatMessageOnCreate removes
+    // flagged messages after the write. No client-side word list.
     // Write to Firestore — real-time subscription will update local state
     fbService
       .sendChatMessage(user.username, toUsername, text.trim())

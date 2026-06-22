@@ -179,6 +179,27 @@ export const checkUsernameAvailable = async (username: string): Promise<boolean>
   return !usernameDoc.exists();
 };
 
+// Moderate a signup username + display name via the OpenAI Moderation API
+// (server-side callable). Returns true if flagged. Fail-open: any error (unset
+// key, network, not deployed) returns false so moderation never blocks signup.
+export const moderateUsername = async (
+  username: string,
+  displayName: string
+): Promise<boolean> => {
+  try {
+    const functions = getFunctions();
+    const fn = httpsCallable<
+      { username: string; displayName: string },
+      { flagged: boolean }
+    >(functions, 'moderateUsername');
+    const res = await fn({ username, displayName });
+    return !!res.data?.flagged;
+  } catch (err) {
+    console.warn('[MainWRLD] moderateUsername failed (fail-open):', err);
+    return false;
+  }
+};
+
 export const getUserProfile = async (uid: string) => {
   const userDoc = await getDoc(doc(db, 'users', uid));
   if (!userDoc.exists()) return null;
