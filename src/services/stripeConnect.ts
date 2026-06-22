@@ -22,12 +22,16 @@ export const openStripeUrl = async (url: string): Promise<void> => {
 // (functions/src/stripeConnect.ts). Mirrors the httpsCallable pattern in
 // firebaseService.ts (deleteCurrentAccount / verifyAppleReceipt).
 //
-// Stripe runs in TEST mode in dev and LIVE in production. Vite sets
-// import.meta.env.PROD true only for `vite build`, matching the test/live
-// split already used for the Payment Links in src/config/config.ts. We pass
-// the mode + browser origin to the function so it picks the right secret key
-// and builds correct return/success URLs for whichever host we're on.
-const MODE: 'live' | 'test' = import.meta.env.PROD ? 'live' : 'test'
+// Stripe Connect mode is controlled EXPLICITLY by VITE_STRIPE_MODE, not by the
+// build type. iOS bundles are always `vite build` (PROD=true), so tying mode to
+// PROD forced the device into live mode and made test-mode testing impossible —
+// onboarding (created in test) then mismatched the live checkout key ("No such
+// destination … exists in test mode"). Default to TEST so testing is safe;
+// set VITE_STRIPE_MODE=live in the production build env to go live. We pass the
+// mode + browser origin to the function so it picks the matching secret key and
+// builds correct return/success URLs for whichever host we're on.
+const MODE: 'live' | 'test' =
+  import.meta.env.VITE_STRIPE_MODE === 'live' ? 'live' : 'test'
 const origin = () =>
   typeof window !== 'undefined' ? window.location.origin : ''
 
