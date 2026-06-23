@@ -10,6 +10,7 @@ import {
   type DocumentReference,
   type Firestore,
 } from 'firebase-admin/firestore';
+import type Stripe from 'stripe';
 import { PLATFORM_FEE_RATE } from '@mainwrld/types';
 import {
   COLLECTIONS,
@@ -236,7 +237,7 @@ export class PaymentsService {
     }
     const chargedAmount = unitAmount - discountCents;
 
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment',
       line_items: [
         {
@@ -268,7 +269,30 @@ export class PaymentsService {
       cancel_url: nativeReturn
         ? `${safe}/checkout-complete.html?bookId=${encodeURIComponent(dto.bookId)}&cancelled=true`
         : `${safe}/?payment_cancelled=true`,
-    });
+    };
+
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionParams);
+    } catch (err) {
+      // A seller whose Connect account was created in a different Stripe mode
+      // (e.g. a test-mode iOS/dev build) leaves a destination acct_… the live
+      // key can't resolve, so Stripe throws resource_missing on transfer_data.
+      // Surface a clean precondition instead of letting it bubble up as a 500.
+      const e = err as { type?: string; param?: string };
+      if (
+        e?.type === 'StripeInvalidRequestError' &&
+        typeof e.param === 'string' &&
+        e.param.includes('transfer_data')
+      ) {
+        throw new PreconditionFailedException({
+          code: 'failed-precondition',
+          message:
+            'This book isn’t available for purchase yet — the seller hasn’t finished setting up live payouts.',
+        });
+      }
+      throw err;
+    }
     if (!session.url) {
       throw new InternalServerErrorException(
         'Stripe did not return a checkout URL.',
