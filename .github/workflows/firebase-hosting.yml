@@ -7,25 +7,22 @@ name: Deploy to Firebase Hosting
 # the exact failure that left the schema-2 `books/{id}/chapters` rules and the
 # RTDB presence rules un-deployed (drafts + presence hit default-deny in prod).
 #
-# Requires repo secret FIREBASE_SERVICE_ACCOUNT: a Firebase service-account
-# JSON (Firebase Console -> Project Settings -> Service accounts -> Generate new
-# private key). For the backend step the service account needs MORE than
-# "Firebase Hosting Admin" — grant in GCP IAM (Console -> IAM):
-#   - Firebase Rules Admin            (firestore.rules + storage.rules)
+# Requires repo secret FIREBASE_SERVICE_ACCOUNT: a Firebase service-account JSON
+# (Firebase Console -> Project Settings -> Service accounts -> Generate new
+# private key) — the firebase-adminsdk-fbsvc@ account. The backend step needs
+# MORE than "Firebase Hosting Admin"; the following IAM roles are GRANTED on the
+# account and the Cloud Billing API is ENABLED, so the step deploys the full set
+# (firestore:rules + database + storage + functions):
+#   - Firebase Rules Admin             (firestore.rules + storage.rules release)
+#   - Firebase Storage Admin           (firebasestorage.defaultBucket.get)
 #   - Firebase Realtime Database Admin (database.rules.json)
-#   - Storage Admin                    (storage.rules release)
+#   - Storage Admin                    (GCS buckets)
 #   - Cloud Functions Admin + Service Account User + Cloud Build Editor
-#     + Artifact Registry Writer + Secret Manager Secret Accessor (functions)
-# The CI service account currently only has Hosting + rules access, so the
-# backend step deploys ONLY firestore:rules + database — the rules-drift guard
-# this step exists for. `storage` and `functions` are deployed MANUALLY:
-#   - storage 403s on the default-bucket lookup (no Storage Admin) and aborts
-#     the whole deploy command;
-#   - functions 403s on the Cloud Billing API (and needs the Cloud Functions
-#     roles above).
-# The step is also marked continue-on-error so any residual 403 never reds the
-# run (hosting above is the critical release). Grant the roles above, then re-add
-# storage,functions to --only and drop continue-on-error for full backend CI.
+#     + Artifact Registry Admin + Run Admin + Eventarc Admin + Pub/Sub Admin
+#     + Cloud Scheduler Admin + Secret Manager Admin   (Gen2 functions)
+#   - Cloud Billing API enabled on the project         (functions billing check)
+# If a backend 403 returns, a role/API above was revoked — the hosting step runs
+# first, so it still ships regardless.
 
 on:
   push:
@@ -83,25 +80,19 @@ jobs:
           channelId: live
           projectId: mainwrld-f7acf
 
-      # Catch the backend up to the front-end in the same run. Runs AFTER
-      # hosting, so a backend 403 (pending IAM, see header) never blocks the
-      # hosting release. The SA JSON is passed via env (not inlined into the
-      # script) so the secret can't leak through shell expansion. functions
-      # build runs via firebase.json's predeploy hook, which needs functions/
-      # deps installed first.
-      - name: Deploy backend rules (firestore + database)
-        # Deploys firestore:rules + database only — the rules-drift guard this
-        # step exists for. storage (no Storage Admin) and functions (Cloud
-        # Billing API + Cloud Functions roles) 403 with the current CI service
-        # account and are deployed manually (see header). continue-on-error keeps
-        # a residual 403 from reding the run; hosting above already shipped.
-        # No functions deps/build needed now that functions is out of --only.
-        continue-on-error: true
+      # Catch the backend up to the front-end in the same run so rules and
+      # functions can never silently drift behind it. Runs AFTER hosting, so even
+      # if a backend deploy ever errors the hosting release still ships. The SA
+      # JSON is passed via env (not inlined into the script) so the secret can't
+      # leak through shell expansion. functions build runs via firebase.json's
+      # predeploy hook, which needs functions/ deps installed first.
+      - name: Deploy backend (rules + functions)
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npm --prefix functions ci
           npx firebase-tools@15 deploy \
-            --only firestore:rules,database \
+            --only firestore:rules,database,storage,functions \
             --project mainwrld-f7acf --non-interactive --force
