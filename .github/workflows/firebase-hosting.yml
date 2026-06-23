@@ -16,8 +16,13 @@ name: Deploy to Firebase Hosting
 #   - Storage Admin                    (storage.rules release)
 #   - Cloud Functions Admin + Service Account User + Cloud Build Editor
 #     + Artifact Registry Writer + Secret Manager Secret Accessor (functions)
-# Until those roles are granted the backend step fails with 403 while hosting
-# (the prior step) still deploys; in that interim drop `functions` from --only.
+# Until those roles are granted the backend step is BEST-EFFORT: it is marked
+# continue-on-error so a 403 never reds the run (hosting above is the critical
+# release), and `storage` is dropped from --only because the CI service account
+# lacks Storage Admin — its default-bucket lookup 403s and aborts the WHOLE
+# deploy command (so nothing, not even rules/functions, ships). Storage rules are
+# deployed manually in that interim. Grant the roles above, then re-add `storage`
+# to --only and drop continue-on-error to restore full, enforced backend CI.
 
 on:
   push:
@@ -82,6 +87,13 @@ jobs:
       # build runs via firebase.json's predeploy hook, which needs functions/
       # deps installed first.
       - name: Deploy backend (rules + functions)
+        # Best-effort (see header). `storage` is omitted because the CI service
+        # account lacks Storage Admin: its default-bucket lookup 403s and would
+        # abort the entire deploy, so dropping it lets rules + database +
+        # functions still ship. continue-on-error keeps a residual IAM 403 from
+        # failing the run; storage rules are deployed manually until the roles
+        # in the header are granted.
+        continue-on-error: true
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
@@ -89,5 +101,5 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
           npm --prefix functions ci
           npx firebase-tools@15 deploy \
-            --only firestore:rules,database,storage,functions \
+            --only firestore:rules,database,functions \
             --project mainwrld-f7acf --non-interactive --force
