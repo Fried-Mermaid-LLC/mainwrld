@@ -1,0 +1,21 @@
+# Build context is the repo root (docker build -f apps/api/Dockerfile .), so the
+# ignore file must live here, not in apps/api. Keep node_modules, build output,
+# incremental caches (stale tsbuildinfo makes nest build skip files) and secrets
+# out of the image.
+**/node_modules
+**/dist
+**/lib
+.turbo
+**/.turbo
+.git
+**/*.tsbuildinfo
+**/coverage
+*.log
+**/.env
+**/.env.local
+**/.env.*
+**/service-account.json
+service-account.json
+apps/app/ios
+.github
+CUTOVER.md
