@@ -1,7 +1,7 @@
 {
-  "name": "copy-of-mainwrld",
+  "name": "@mainwrld/app",
+  "version": "1.0.0",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
