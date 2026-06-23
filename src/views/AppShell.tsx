@@ -30,6 +30,7 @@ import { LandingView } from '@/views/LandingView'
 import { LoginView } from '@/views/LoginView'
 import { SignupView } from '@/views/SignupView'
 import { WelcomePopup } from '@/components/WelcomePopup'
+import { OnboardingGate } from '@/components/OnboardingGate'
 import { useApp } from '@/state/AppContext'
 
 
@@ -287,7 +288,11 @@ export const AppShell: React.FC = () => {
           </div>
         </div>
       )}
-      {/* First-launch onboarding popup (F10) */}
+      {/* First-run appearance setup — covers the app until the user picks a
+          character, so a new account never lingers on the default model. */}
+      <OnboardingGate />
+      {/* First-launch onboarding popup (F10) — gated to appear after the
+          character is created (see WelcomePopup's avatarConfig guard). */}
       <WelcomePopup />
     </div>
   )
