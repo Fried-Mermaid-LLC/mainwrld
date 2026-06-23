@@ -226,6 +226,11 @@ export function useNotifications({
   const handleNotificationClick = (n: NotificationItem) => {
     if (n.id) {
       fbService.markNotificationRead(n.id).catch(console.error)
+      // Optimistic: SSE doesn't echo read flips (only 'added' events), so
+      // without this the unread dot/badge persists until the 60s fallback poll.
+      setNotifications(prev =>
+        prev.map(x => (x.id === n.id ? { ...x, read: true } : x))
+      )
     }
     routeNotification(n)
   }

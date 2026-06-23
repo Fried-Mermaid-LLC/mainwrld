@@ -6,6 +6,7 @@ export const NotificationsView = () => {
     setView,
     user,
     notifications,
+    setNotifications,
     blockedUsers,
     handleNotificationClick
   } = useApp()
@@ -22,13 +23,16 @@ export const NotificationsView = () => {
     .slice(0, 20)
   // Mark all as read after a short delay so user sees unread state first
   if (sortedNotifs.some(n => !n.read)) {
-    setTimeout(
-      () =>
-        fbService
-          .markNotificationsRead(user.username)
-          .catch(console.error),
-      2000
-    )
+    setTimeout(() => {
+      fbService.markNotificationsRead(user.username).catch(console.error)
+      // Optimistic: SSE doesn't echo read flips, so mirror markAllRead locally
+      // to clear the badge without waiting for the 60s fallback poll.
+      setNotifications(prev =>
+        prev.map(x =>
+          x.recipient === user.username && !x.read ? { ...x, read: true } : x
+        )
+      )
+    }, 2000)
   }
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500'>

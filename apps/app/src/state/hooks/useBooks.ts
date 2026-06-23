@@ -266,11 +266,17 @@ export function useBooks({
   const handleUnpublish = async (bookId: string) => {
     const book = books.find(b => b.id === bookId)
     const wasMonetized = book?.isMonetized
-    await fbService.updateBook(bookId, {
+    const patch = {
       isDraft: true,
       isMonetized: false,
       wasMonetizedBefore: wasMonetized || book?.wasMonetizedBefore || false
-    })
+    }
+    // Optimistic: move the book to drafts immediately so it leaves the
+    // published lists instead of lingering until the ~30s books poll lands.
+    setBooks(prev => prev.map(b => (b.id === bookId ? { ...b, ...patch } : b)))
+    if (selectedBook?.id === bookId)
+      setSelectedBook(prev => (prev ? { ...prev, ...patch } : prev))
+    await fbService.updateBook(bookId, patch)
     showToast('Book unpublished and moved to drafts.', 'visibility_off')
   }
 
@@ -283,6 +289,10 @@ export function useBooks({
       icon: 'check_circle',
       onConfirm: async () => {
         await fbService.deleteBook(bookId)
+        // Optimistic: drop the deleted book from local state so it doesn't
+        // linger in the profile lists until the ~30s books poll lands.
+        setBooks(prev => prev.filter(b => b.id !== bookId))
+        setSelectedBook(prev => (prev && prev.id === bookId ? null : prev))
         setView('self-profile')
         showToast(`You successfully deleted your book`)
       },
@@ -313,6 +323,9 @@ export function useBooks({
               price: 0
             }
             await fbService.updateBook(bookId, updates)
+            setBooks(prev =>
+              prev.map(b => (b.id === bookId ? { ...b, ...updates } : b))
+            )
             if (selectedBook?.id === bookId)
               setSelectedBook((prev: any) =>
                 prev ? { ...prev, ...updates } : prev
@@ -332,6 +345,9 @@ export function useBooks({
           onConfirm: async () => {
             const updates = { isCompleted: false, wasCompleted: true }
             await fbService.updateBook(bookId, updates)
+            setBooks(prev =>
+              prev.map(b => (b.id === bookId ? { ...b, ...updates } : b))
+            )
             if (selectedBook?.id === bookId)
               setSelectedBook((prev: any) =>
                 prev ? { ...prev, ...updates } : prev
@@ -352,6 +368,9 @@ export function useBooks({
         onConfirm: async () => {
           const updates = { isCompleted: true, wasCompleted: true }
           await fbService.updateBook(bookId, updates)
+          setBooks(prev =>
+            prev.map(b => (b.id === bookId ? { ...b, ...updates } : b))
+          )
           if (selectedBook?.id === bookId)
             setSelectedBook((prev: any) =>
               prev ? { ...prev, ...updates } : prev

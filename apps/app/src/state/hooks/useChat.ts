@@ -65,6 +65,15 @@ export function useChat({
       fbService
         .markMessagesRead(selectedChatUser, user.username)
         .catch(console.error)
+      // Optimistic: clear the unread badge immediately. SSE doesn't echo read
+      // flips, so otherwise the badge persists until the 60s fallback poll.
+      setChatMessages(prev =>
+        prev.map(m =>
+          m.from === selectedChatUser && m.to === user.username && !m.read
+            ? { ...m, read: true }
+            : m
+        )
+      )
     }
   }, [view, selectedChatUser])
 
@@ -101,10 +110,39 @@ export function useChat({
       )
       return false
     }
-    // Write to Firestore — real-time subscription will update local state
+    // Optimistic insert so the sent message shows instantly. Without it the
+    // message is missing until the SSE echo (or the 60s fallback poll) lands.
+    // The SSE handler dedupes by id, so we insert under a temp id and reconcile
+    // to the server message (real id) when sendChatMessage resolves.
+    const tempId = `tmp_${Math.random().toString(36).slice(2)}`
+    setChatMessages(prev => [
+      ...prev,
+      {
+        id: tempId,
+        from: user.username,
+        to: toUsername,
+        text: text.trim(),
+        timestamp: new Date().toISOString(),
+        read: false,
+        senderIsPremium: !!user.isPremium
+      }
+    ])
     fbService
       .sendChatMessage(user.username, toUsername, text.trim(), !!user.isPremium)
-      .catch(console.error)
+      .then(created => {
+        setChatMessages(prev => {
+          const noTemp = prev.filter(m => m.id !== tempId)
+          // SSE may have already delivered the real message by id — avoid a dup.
+          return noTemp.some(m => m.id === created.id)
+            ? noTemp
+            : [...noTemp, created]
+        })
+      })
+      .catch(err => {
+        console.error(err)
+        setChatMessages(prev => prev.filter(m => m.id !== tempId))
+        showToast('Failed to send message. Please try again.', 'warning')
+      })
     // Send notification to recipient
     const recipientUser =
       registeredUsers.find(u => u.username === toUsername) ||

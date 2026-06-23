@@ -354,7 +354,9 @@ export function useAppValue() {
     registeredUsers,
     setRegisteredUsers,
     books,
-    allComments
+    setBooks,
+    allComments,
+    setAllComments
   })
   const {
     reports,

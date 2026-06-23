@@ -17,7 +17,9 @@ interface AdminDeps {
   registeredUsers: any[]
   setRegisteredUsers: Dispatch<SetStateAction<any[]>>
   books: Book[]
+  setBooks: Dispatch<SetStateAction<Book[]>>
   allComments: Comment[]
+  setAllComments: Dispatch<SetStateAction<Comment[]>>
 }
 
 // Moderation / admin domain (Phase B). Owns reports + their (admin-gated)
@@ -36,7 +38,9 @@ export function useAdmin({
   registeredUsers,
   setRegisteredUsers,
   books,
-  allComments
+  setBooks,
+  allComments,
+  setAllComments
 }: AdminDeps) {
   // Reports state (Firestore real-time)
   const [reports, setReports] = useState<Report[]>([])
@@ -77,6 +81,17 @@ export function useAdmin({
     })
     return () => unsub()
   }, [firebaseUid, isAdmin])
+
+  // Optimistically reflect a report-status change locally so the admin queue
+  // (reports.filter(status === 'pending')) clears immediately instead of after
+  // the ~30s reports poll. The subscription reconciles to server truth.
+  const setReportsStatusLocally = (
+    reportIds: string[],
+    status: Report['status']
+  ) =>
+    setReports(prev =>
+      prev.map(r => (reportIds.includes(r.id) ? { ...r, status } : r))
+    )
 
   const handleReport = (
     type: 'Book' | 'Comment' | 'User',
@@ -175,12 +190,25 @@ export function useAdmin({
         isDraft: true
       })
       .catch(console.error)
+    // Optimistic: hide the book from client lists immediately (AdminDashboard +
+    // readers filter on isDraft). takenDown* are server-side gates, not rendered.
+    setBooks(prev =>
+      prev.map(b =>
+        b.id === bookId
+          ? { ...b, isDraft: true, isMonetized: false, isFree: false }
+          : b
+      )
+    )
     const bookReports = reports.filter(
       r => r.targetId === bookId && r.type === 'Book'
     )
     bookReports.forEach(r => {
       fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
     })
+    setReportsStatusLocally(
+      bookReports.map(r => r.id),
+      'resolved'
+    )
     // Strike the author once for the removal (keyed on the first report id so
     // N reports on one book = one strike, and a re-run won't double-strike).
     const authorUsername = books.find(b => b.id === bookId)?.author.username
@@ -190,12 +218,19 @@ export function useAdmin({
 
   const handleRemoveComment = (commentId: string) => {
     fbService.removeCommentDoc(commentId).catch(console.error)
+    // Optimistic: drop the comment from readers' threads immediately instead of
+    // lingering until the ~20s comments poll.
+    setAllComments(prev => prev.filter(c => c.id !== commentId))
     const commentReports = reports.filter(
       r => r.targetId === commentId && r.type === 'Comment'
     )
     commentReports.forEach(r => {
       fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
     })
+    setReportsStatusLocally(
+      commentReports.map(r => r.id),
+      'resolved'
+    )
     // Comments carry `authorUsername` on the doc (read into allComments).
     const authorUsername = allComments.find(c => c.id === commentId)
       ?.authorUsername
@@ -212,6 +247,10 @@ export function useAdmin({
     userReports.forEach(r => {
       fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
     })
+    setReportsStatusLocally(
+      userReports.map(r => r.id),
+      'resolved'
+    )
     applyStrike(username, userReports[0]?.id)
   }
 
@@ -241,11 +280,16 @@ export function useAdmin({
     const targetUser = registeredUsers.find(u => u.username === username)
     if (!targetUser?.uid) return
     if (targetUser.isAdmin) return // never ban an admin
-    reports
-      .filter(r => r.targetId === username && r.type === 'User')
-      .forEach(r => {
-        fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
-      })
+    const userReports = reports.filter(
+      r => r.targetId === username && r.type === 'User'
+    )
+    userReports.forEach(r => {
+      fbService.updateReportStatus(r.id, 'resolved').catch(console.error)
+    })
+    setReportsStatusLocally(
+      userReports.map(r => r.id),
+      'resolved'
+    )
     fbService.banUser(targetUser.uid).catch(console.error)
     showToast(`@${username} banned`, 'block')
     // Mark banned in place (don't drop from the list) so the row can offer
@@ -273,6 +317,8 @@ export function useAdmin({
 
   const handleDismissReport = (reportId: string) => {
     fbService.updateReportStatus(reportId, 'dismissed').catch(console.error)
+    // Optimistic: clear it from the pending queue immediately.
+    setReportsStatusLocally([reportId], 'dismissed')
   }
 
   // ---- Monetization review (F03) ----
@@ -283,6 +329,22 @@ export function useAdmin({
   const handleApproveMonetization = async (bookId: string) => {
     try {
       await stripeConnect.reviewMonetization(bookId, 'approve')
+      // Optimistic: drop the book from the pending queue immediately
+      // (queue = books.filter(monetizationStatus === 'pending')).
+      setBooks(prev =>
+        prev.map(b =>
+          b.id === bookId
+            ? {
+                ...b,
+                monetizationStatus: 'approved' as const,
+                isMonetized: true,
+                isFree: false,
+                price: b.requestedPrice ?? b.price,
+                monetizationReviewedAt: new Date().toISOString()
+              }
+            : b
+        )
+      )
       showToast('Monetization approved', 'paid')
     } catch (err: any) {
       showToast(err?.message || 'Could not approve.', 'error')
@@ -297,6 +359,19 @@ export function useAdmin({
     }
     try {
       await stripeConnect.reviewMonetization(bookId, 'deny', trimmed)
+      // Optimistic: drop the book from the pending queue immediately.
+      setBooks(prev =>
+        prev.map(b =>
+          b.id === bookId
+            ? {
+                ...b,
+                monetizationStatus: 'denied' as const,
+                monetizationDenialReason: trimmed,
+                monetizationReviewedAt: new Date().toISOString()
+              }
+            : b
+        )
+      )
       showToast('Monetization denied', 'money_off')
     } catch (err: any) {
       showToast(err?.message || 'Could not deny.', 'error')
