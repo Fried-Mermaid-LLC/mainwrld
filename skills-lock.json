@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "nestjs": {
+      "source": "iamursky/nestjs-skill",
+      "sourceType": "github",
+      "skillPath": "skills/nestjs/SKILL.md",
+      "computedHash": "c87574f1fd0bbd5858284c4d60f6ad8ba6e08f3d2764cfcff262bb5f72f575ee"
+    },
+    "turborepo": {
+      "source": "vercel/turborepo",
+      "sourceType": "github",
+      "skillPath": "skills/turborepo/SKILL.md",
+      "computedHash": "b7c3165ae67a2892d6195a5b2cba15c8d96341f5c64ddd0d3ce4225c94a2ae83"
+    }
+  }
+}
