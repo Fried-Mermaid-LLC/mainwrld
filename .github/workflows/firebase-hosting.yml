@@ -1,11 +1,23 @@
 name: Deploy to Firebase Hosting
 
 # Builds the Vite app (output: dist/) and deploys it to Firebase Hosting on
-# push to main. Replaces the GitHub Pages deployment.
+# push to main. Replaces the GitHub Pages deployment. The same run ALSO deploys
+# the backend (Firestore/RTDB/Storage rules + Cloud Functions) so the rules and
+# functions can never silently drift behind the already-deployed front-end —
+# the exact failure that left the schema-2 `books/{id}/chapters` rules and the
+# RTDB presence rules un-deployed (drafts + presence hit default-deny in prod).
 #
 # Requires repo secret FIREBASE_SERVICE_ACCOUNT: a Firebase service-account
-# JSON with the "Firebase Hosting Admin" role (Firebase Console -> Project
-# Settings -> Service accounts -> Generate new private key).
+# JSON (Firebase Console -> Project Settings -> Service accounts -> Generate new
+# private key). For the backend step the service account needs MORE than
+# "Firebase Hosting Admin" — grant in GCP IAM (Console -> IAM):
+#   - Firebase Rules Admin            (firestore.rules + storage.rules)
+#   - Firebase Realtime Database Admin (database.rules.json)
+#   - Storage Admin                    (storage.rules release)
+#   - Cloud Functions Admin + Service Account User + Cloud Build Editor
+#     + Artifact Registry Writer + Secret Manager Secret Accessor (functions)
+# Until those roles are granted the backend step fails with 403 while hosting
+# (the prior step) still deploys; in that interim drop `functions` from --only.
 
 on:
   push:
@@ -62,3 +74,20 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
           projectId: mainwrld-f7acf
+
+      # Catch the backend up to the front-end in the same run. Runs AFTER
+      # hosting, so a backend 403 (pending IAM, see header) never blocks the
+      # hosting release. The SA JSON is passed via env (not inlined into the
+      # script) so the secret can't leak through shell expansion. functions
+      # build runs via firebase.json's predeploy hook, which needs functions/
+      # deps installed first.
+      - name: Deploy backend (rules + functions)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          npm --prefix functions ci
+          npx firebase-tools@15 deploy \
+            --only firestore:rules,database,storage,functions \
+            --project mainwrld-f7acf --non-interactive --force
