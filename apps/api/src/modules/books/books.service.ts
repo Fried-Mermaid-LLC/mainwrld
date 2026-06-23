@@ -1,0 +1,183 @@
+import { randomUUID } from 'node:crypto';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import type { Storage } from 'firebase-admin/storage';
+import type { AuthUser } from '../../infra/auth/auth-user.interface';
+import {
+  COLLECTIONS,
+  FIREBASE_STORAGE,
+  FIRESTORE,
+} from '../../infra/firebase/firebase.constants';
+import { ModerationService } from '../moderation/moderation.service';
+import type { CreateBookDto } from './dto/create-book.dto';
+import type { UpdateBookDto } from './dto/update-book.dto';
+
+// Raw Firestore book document. The client converts this into the richer `Book`
+// shape (nested author object, isFavorite, …); we keep the wire shape raw so
+// that conversion layer in the hooks is untouched.
+export type BookDoc = Record<string, unknown> & {
+  id: string;
+  authorUid?: string;
+  authorUsername?: string;
+  isDraft?: boolean;
+  title?: string;
+};
+
+@Injectable()
+export class BooksService {
+  constructor(
+    @Inject(FIRESTORE) private readonly db: Firestore,
+    @Inject(FIREBASE_STORAGE) private readonly storage: Storage,
+    private readonly moderation: ModerationService,
+  ) {}
+
+  private get col() {
+    return this.db.collection(COLLECTIONS.books);
+  }
+
+  // Books the user may read: every published book + the user's own (including
+  // drafts), merged by id (own copy wins). Mirrors the client's two-listener
+  // merge that the security rules require.
+  async listForUser(uid: string): Promise<BookDoc[]> {
+    const [published, mine] = await Promise.all([
+      this.col.where('isDraft', '==', false).get(),
+      this.col.where('authorUid', '==', uid).get(),
+    ]);
+    const byId = new Map<string, BookDoc>();
+    for (const d of published.docs)
+      byId.set(d.id, { id: d.id, ...d.data() } as BookDoc);
+    for (const d of mine.docs)
+      byId.set(d.id, { id: d.id, ...d.data() } as BookDoc);
+    return Array.from(byId.values());
+  }
+
+  async getForUser(id: string, user: AuthUser): Promise<BookDoc> {
+    const snap = await this.col.doc(id).get();
+    if (!snap.exists) throw new NotFoundException('Book not found');
+    const data = { id: snap.id, ...snap.data() } as BookDoc;
+    // Drafts are visible only to the author or an admin.
+    if (data.isDraft && data.authorUid !== user.uid && !user.admin) {
+      throw new NotFoundException('Book not found');
+    }
+    return data;
+  }
+
+  // The ValidationPipe (whitelist) has already dropped any field not on the DTO
+  // — including server-managed ones (authorUid, monetization*, sellerUid, …) —
+  // so `dto` carries only author-writable fields. authorUid is stamped here.
+  async create(user: AuthUser, dto: CreateBookDto): Promise<BookDoc> {
+    await this.screenMetadata(dto.title, dto.tagline);
+    // Accept a caller-supplied id (so a cover can be uploaded before the doc
+    // exists); otherwise allocate one.
+    const id =
+      dto.id && /^[A-Za-z0-9_-]{1,128}$/.test(dto.id) ? dto.id : this.col.doc().id;
+    const { id: _ignored, ...rest } = dto;
+    const data = {
+      ...rest,
+      id,
+      authorUid: user.uid,
+      authorUsername: user.username ?? dto.authorUsername ?? null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    await this.col.doc(id).set(data);
+    const snap = await this.col.doc(id).get();
+    return { id, ...snap.data() } as BookDoc;
+  }
+
+  async update(
+    id: string,
+    user: AuthUser,
+    dto: UpdateBookDto,
+  ): Promise<BookDoc> {
+    const ref = this.col.doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) throw new NotFoundException('Book not found');
+    const existing = snap.data() as BookDoc;
+    if (existing.authorUid !== user.uid && !user.admin) {
+      throw new ForbiddenException('Not the book author');
+    }
+    await this.screenMetadata(dto.title, dto.tagline);
+    await ref.update({ ...dto, updatedAt: FieldValue.serverTimestamp() });
+    const after = await ref.get();
+    return { id, ...after.data() } as BookDoc;
+  }
+
+  async remove(id: string, user: AuthUser): Promise<void> {
+    const ref = this.col.doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const data = snap.data() as BookDoc;
+    if (data.authorUid !== user.uid && !user.admin) {
+      throw new ForbiddenException('Not the book author');
+    }
+    // Admin SDK recursive delete removes the book + its chapters subcollection
+    // (the client SDK had to batch this manually).
+    await this.db.recursiveDelete(ref);
+  }
+
+  // Per-book favorites counter feeding the spotlight ranking. Best-effort; the
+  // client owns the per-user favorite list, this is just the aggregate signal.
+  async adjustFavorite(id: string, delta: 1 | -1): Promise<void> {
+    const ref = this.col.doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    await ref.update({ favoritesTotal: FieldValue.increment(delta) });
+  }
+
+  // Upload a base64 data-URL cover to Storage and return its public download
+  // URL + path. Path embeds the author uid so storage rules can enforce write
+  // ownership; the firebaseStorageDownloadTokens metadata yields a public URL
+  // identical in shape to the client SDK's getDownloadURL.
+  async uploadCover(
+    authorUid: string,
+    bookId: string,
+    dataUrl: string,
+  ): Promise<{ url: string; path: string }> {
+    const match = /^data:(.+?);base64,(.*)$/s.exec(dataUrl);
+    if (!match) throw new UnprocessableEntityException('Invalid cover data URL');
+    const [, contentType, b64] = match;
+    const buffer = Buffer.from(b64, 'base64');
+    const token = randomUUID();
+    const path = `book-covers/${authorUid}/${bookId}/${randomUUID()}.jpg`;
+    const bucket = this.storage.bucket();
+    await bucket.file(path).save(buffer, {
+      contentType,
+      metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+    });
+    const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(
+      path,
+    )}?alt=media&token=${token}`;
+    return { url, path };
+  }
+
+  async deleteCover(path: string): Promise<void> {
+    try {
+      await this.storage.bucket().file(path).delete();
+    } catch {
+      // Best-effort — a missing/old cover must never block the flow.
+    }
+  }
+
+  // Pre-moderation for public-facing metadata (title + tagline/synopsis). A
+  // flagged write is rejected (422) and recorded for the admin audit trail,
+  // replacing the old post-write moderateBookOnWrite trigger.
+  private async screenMetadata(title?: string, tagline?: string): Promise<void> {
+    for (const text of [title, tagline]) {
+      if (!text) continue;
+      const verdict = await this.moderation.screen(text);
+      if (verdict.flagged) {
+        throw new UnprocessableEntityException({
+          code: 'moderation-flagged',
+          message: 'Content violates community guidelines',
+        });
+      }
+    }
+  }
+}

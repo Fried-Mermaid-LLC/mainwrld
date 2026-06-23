@@ -1,0 +1,20 @@
+# Compiled output
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Env (secrets — never commit)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+
+# Local service-account credentials
+service-account.json
