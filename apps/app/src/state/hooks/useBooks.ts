@@ -188,17 +188,20 @@ export function useBooks({
         `Chapter ${chapterIndex + 1}`
       const authorUsername =
         (targetBook as any).authorUsername || targetBook.author.username
-      addNotification(
-        'Chapter Liked',
-        `${user?.displayName} liked ${chapterTitle} from "${targetBook.title}"`,
-        'favorite',
-        authorUsername,
-        user.username,
-        targetBook.id,
-        chapterIndex,
-        undefined,
-        'bookLikes'
-      )
+      // Don't notify yourself about liking your own book (self-notification).
+      if (authorUsername !== user.username) {
+        addNotification(
+          'Chapter Liked',
+          `${user?.displayName} liked ${chapterTitle} from "${targetBook.title}"`,
+          'favorite',
+          authorUsername,
+          user.username,
+          targetBook.id,
+          chapterIndex,
+          undefined,
+          'bookLikes'
+        )
+      }
 
       // Earned points: award book author 2 pts when chapter hits like threshold
       const rewardKey = `chapter:${bookId}:${chapterIndex}:${Math.floor(

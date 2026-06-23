@@ -220,6 +220,16 @@ describe('UsersService', () => {
       // bio left intact (a bare update with empty payload would not run).
       expect(doc.bio).toBe('old');
     });
+
+    it('strips the caller’s own username from blockedUsers (no self-block)', async () => {
+      await svc.updateMe(
+        'u1',
+        { blockedUsers: ['bob', 'Alice', 'carol'] },
+        'alice',
+      );
+      // own username removed (case-insensitive), others kept
+      expect(fs.dump('users/u1')!.blockedUsers).toEqual(['bob', 'carol']);
+    });
   });
 
   describe('deleteAccount', () => {

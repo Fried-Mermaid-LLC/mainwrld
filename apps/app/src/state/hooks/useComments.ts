@@ -90,17 +90,20 @@ export function useComments({
       const chapterName = chapterMetaEntry
         ? ` (${chapterMetaEntry.title})`
         : ''
-      addNotification(
-        'New Comment',
-        `${user.displayName} commented on "${selectedBook.title}"${chapterName}`,
-        'chat_bubble',
-        selectedBook.author.username,
-        user.username,
-        selectedBook.id,
-        chapterIndex,
-        createdCommentId || newComment.id,
-        'comments'
-      )
+      // Don't notify yourself about commenting on your own book.
+      if (selectedBook.author.username !== user.username) {
+        addNotification(
+          'New Comment',
+          `${user.displayName} commented on "${selectedBook.title}"${chapterName}`,
+          'chat_bubble',
+          selectedBook.author.username,
+          user.username,
+          selectedBook.id,
+          chapterIndex,
+          createdCommentId || newComment.id,
+          'comments'
+        )
+      }
 
       showToast('Your comment has been successfully added.')
     } catch (error) {
@@ -113,6 +116,9 @@ export function useComments({
   const handleLikeComment = async (commentId: string) => {
     const comment = allComments.find(c => c.id === commentId)
     if (!comment) return
+    // Can't like your own comment (self-endorsement; the server strips it too,
+    // and this avoids a "X liked your comment" self-notification).
+    if ((comment as any).authorUsername === user.username) return
     const likedBy = comment.likedBy || []
     if (likedBy.includes(user.username)) return // Already liked
     const newLikes = comment.likes + 1

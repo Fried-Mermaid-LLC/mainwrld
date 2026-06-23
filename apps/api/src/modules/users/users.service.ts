@@ -282,12 +282,26 @@ export class UsersService {
     return !snap.exists;
   }
 
-  async updateMe(uid: string, data: Record<string, unknown>): Promise<void> {
+  async updateMe(
+    uid: string,
+    data: Record<string, unknown>,
+    ownUsername?: string | null,
+  ): Promise<void> {
     const clean = Object.fromEntries(
       Object.entries(data).filter(
         ([k, v]) => !PROTECTED_FIELDS.has(k) && v !== undefined,
       ),
     );
+    // A user can't block themselves: self-blocking silently hides them from
+    // their own feed, chat list, and notifications. Strip the caller's own
+    // username from blockedUsers (the client guards this too, but a direct
+    // PATCH /users/me would otherwise bypass it).
+    if (ownUsername && Array.isArray(clean.blockedUsers)) {
+      const own = ownUsername.toLowerCase();
+      clean.blockedUsers = (clean.blockedUsers as unknown[]).filter(
+        (u) => typeof u === 'string' && u.toLowerCase() !== own,
+      );
+    }
     if (Object.keys(clean).length) await this.col.doc(uid).update(clean);
   }
 

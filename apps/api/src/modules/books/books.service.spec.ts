@@ -66,6 +66,15 @@ describe('BooksService', () => {
       } as any);
       expect(book.authorUsername).toBe('dtoname');
     });
+
+    it('drops a client-supplied likes array on create (non-admin)', async () => {
+      const book = await svc.create(makeAuthUser({ uid: 'u1' }), {
+        id: 'b1',
+        title: 'T',
+        likes: [50, 50],
+      } as any);
+      expect(book.likes).toBeUndefined();
+    });
   });
 
   describe('getForUser', () => {
@@ -140,6 +149,27 @@ describe('BooksService', () => {
         { title: 'mod' } as any,
       );
       expect(out.title).toBe('mod');
+    });
+
+    it('drops an author-supplied likes write (no self-inflation)', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'old',
+        likes: [1, 1],
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        likes: [999, 999],
+      } as any);
+      expect(fs.dump('books/b1')!.likes).toEqual([1, 1]);
+    });
+
+    it('lets an admin adjust likes', async () => {
+      fs.seed('books/b1', { id: 'b1', authorUid: 'owner', title: 'old', likes: [1] });
+      await svc.update('b1', makeAuthUser({ uid: 'admin1', admin: true }), {
+        likes: [5],
+      } as any);
+      expect(fs.dump('books/b1')!.likes).toEqual([5]);
     });
 
     it('rejects a flagged update (422) before writing', async () => {

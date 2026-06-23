@@ -111,8 +111,14 @@ export class CommentsService {
 
     const patch: Record<string, unknown> = {};
     if (dto.text !== undefined) patch.text = dto.text;
-    if (dto.likes !== undefined) patch.likes = dto.likes;
-    if (dto.likedBy !== undefined) patch.likedBy = dto.likedBy;
+    // Likes are collaborative (any reader toggles a like) EXCEPT the comment's
+    // own author: a user can't like their own comment (self-endorsement that
+    // inflates `likes` + inserts their username into `likedBy`). Admins exempt.
+    const isOwnComment = data.authorUsername === user.username;
+    if (!isOwnComment || user.admin) {
+      if (dto.likes !== undefined) patch.likes = dto.likes;
+      if (dto.likedBy !== undefined) patch.likedBy = dto.likedBy;
+    }
     if (Object.keys(patch).length) await ref.update(patch);
   }
 

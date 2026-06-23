@@ -74,7 +74,7 @@ export class UsersController {
     @CurrentUser() user: AuthUser,
     @Body() body: Record<string, unknown>,
   ) {
-    await this.users.updateMe(user.uid, body);
+    await this.users.updateMe(user.uid, body, user.username);
   }
 
   @Post('me/fcm-tokens')

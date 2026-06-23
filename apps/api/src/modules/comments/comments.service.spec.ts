@@ -158,6 +158,29 @@ describe('CommentsService', () => {
       expect(moderation.screen).not.toHaveBeenCalled();
     });
 
+    it('does NOT let the author like their own comment (drops likes/likedBy)', async () => {
+      seedComment({ authorUsername: 'alice', likes: 1, likedBy: ['bob'] });
+      await svc.update(
+        'cmt1',
+        makeAuthUser({ username: 'alice' }),
+        { likes: 2, likedBy: ['bob', 'alice'] } as any,
+      );
+      const doc = fs.dump('comments/cmt1')!;
+      // self-like stripped: count + membership unchanged
+      expect(doc.likes).toBe(1);
+      expect(doc.likedBy).toEqual(['bob']);
+    });
+
+    it('still lets the author edit their own comment text (likes untouched)', async () => {
+      seedComment({ authorUsername: 'alice', likes: 3, likedBy: ['bob'] });
+      await svc.update('cmt1', makeAuthUser({ username: 'alice' }), {
+        text: 'edited',
+      } as any);
+      const doc = fs.dump('comments/cmt1')!;
+      expect(doc.text).toBe('edited');
+      expect(doc.likes).toBe(3);
+    });
+
     it('no-ops when the dto carries no recognized fields', async () => {
       seedComment();
       await svc.update('cmt1', makeAuthUser(), {} as any);

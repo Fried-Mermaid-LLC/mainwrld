@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   HttpException,
   HttpStatus,
   Inject,
@@ -53,6 +54,15 @@ export class ChatService {
     to: string,
     text: string,
   ): Promise<ChatMessage> {
+    // A DM is between two distinct users — you can't message yourself (it would
+    // spawn a self-conversation, burn your own rate-limit budget, and notify
+    // yourself). Mirrors the self-action guards in social/payments/admin.
+    if (from === to) {
+      throw new BadRequestException({
+        code: 'failed-precondition',
+        message: 'You cannot message yourself.',
+      });
+    }
     // Pre-moderation (replaces moderateChatMessageOnCreate).
     const verdict = await this.moderation.screen(text);
     if (verdict.flagged) {

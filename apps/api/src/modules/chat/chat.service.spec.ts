@@ -39,6 +39,14 @@ describe('ChatService', () => {
       expect(moderation.screen).toHaveBeenCalledWith('hi there');
     });
 
+    it('rejects messaging yourself (from === to) before moderation', async () => {
+      await expect(
+        svc.send('alice', 'u1', 'alice', 'hi me'),
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(await allMessages(fs)).toHaveLength(0);
+      expect(moderation.screen).not.toHaveBeenCalled();
+    });
+
     it('rejects flagged content with 422 and logs the flag', async () => {
       moderation = createFakeModeration(true);
       moderation.screen = jest.fn(async () => ({

@@ -17,7 +17,7 @@ describe('AdminService', () => {
       auth._store['t1'] = { customClaims: { username: 'bob' } };
       fs.seed('users/t1', { username: 'bob' });
 
-      const res = await svc.setAdmin('t1', true);
+      const res = await svc.setAdmin('admin1', 't1',true);
 
       expect(res).toEqual({ uid: 't1', admin: true });
       expect(auth.setCustomUserClaims).toHaveBeenCalledWith('t1', {
@@ -31,13 +31,24 @@ describe('AdminService', () => {
       auth._store['t1'] = { customClaims: { admin: true } };
       fs.seed('users/t1', { isAdmin: true });
 
-      const res = await svc.setAdmin('t1', false);
+      const res = await svc.setAdmin('admin1', 't1',false);
 
       expect(res.admin).toBe(false);
       expect(auth.setCustomUserClaims).toHaveBeenCalledWith('t1', {
         admin: false,
       });
       expect(fs.dump('users/t1')!.isAdmin).toBe(false);
+    });
+
+    it('refuses to change your own admin status (no self-lockout)', async () => {
+      auth._store['admin1'] = { customClaims: { admin: true } };
+      fs.seed('users/admin1', { isAdmin: true });
+      await expect(svc.setAdmin('admin1', 'admin1', false)).rejects.toThrow(
+        'You cannot change your own admin status.',
+      );
+      // claim + profile untouched
+      expect(auth.setCustomUserClaims).not.toHaveBeenCalled();
+      expect(fs.dump('users/admin1')!.isAdmin).toBe(true);
     });
   });
 
@@ -166,7 +177,7 @@ describe('AdminService', () => {
       fs.seed('users/t1', { username: 'victim', strikes: 0 });
       auth._store['t1'] = { customClaims: {} };
 
-      const res = await svc.addStrike('t1', 'rep-1');
+      const res = await svc.addStrike('admin1', 't1','rep-1');
 
       expect(res).toEqual({ strikes: 1, banned: false });
       const data = fs.dump('users/t1')!;
@@ -181,7 +192,7 @@ describe('AdminService', () => {
       fs.seed('users/t1', { username: 'victim', strikes: 2 });
       auth._store['t1'] = { customClaims: {} };
 
-      const res = await svc.addStrike('t1', 'rep-3');
+      const res = await svc.addStrike('admin1', 't1','rep-3');
 
       expect(res).toEqual({ strikes: 3, banned: true });
       const data = fs.dump('users/t1')!;
@@ -199,7 +210,7 @@ describe('AdminService', () => {
       fs.seed('users/t1', { username: 'mod', strikes: 2, isAdmin: true });
       auth._store['t1'] = { customClaims: { admin: true } };
 
-      const res = await svc.addStrike('t1', 'rep-3');
+      const res = await svc.addStrike('admin1', 't1','rep-3');
 
       expect(res).toEqual({ strikes: 3, banned: false });
       expect(fs.dump('users/t1')!.isBanned).toBeUndefined();
@@ -210,7 +221,7 @@ describe('AdminService', () => {
       fs.seed('users/t1', { username: 'victim', strikes: 5, isBanned: true });
       auth._store['t1'] = { customClaims: { banned: true } };
 
-      const res = await svc.addStrike('t1', 'rep-x');
+      const res = await svc.addStrike('admin1', 't1','rep-x');
 
       expect(res.banned).toBe(false);
       expect(res.strikes).toBe(6);
@@ -222,10 +233,19 @@ describe('AdminService', () => {
       fs.seed('users/t1', { username: 'victim', strikes: 0 });
       auth._store['t1'] = { customClaims: {} };
 
-      const res = await svc.addStrike('t1');
+      const res = await svc.addStrike('admin1', 't1');
 
       expect(res).toEqual({ strikes: 1, banned: false });
       expect(fs.dump('users/t1')!.struckByReportIds).toBeUndefined();
+    });
+
+    it('refuses to strike yourself (precondition)', async () => {
+      fs.seed('users/admin1', { username: 'admin', strikes: 0 });
+      await expect(svc.addStrike('admin1', 'admin1', 'rep-self')).rejects.toThrow(
+        'You cannot strike yourself.',
+      );
+      // no strike written
+      expect(fs.dump('users/admin1')!.strikes).toBe(0);
     });
   });
 });

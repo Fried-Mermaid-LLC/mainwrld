@@ -139,6 +139,7 @@ export class MonetizationService {
 
   async review(
     adminUsername: string,
+    reviewerUid: string,
     bookId: string,
     decision: 'approve' | 'deny',
     reason?: string,
@@ -146,6 +147,15 @@ export class MonetizationService {
     const found = await this.payments.findBookByIdField(bookId);
     if (!found) throw new NotFoundException('Book not found.');
     const book = found.data;
+    // Monetization review is an independent gate: the requester/payee-seller
+    // and the approver must be different people. An admin who authored (or is
+    // the seller of) this book may not review their own request — otherwise the
+    // person who profits unilaterally approves their own sale.
+    if (book.authorUid === reviewerUid || book.sellerUid === reviewerUid) {
+      throw new ForbiddenException(
+        'You cannot review your own book’s monetization request.',
+      );
+    }
     const nowIso = new Date().toISOString();
 
     if (decision === 'approve') {

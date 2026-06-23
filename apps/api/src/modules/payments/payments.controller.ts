@@ -74,6 +74,7 @@ export class PaymentsController {
   ) {
     return this.monetization.review(
       user.username || 'admin',
+      user.uid,
       bookId,
       dto.decision,
       dto.reason,

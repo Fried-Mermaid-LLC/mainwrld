@@ -73,6 +73,11 @@ export class BooksService {
   // so `dto` carries only author-writable fields. authorUid is stamped here.
   async create(user: AuthUser, dto: CreateBookDto): Promise<BookDoc> {
     await this.screenMetadata(dto.title, dto.tagline);
+    // Per-chapter `likes` is a reader-driven aggregate, never author-authored.
+    // An author seeding it would self-inflate the count that gates monetization
+    // (100+ likes/chapter) and the spotlight ranking. Strip it on the author
+    // path (admins may still seed/repair counts).
+    this.stripLikesUnlessAdmin(user, dto);
     // Accept a caller-supplied id (so a cover can be uploaded before the doc
     // exists); otherwise allocate one.
     const id =
@@ -103,6 +108,10 @@ export class BooksService {
     if (existing.authorUid !== user.uid && !user.admin) {
       throw new ForbiddenException('Not the book author');
     }
+    // An author may not write their own book's per-chapter `likes` — that would
+    // self-inflate the monetization/spotlight signal (readers' likes never reach
+    // this author-only endpoint anyway). Admins may still adjust counts.
+    this.stripLikesUnlessAdmin(user, dto);
     await this.screenMetadata(dto.title, dto.tagline);
     await ref.update({ ...dto, updatedAt: FieldValue.serverTimestamp() });
     const after = await ref.get();
@@ -120,6 +129,17 @@ export class BooksService {
     // Admin SDK recursive delete removes the book + its chapters subcollection
     // (the client SDK had to batch this manually).
     await this.db.recursiveDelete(ref);
+  }
+
+  // `likes` is a server-managed reader aggregate. Non-admin callers (i.e. the
+  // book's own author — the only non-admin who clears the ownership check) must
+  // never write it, or they could like their own book and forge the
+  // monetization/spotlight signal. Mutates the dto in place.
+  private stripLikesUnlessAdmin(
+    user: AuthUser,
+    dto: { likes?: number[] },
+  ): void {
+    if (!user.admin) delete dto.likes;
   }
 
   // Per-book favorites counter feeding the spotlight ranking. Best-effort; the

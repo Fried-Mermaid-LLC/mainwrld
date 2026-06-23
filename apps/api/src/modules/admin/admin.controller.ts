@@ -13,8 +13,12 @@ export class AdminController {
   constructor(private readonly admin: AdminService) {}
 
   @Post('admin')
-  setAdmin(@Param('uid') uid: string, @Body() dto: SetAdminDto) {
-    return this.admin.setAdmin(uid, dto.admin);
+  setAdmin(
+    @CurrentUser() user: AuthUser,
+    @Param('uid') uid: string,
+    @Body() dto: SetAdminDto,
+  ) {
+    return this.admin.setAdmin(user.uid, uid, dto.admin);
   }
 
   @Post('ban')
@@ -28,7 +32,11 @@ export class AdminController {
   }
 
   @Post('strikes')
-  addStrike(@Param('uid') uid: string, @Body() dto: AddStrikeDto) {
-    return this.admin.addStrike(uid, dto.reportId);
+  addStrike(
+    @CurrentUser() user: AuthUser,
+    @Param('uid') uid: string,
+    @Body() dto: AddStrikeDto,
+  ) {
+    return this.admin.addStrike(user.uid, uid, dto.reportId);
   }
 }

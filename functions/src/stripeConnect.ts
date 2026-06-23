@@ -371,6 +371,15 @@ export const reviewMonetization = onCall<
   const found = await findBookByIdField(db, bookId)
   if (!found) throw new HttpsError('not-found', 'Book not found.')
   const book = found.data
+  // Independent-review guard: an admin who authored (or sells) this book may not
+  // review their own monetization request — the payee and the approver must be
+  // different people.
+  if (book.authorUid === req.auth.uid || book.sellerUid === req.auth.uid) {
+    throw new HttpsError(
+      'permission-denied',
+      'You cannot review your own book’s monetization request.'
+    )
+  }
   const nowIso = new Date().toISOString()
 
   if (decision === 'approve') {

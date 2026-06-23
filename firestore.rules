@@ -129,7 +129,14 @@ service cloud.firestore {
       // permanence flags. Author un-monetize (isMonetized true→false, price 0)
       // is still allowed so the demonetize/unpublish handlers keep working.
       allow update: if isSignedIn() && (
-        isAdmin()
+        // Admins may edit any book — EXCEPT an admin may not self-grant
+        // monetization on a book they authored (independent-review invariant;
+        // the real approval path uses the Admin SDK and bypasses these rules).
+        (isAdmin() && !(
+          request.resource.data.get('isMonetized', false) == true
+          && resource.data.get('isMonetized', false) != true
+          && resource.data.authorUid == request.auth.uid
+        ))
         || (
           resource.data.authorUid == request.auth.uid
           && !isBanned()
@@ -209,6 +216,8 @@ service cloud.firestore {
       // enforceChatRateLimit Cloud Function backstop.
       allow create: if isSignedIn() && !isBanned()
         && request.resource.data.from == request.auth.token.username
+        // A DM has two distinct participants — you can't message yourself.
+        && request.resource.data.to != request.resource.data.from
         && request.resource.data.text is string
         && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 500;

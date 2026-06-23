@@ -120,7 +120,7 @@ describe('MonetizationService', () => {
         sellerStripeAccountId: 'acct_1',
         monetizationAdminBypass: true,
       });
-      const res = await svc.review('admin', 'b1', 'approve');
+      const res = await svc.review('admin', 'reviewer-uid', 'b1', 'approve');
       expect(res.ok).toBe(true);
       const book = fs.dump('books/b1')!;
       expect(book.isMonetized).toBe(true);
@@ -139,15 +139,49 @@ describe('MonetizationService', () => {
         sellerStripeAccountId: 'acct_1',
         monetizationAdminBypass: true,
       });
-      await expect(svc.review('admin', 'b1', 'approve')).rejects.toThrow();
+      await expect(
+        svc.review('admin', 'reviewer-uid', 'b1', 'approve'),
+      ).rejects.toThrow();
     });
 
     it('requires a reason to deny and fires onDenied', async () => {
       seedBook({ monetizationStatus: 'pending' });
-      await expect(svc.review('admin', 'b1', 'deny')).rejects.toThrow();
-      await svc.review('admin', 'b1', 'deny', 'low quality');
+      await expect(
+        svc.review('admin', 'reviewer-uid', 'b1', 'deny'),
+      ).rejects.toThrow();
+      await svc.review('admin', 'reviewer-uid', 'b1', 'deny', 'low quality');
       expect(fs.dump('books/b1')!.monetizationStatus).toBe('denied');
       expect(effects.onDenied).toHaveBeenCalledWith('b1', expect.anything(), 'low quality');
+    });
+
+    it('forbids an admin from reviewing their OWN book (reviewer === authorUid)', async () => {
+      seedBook({
+        authorUid: 'u1',
+        monetizationStatus: 'pending',
+        requestedPrice: 9.99,
+        sellerStripeAccountId: 'acct_1',
+        monetizationAdminBypass: true,
+      });
+      // reviewer is the book's author -> conflict of interest, rejected
+      await expect(
+        svc.review('admin', 'u1', 'b1', 'approve'),
+      ).rejects.toThrow('your own book');
+      expect(fs.dump('books/b1')!.isMonetized).toBeUndefined();
+      expect(effects.onApproved).not.toHaveBeenCalled();
+    });
+
+    it('forbids an admin from reviewing a book where they are the seller (reviewer === sellerUid)', async () => {
+      seedBook({
+        authorUid: 'someoneElse',
+        sellerUid: 'u1',
+        monetizationStatus: 'pending',
+        requestedPrice: 9.99,
+        sellerStripeAccountId: 'acct_1',
+        monetizationAdminBypass: true,
+      });
+      await expect(
+        svc.review('admin', 'u1', 'b1', 'approve'),
+      ).rejects.toThrow('your own book');
     });
   });
 

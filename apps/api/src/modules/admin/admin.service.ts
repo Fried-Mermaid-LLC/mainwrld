@@ -30,9 +30,17 @@ export class AdminService {
   }
 
   async setAdmin(
+    callerUid: string,
     targetUid: string,
     admin: boolean,
   ): Promise<{ uid: string; admin: boolean }> {
+    // No self-targeting: revoking your own admin is an irreversible lockout
+    // (every admin route then rejects you), and self-promotion is meaningless.
+    if (targetUid === callerUid) {
+      throw new PreconditionFailedException(
+        'You cannot change your own admin status.',
+      );
+    }
     const existing = (await this.auth.getUser(targetUid)).customClaims ?? {};
     await this.auth.setCustomUserClaims(targetUid, { ...existing, admin });
     // Mirror onto the profile so lists can show an admin badge.
@@ -126,9 +134,15 @@ export class AdminService {
   // Increment strikes + auto-ban at 3 (replaces client addStrikeToUser +
   // the strikeWatch trigger, now that all strike writes go through the API).
   async addStrike(
+    callerUid: string,
     targetUid: string,
     reportId?: string,
   ): Promise<{ strikes: number; banned: boolean }> {
+    // A moderator can't strike themselves (corrupts their own moderation
+    // counters and is a latent auto-ban once isAdmin is later removed).
+    if (targetUid === callerUid) {
+      throw new PreconditionFailedException('You cannot strike yourself.');
+    }
     const ref = this.users.doc(targetUid);
     await ref.update({
       strikes: FieldValue.increment(1),

@@ -64,6 +64,13 @@ export const setAdmin = onCall<{ uid: string; admin: boolean }>(
         'Expected { uid: string, admin: boolean }.'
       )
     }
+    // No self-targeting: revoking your own admin is an irreversible lockout.
+    if (uid === req.auth.uid) {
+      throw new HttpsError(
+        'failed-precondition',
+        'You cannot change your own admin status.'
+      )
+    }
     const existing = (await getAuth().getUser(uid)).customClaims ?? {}
     await getAuth().setCustomUserClaims(uid, { ...existing, admin })
     // Mirror the claim onto the user profile so other clients can show
