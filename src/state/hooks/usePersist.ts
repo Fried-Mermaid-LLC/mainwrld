@@ -86,13 +86,14 @@ export function usePersist({
       }))
 
       const batchUpdate: Record<string, any> = {
-        // User state
+        // User state. NOTE: strikes + isPremium are SERVER-owned (moderation /
+        // billing) — written only by Cloud Functions and loaded fresh on login,
+        // so the client must not persist (and thus clobber or forge) them. See
+        // the C1 privilege lock in firestore.rules.
         points: user.points,
         displayName: user.displayName,
-        strikes: user.strikes,
         admirersCount: user.admirersCount,
         mutualsCount: user.mutualsCount,
-        isPremium: user.isPremium || false,
         dailyEarnedPoints: user.dailyEarnedPoints || 0,
         lastPointsReset: user.lastPointsReset || null,
         lastClaimedPoints: lastClaimedPoints || null,
@@ -176,12 +177,11 @@ export function usePersist({
         coverImage: b.coverImage
       }))
       const batchUpdate: Record<string, any> = {
+        // strikes + isPremium are server-owned (see the debounced persist above).
         points: user.points,
         displayName: user.displayName,
-        strikes: user.strikes,
         admirersCount: user.admirersCount,
         mutualsCount: user.mutualsCount,
-        isPremium: user.isPremium || false,
         // NOTE: isOnline/lastOnline intentionally NOT written here — presence is
         // owned by the dedicated presence effect (and, per X06, by the RTDB
         // mirror). Writing isOnline:false on every tab-switch/visibility-hidden

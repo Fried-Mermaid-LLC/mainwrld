@@ -84,6 +84,19 @@ export interface User {
   chargesEnabled?: boolean;          // Stripe account.charges_enabled
   detailsSubmitted?: boolean;        // account.details_submitted (KYC + tax form done)
   stripeAccountUpdatedAt?: number;   // Date.now() of last sync, for staleness checks
+  // ---- Premium membership lifecycle (F05 renewal reminder, F06 cancel) ----
+  // Written by Cloud Functions only (stripeWebhook / verifyAppleReceipt /
+  // cancelMembership); client writes to these are rejected by firestore.rules.
+  premiumProvider?: 'stripe' | 'apple';   // where the premium subscription lives
+  premiumRenewalAt?: number;               // epoch ms of next renewal; drives the 7-day reminder (F05)
+  premiumCancelAtPeriodEnd?: boolean;      // set when the user cancels but keeps access until period end
+  renewalReminderSentForAt?: number;       // dedupe: premiumRenewalAt the reminder was last sent for
+  membershipAutoRenew?: boolean;           // false after a cancel-membership request (F06)
+  membershipCancelledAt?: string;          // ISO timestamp of the cancel request (F06)
+  stripeCustomerId?: string;               // cus_xxx, buyer-side customer for premium subscription
+  stripeSubscriptionId?: string;           // sub_xxx, premium subscription (used by cancelMembership)
+  // ---- Onboarding (F10) ----
+  onboardingTutorialDismissed?: boolean;   // true once the welcome popup's "do not show again" is checked
 }
 
 export interface UserRecord extends User {

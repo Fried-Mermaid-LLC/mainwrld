@@ -391,11 +391,20 @@ export const stripeWebhook = onRequest(
           t.update(userRef, { points: FieldValue.increment(points) })
         }
         if (isPremium) {
+          // Stopgap renewal date so the 7-day reminder (sendRenewalReminders)
+          // works even if the customer.subscription.* event is delayed or not
+          // enabled on this endpoint. That handler overwrites premiumRenewalAt
+          // with the real current_period_end when it arrives, so never clobber
+          // a value it has already written.
+          const existingRenewal = (userSnap.data() as any)?.premiumRenewalAt
+          const YEAR_MS = 365 * 24 * 60 * 60 * 1000
           t.update(userRef, {
             isPremium: true,
             premiumSince: new Date().toISOString(),
             membershipStartDate: Date.now(),
             premiumProvider: 'stripe',
+            membershipAutoRenew: true,
+            premiumRenewalAt: existingRenewal || Date.now() + YEAR_MS,
             ...(stripeCustomerId ? { stripeCustomerId } : {}),
             ...(stripeSubscriptionId ? { stripeSubscriptionId } : {}),
           })

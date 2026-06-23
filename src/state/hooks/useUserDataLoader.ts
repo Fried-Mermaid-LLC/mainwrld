@@ -122,7 +122,9 @@ export function useUserDataLoader({
           profile.membershipStartDate !== undefined ||
           profile.lastMembershipRewardDate !== undefined ||
           profile.dailyChaptersPublished !== undefined ||
-          profile.chatDailyCounts !== undefined
+          profile.chatDailyCounts !== undefined ||
+          profile.notificationPrefs !== undefined ||
+          profile.onboardingTutorialDismissed !== undefined
         ) {
           setUser(prev => ({
             ...prev,
@@ -133,7 +135,11 @@ export function useUserDataLoader({
             lastMembershipRewardDate: profile.lastMembershipRewardDate || null,
             dailyChaptersPublished: profile.dailyChaptersPublished || 0,
             lastChapterPublishReset: profile.lastChapterPublishReset || 0,
-            chatDailyCounts: profile.chatDailyCounts || {}
+            chatDailyCounts: profile.chatDailyCounts || {},
+            // F06 notification prefs (B2) + F10 onboarding dismissal (A4)
+            notificationPrefs: profile.notificationPrefs || undefined,
+            onboardingTutorialDismissed:
+              profile.onboardingTutorialDismissed || false
           }))
         }
         if (profile.isPremium && !profile.membershipStartDate) {

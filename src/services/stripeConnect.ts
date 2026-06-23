@@ -116,6 +116,23 @@ export const reviewMonetization = async (
   return res.data
 }
 
+// ---- Membership (F06) ----
+
+// Cancel-membership: turns off auto-renew. On Stripe (web) this sets
+// cancel_at_period_end so the member keeps access until the period ends; the
+// subscription.updated webhook mirrors premiumCancelAtPeriodEnd back. iOS routes
+// the user to the App Store instead and never calls this.
+export const cancelMembership = async (): Promise<{
+  ok: boolean
+  cancelAtPeriodEnd: boolean
+}> => {
+  const fn = call<{ mode: string }, { ok: boolean; cancelAtPeriodEnd: boolean }>(
+    'cancelMembership'
+  )
+  const res = await fn({ mode: MODE })
+  return res.data
+}
+
 // ---- Reader checkout ----
 
 // Cash purchase — the ONLY way to buy a book (web + iOS). Returns a Stripe

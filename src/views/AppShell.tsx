@@ -29,6 +29,7 @@ import { BlockedUsersView } from '@/views/BlockedUsersView'
 import { LandingView } from '@/views/LandingView'
 import { LoginView } from '@/views/LoginView'
 import { SignupView } from '@/views/SignupView'
+import { WelcomePopup } from '@/components/WelcomePopup'
 import { useApp } from '@/state/AppContext'
 
 
@@ -286,6 +287,8 @@ export const AppShell: React.FC = () => {
           </div>
         </div>
       )}
+      {/* First-launch onboarding popup (F10) */}
+      <WelcomePopup />
     </div>
   )
 }

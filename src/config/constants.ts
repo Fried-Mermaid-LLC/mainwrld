@@ -10,6 +10,13 @@ export const buildBookShareUrl = (id: string) => `${SHARE_BASE}/book/${id}`;
 
 export const WORLD_RADIUS = 50;
 export const MAX_LIBRARY_SIZE = 35;
+// Shown when a reader tries to add a book past MAX_LIBRARY_SIZE (F07).
+export const LIBRARY_FULL_TOAST = 'Read and remove some books in your library to add more';
+
+// First-launch onboarding (F10). The welcome popup links to this tutorial book
+// from the MainWRLD account. Leave empty until the real book id is known — an
+// empty id hides the "Open tutorial book" CTA (the popup still shows).
+export const TUTORIAL_BOOK_ID = '';
 export const MIN_WORD_COUNT = 150;
 export const MAX_DAILY_EARNED_POINTS = 25;
 export const COMMENT_LIKES_THRESHOLD = 50;

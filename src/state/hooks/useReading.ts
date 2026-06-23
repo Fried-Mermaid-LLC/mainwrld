@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
-import { MAX_DAILY_CHAPTERS } from '@/config/constants'
+import { MAX_DAILY_CHAPTERS, MAX_LIBRARY_SIZE, LIBRARY_FULL_TOAST } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import type { User, Book, BookProgress, View, Relationship } from '@/types'
 
@@ -246,6 +246,23 @@ export function useReading({
   }
 
   const handleSaveToLibrary = (bookId: string) => {
+    // F07: cap the library at MAX_LIBRARY_SIZE. Read the latest data from the
+    // ref so the count is correct under rapid consecutive saves.
+    const currentUd = userBookDataRef.current[user.username] || {
+      ownedBookIds: [],
+      bookProgress: {},
+      purchasedBookIds: []
+    }
+    const alreadyInLibrary = new Set([
+      ...currentUd.ownedBookIds,
+      ...(currentUd.purchasedBookIds || [])
+    ])
+    // Re-saving a book already in the library is a no-op and not capped; only a
+    // genuinely new add is blocked once the library is full.
+    if (!alreadyInLibrary.has(bookId) && alreadyInLibrary.size >= MAX_LIBRARY_SIZE) {
+      showToast(LIBRARY_FULL_TOAST, 'error')
+      return
+    }
     setBooks(prev => {
       const updated = prev.map(b =>
         b.id === bookId ? { ...b, isOwned: true } : b
@@ -257,11 +274,6 @@ export function useReading({
     })
     // Compute updated data from the ref, then SYNC the ref immediately
     // so rapid consecutive saves each see the previous save's result
-    const currentUd = userBookDataRef.current[user.username] || {
-      ownedBookIds: [],
-      bookProgress: {},
-      purchasedBookIds: []
-    }
     const newOwned = currentUd.ownedBookIds.includes(bookId)
       ? currentUd.ownedBookIds
       : [...currentUd.ownedBookIds, bookId]

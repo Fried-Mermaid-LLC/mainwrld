@@ -48,7 +48,7 @@ export const sendRenewalReminders = onSchedule(
         skipped++
         continue
       }
-      if (u.premiumCancelAtPeriodEnd === true) {
+      if (u.premiumCancelAtPeriodEnd === true || u.membershipAutoRenew === false) {
         skipped++
         continue
       }

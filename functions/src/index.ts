@@ -31,6 +31,7 @@ export {
   createBookCheckoutSession,
 } from './stripeConnect.js'
 export { onBookMonetized } from './monetization.js'
+export { cancelMembership } from './cancelMembership.js'
 export { mirrorPresence } from './presence.js'
 export { rotateSpotlight, rotateSpotlightNow } from './spotlight.js'
 export { enforceChatRateLimit } from './chatRateLimit.js'

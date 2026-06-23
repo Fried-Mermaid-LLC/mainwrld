@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Button } from '@/components/sharedComponents'
 import * as iap from '@/services/iap'
+import * as stripeConnect from '@/services/stripeConnect'
 import * as fbService from '@/services/firebaseService'
 import { useApp } from '@/state/AppContext'
 import { PayoutsSection } from '@/views/PayoutsSection'
@@ -14,11 +15,12 @@ export const SettingsView = () => {
   const onUpdateUser = (updatedUser: User) => {
     setUser(updatedUser)
     if (firebaseUid) {
+      // Only persist client-editable profile fields here. Server-owned fields
+      // (points, strikes, isPremium, isAdmin, …) are written exclusively by
+      // Cloud Functions and rejected from client writes by firestore.rules (C1).
       fbService
         .updateUserProfile(firebaseUid, {
-          displayName: updatedUser.displayName,
-          points: updatedUser.points,
-          strikes: updatedUser.strikes
+          displayName: updatedUser.displayName
         })
         .catch(console.error)
     }
@@ -38,6 +40,49 @@ export const SettingsView = () => {
   const [formValue, setFormValue] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+
+  // Membership already cancelled (auto-renew off / will not renew). On the web
+  // rail the button becomes a non-interactive status; on iOS it still deep-links
+  // to the App Store so the user can re-manage the Apple subscription.
+  const membershipCancelled =
+    user.membershipAutoRenew === false || user.premiumCancelAtPeriodEnd === true
+
+  const handleCancelMembership = () => {
+    if (iap.isNativeIAPAvailable()) {
+      // Apple-managed subscriptions can only be cancelled in the App Store.
+      // `_system` lets Capacitor hand the itms-apps:// scheme to iOS.
+      window.open('itms-apps://apps.apple.com/account/subscriptions', '_system')
+      return
+    }
+    if (membershipCancelled) return
+    setShowCancelConfirm(true)
+  }
+
+  const confirmCancelMembership = async () => {
+    setCancelling(true)
+    try {
+      await stripeConnect.cancelMembership()
+      setUser({
+        ...user,
+        membershipAutoRenew: false,
+        premiumCancelAtPeriodEnd: true
+      })
+      showToast(
+        'Membership cancelled. You keep access until your period ends.',
+        'check_circle'
+      )
+    } catch (err: any) {
+      showToast(
+        err?.message || 'Could not cancel membership. Please try again.',
+        'error'
+      )
+    } finally {
+      setCancelling(false)
+      setShowCancelConfirm(false)
+    }
+  }
 
   const handleSave = () => {
     if (activeModal === 'email') {
@@ -244,6 +289,43 @@ export const SettingsView = () => {
         </div>
       )}
 
+      {/* Cancel membership confirmation (web / Stripe rail) */}
+      {showCancelConfirm && (
+        <div className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[500] flex items-center justify-center p-6 animate-in fade-in duration-200'>
+          <div className='bg-white rounded-[2rem] p-8 max-w-sm w-full space-y-6 animate-in zoom-in-95 duration-300'>
+            <div className='text-center space-y-3'>
+              <div className='w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto'>
+                <span className='material-icons-round text-red-500 text-3xl'>
+                  workspace_premium
+                </span>
+              </div>
+              <h2 className='text-lg font-bold'>Cancel Membership?</h2>
+              <p className='text-sm text-gray-400 leading-relaxed'>
+                Your MainWRLD+ benefits stay active until the end of your current
+                billing period, then auto-renew turns off. You can re-subscribe
+                anytime.
+              </p>
+            </div>
+            <div className='flex gap-3'>
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={cancelling}
+                className='flex-1 py-4 rounded-2xl bg-gray-100 text-sm font-bold transition-all active:scale-95 disabled:opacity-60'
+              >
+                Keep Membership
+              </button>
+              <button
+                onClick={confirmCancelMembership}
+                disabled={cancelling}
+                className='flex-1 py-4 rounded-2xl bg-red-500 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-60'
+              >
+                {cancelling ? 'Cancelling…' : 'Cancel Membership'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className='p-6 space-y-10 pb-32'>
         <section className='space-y-4'>
           <h3 className='text-[10px] font-bold text-gray-300 uppercase tracking-widest ml-4'>
@@ -274,26 +356,41 @@ export const SettingsView = () => {
           <div className='bg-gray-50 rounded-[2.5rem] overflow-hidden border border-gray-100'>
             <button
               onClick={() => onNavigate('notification-settings')}
-              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all border-b border-gray-100'
+              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all'
             >
               <span className='font-bold text-sm'>Notification Settings</span>
               <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
                 chevron_right
               </span>
             </button>
-            <button
-              onClick={() =>
-                showToast('More languages coming soon!', 'translate')
-              }
-              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all'
-            >
-              <span className='font-bold text-sm'>Language</span>
-              <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
-                chevron_right
-              </span>
-            </button>
           </div>
         </section>
+
+        {user.isPremium && (
+          <section className='space-y-4'>
+            <h3 className='text-[10px] font-bold text-gray-300 uppercase tracking-widest ml-4'>
+              Membership
+            </h3>
+            <div className='bg-gray-50 rounded-[2.5rem] overflow-hidden border border-gray-100'>
+              <button
+                onClick={handleCancelMembership}
+                disabled={membershipCancelled && !iap.isNativeIAPAvailable()}
+                className={`w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all ${
+                  membershipCancelled ? 'text-gray-400' : 'text-red-500'
+                } disabled:active:bg-transparent`}
+              >
+                <span className='font-bold text-sm'>
+                  {membershipCancelled
+                    ? 'Membership Cancelled'
+                    : 'Cancel Membership'}
+                </span>
+                <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
+                  chevron_right
+                </span>
+              </button>
+            </div>
+          </section>
+        )}
 
         <PayoutsSection />
 
