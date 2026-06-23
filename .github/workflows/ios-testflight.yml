@@ -28,7 +28,7 @@ jobs:
       TEAM_ID: 2C7AJQ5G4C
       BUNDLE_ID: com.mainwrld
       SCHEME: App
-      PROJECT_PATH: ios/App/App.xcodeproj
+      PROJECT_PATH: apps/app/ios/App/App.xcodeproj
       EXPORT_DIR: build/export
       ARCHIVE_PATH: build/App.xcarchive
 
@@ -65,8 +65,12 @@ jobs:
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
           VITE_FIREBASE_DATABASE_URL: ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
 
+      # Run from the app workspace so the Capacitor CLI picks up apps/app's
+      # capacitor.config.ts and syncs apps/app/dist -> apps/app/ios. `pnpm exec`
+      # resolves the `cap` bin from the workspace (npx can't under pnpm's layout).
       - name: Capacitor sync iOS
-        run: npx cap sync ios
+        working-directory: apps/app
+        run: pnpm exec cap sync ios
 
       - name: Install App Store Connect API key
         run: |
@@ -143,7 +147,7 @@ jobs:
           echo "Using provisioning profile: $PROFILE_NAME"
 
       - name: Set build number
-        working-directory: ios/App
+        working-directory: apps/app/ios/App
         run: |
           BUILD_NUMBER=$(date +%Y%m%d%H%M)
           xcrun agvtool new-version -all "$BUILD_NUMBER"
@@ -236,7 +240,7 @@ jobs:
           echo "dSYMs to upload:"; ls -1 "$DSYM_DIR"
           # Synchronous (blocking) upload — fails the job loudly if it can't reach
           # Crashlytics, instead of silently dropping symbols like the build phase.
-          "$UPLOAD_SYMBOLS" -gsp ios/App/App/GoogleService-Info.plist -p ios "$DSYM_DIR"
+          "$UPLOAD_SYMBOLS" -gsp apps/app/ios/App/App/GoogleService-Info.plist -p ios "$DSYM_DIR"
 
       - name: Cleanup signing material
         if: always()
