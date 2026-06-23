@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "functions"
+allowBuilds:
+  "@firebase/util": true
+  protobufjs: true
+  sharp: true
+minimumReleaseAgeExclude:
+  - stripe@22.2.3

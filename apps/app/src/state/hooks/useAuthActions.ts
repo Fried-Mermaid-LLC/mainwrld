@@ -11,7 +11,7 @@ import { ageFromBirthDate } from '@/utils/age'
 import { sendWelcomeEmail } from '@/config/config'
 import { parseShareBookId } from './useUI'
 import { convertFirestoreBook } from '@/utils/bookConverter'
-import type { User, View, Book } from '@/types'
+import type { User, View, Book, NotificationCategory } from '@/types'
 
 interface AuthActionsDeps {
   setUser: Dispatch<SetStateAction<User>>
@@ -35,7 +35,7 @@ interface AuthActionsDeps {
   }
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
 }
 

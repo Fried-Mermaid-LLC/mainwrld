@@ -1,46 +1,18 @@
-# Node
-node_modules/
-dist/
-docs/
-
-# OS / IDE
+# System files
 .DS_Store
-*.local
-.idea/
-.vscode/
-*.swp
+Thumbs.db
 
-# Env
-.env
-.env.local
-.env.*.local
+# Node
+**/node_modules/
 
-# Asset working files
-MochaMattel3Dassets/
+# Turborepo
+.turbo/
+**/.turbo/
 
-# Capacitor / iOS
-ios/App/Pods/
-ios/App/build/
-ios/.xcode.env.local
-ios/App/App.xcworkspace/xcuserdata/
-ios/App/App.xcodeproj/xcuserdata/
-ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
-*.xcuserstate
-*.p8
-*.p12
-*.mobileprovision
-
-# Capacitor sync output
-ios/App/App/public/
-
-# Vite cache
-.vite/
+# Logs
+*.log
 
 # Firebase
-functions/node_modules/
-functions/lib/
 .firebase/
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
+functions/lib/
 service-account.json

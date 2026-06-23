@@ -317,11 +317,11 @@ export const OtherProfileView = () => {
                           <div className='flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden'>
                             <div
                               className='h-full bg-accent rounded-full transition-all'
-                              style={{ width: `${activity.progress || 0}%` }}
+                              style={{ width: `${activity?.progress || 0}%` }}
                             />
                           </div>
                           <span className='text-[9px] font-bold text-gray-400'>
-                            {activity.progress || 0}%
+                            {activity?.progress || 0}%
                           </span>
                         </div>
                       </div>

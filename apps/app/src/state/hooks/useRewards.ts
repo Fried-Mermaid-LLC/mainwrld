@@ -170,12 +170,14 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
   // Membership reward: 200 pts after 25hrs of premium, then annually
   useEffect(() => {
     if (!user.isPremium || !user.membershipStartDate) return
+    // Capture after the guard so the narrowing survives into the closure below.
+    const membershipStartDate = user.membershipStartDate
     const checkMembershipReward = () => {
       const now = Date.now()
       const msInYear = 365 * 24 * 60 * 60 * 1000
       const msIn25Hours = 25 * 60 * 60 * 1000
       if (!user.lastMembershipRewardDate) {
-        if (now - user.membershipStartDate >= msIn25Hours) {
+        if (now - membershipStartDate >= msIn25Hours) {
           awardMembershipBonus(200, 'Membership Reward', now)
         }
       } else {

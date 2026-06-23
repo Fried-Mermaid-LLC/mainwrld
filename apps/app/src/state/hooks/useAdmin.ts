@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { AVATAR_ITEMS } from '@/components/avatar'
-import type { Report, User, Book, Comment } from '@/types'
+import type { Report, User, Book, Comment, NotificationCategory } from '@/types'
 
 interface AdminDeps {
   user: User
@@ -12,7 +12,7 @@ interface AdminDeps {
   showToast: (message: string, icon?: string) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
   registeredUsers: any[]
   setRegisteredUsers: Dispatch<SetStateAction<any[]>>

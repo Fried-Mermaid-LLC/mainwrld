@@ -1,51 +1,20 @@
 {
-  "name": "copy-of-mainwrld",
+  "name": "mainwrld",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite --port 5173 --strictPort",
-    "dev:ios": "cap run ios -l --host $(grep -E '^HOST=' .env.local | cut -d= -f2) --port 5173",
-    "build:web": "vite build",
-    "build:ios": "npm run build:web && cap sync ios",
-    "typecheck": "tsc --noEmit",
-    "audit:assets": "node scripts/audit-assets.mjs"
-  },
-  "dependencies": {
-    "@capacitor-community/native-audio": "^8.0.0",
-    "@capacitor-firebase/crashlytics": "^8.3.0",
-    "@capacitor-firebase/messaging": "^8.3.0",
-    "@capacitor/app": "^8.1.0",
-    "@capacitor/browser": "^8.0.3",
-    "@capacitor/core": "^8.3.4",
-    "@capacitor/ios": "^8.3.4",
-    "@capacitor/keyboard": "^8.0.3",
-    "@capacitor/preferences": "^8.0.1",
-    "@capacitor/share": "^8.0.1",
-    "@capacitor/splash-screen": "^8.0.1",
-    "@capacitor/status-bar": "^8.0.2",
-    "@react-three/drei": "10.0.0",
-    "@react-three/fiber": "9.1.0",
-    "cordova-plugin-purchase": "^13.16.0",
-    "firebase": "^12.10.0",
-    "obscenity": "^0.4.6",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "three": "0.174.0"
+    "build": "turbo run build",
+    "build:web": "turbo run build:web",
+    "build:ios": "turbo run build:ios",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^8.3.4",
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^3.4.19",
-    "typescript": "~5.8.2",
-    "vite": "^6.4.2"
+    "turbo": "2.9.18"
   },
-  "overrides": {
-    "protobufjs": "^7.5.8",
-    "picomatch": "^4.0.4"
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": "24"
   }
 }

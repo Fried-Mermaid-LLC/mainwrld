@@ -1,0 +1,37 @@
+# Node
+node_modules/
+dist/
+docs/
+
+# OS / IDE
+.DS_Store
+*.local
+.idea/
+.vscode/
+*.swp
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Asset working files
+MochaMattel3Dassets/
+
+# Capacitor / iOS
+ios/App/Pods/
+ios/App/build/
+ios/.xcode.env.local
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcuserstate
+*.p8
+*.p12
+*.mobileprovision
+
+# Capacitor sync output
+ios/App/App/public/
+
+# Vite cache
+.vite/

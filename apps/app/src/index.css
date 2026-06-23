@@ -1,6 +1,28 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind v4: single import replaces the v3 @tailwind base/components/utilities
+   directives. Theme is configured CSS-first below (no tailwind.config.js). */
+@import "tailwindcss";
+
+/* Class-based dark mode (was `darkMode: 'class'` in the old JS config). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand accent — drives bg-accent / text-accent / border-accent / ring-accent
+     / shadow-accent / from-accent / to-accent. */
+  --color-accent: #eb6871;
+
+  /* Font families: font-sans / font-display / font-telegraf. */
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Fredoka One', cursive;
+  --font-telegraf: 'Telegraf', 'Inter', sans-serif;
+
+  /* iOS safe-area insets exposed as spacing utilities, e.g. `pt-safe-top` ->
+     `padding-top: env(safe-area-inset-top)`. (h-dvh / min-h-dvh are native in
+     v4, so the old height/minHeight `dvh` entries are no longer needed.) */
+  --spacing-safe-top: env(safe-area-inset-top);
+  --spacing-safe-bottom: env(safe-area-inset-bottom);
+  --spacing-safe-left: env(safe-area-inset-left);
+  --spacing-safe-right: env(safe-area-inset-right);
+}
 
 @font-face {
   font-family: 'Telegraf';

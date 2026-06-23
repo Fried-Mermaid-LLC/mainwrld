@@ -5,7 +5,7 @@ import {
   MAX_MESSAGE_LENGTH,
   MAX_MESSAGES_PER_CONVERSATION_PER_DAY
 } from '@/config/constants'
-import type { ChatMessage, User, View } from '@/types'
+import type { ChatMessage, User, View, NotificationCategory } from '@/types'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -20,7 +20,7 @@ interface ChatDeps {
   showToast: (message: string, icon?: string) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
 }
 

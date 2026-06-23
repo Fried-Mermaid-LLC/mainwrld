@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import { COMMENT_LIKES_THRESHOLD } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
-import type { Comment, User, Book } from '@/types'
+import type { Comment, User, Book, NotificationCategory } from '@/types'
 
 interface CommentsDeps {
   user: User
@@ -13,7 +13,7 @@ interface CommentsDeps {
   showToast: (message: string, icon?: string) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
   awardPoints: (amount: number, reason: string) => void
   rewardedItems: Set<string>

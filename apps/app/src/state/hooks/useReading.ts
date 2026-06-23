@@ -5,7 +5,7 @@ import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { MAX_DAILY_CHAPTERS, MAX_LIBRARY_SIZE, LIBRARY_FULL_TOAST } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
-import type { User, Book, BookProgress, View, Relationship } from '@/types'
+import type { User, Book, BookProgress, View, Relationship, NotificationCategory } from '@/types'
 
 interface ReadingDeps {
   user: User
@@ -21,7 +21,7 @@ interface ReadingDeps {
   relationships: Relationship[]
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
 }
 
@@ -350,8 +350,9 @@ export function useReading({
     try {
       // Daily chapter publish limit
       const now = Date.now()
-      const isNewDay = now - user.lastChapterPublishReset > 24 * 60 * 60 * 1000
-      const dailyCount = isNewDay ? 0 : user.dailyChaptersPublished
+      const isNewDay =
+        now - (user.lastChapterPublishReset ?? 0) > 24 * 60 * 60 * 1000
+      const dailyCount = isNewDay ? 0 : user.dailyChaptersPublished ?? 0
       if (dailyCount >= MAX_DAILY_CHAPTERS) {
         showToast(
           `You've reached your daily publishing limit of ${MAX_DAILY_CHAPTERS} chapters. Please try again tomorrow!`
@@ -567,11 +568,11 @@ export function useReading({
       // Increment daily chapter publish count
       setUser(prev => {
         const isNewDay =
-          Date.now() - prev.lastChapterPublishReset > 24 * 60 * 60 * 1000
+          Date.now() - (prev.lastChapterPublishReset ?? 0) > 24 * 60 * 60 * 1000
         return {
           ...prev,
           dailyChaptersPublished:
-            (isNewDay ? 0 : prev.dailyChaptersPublished) + 1,
+            (isNewDay ? 0 : prev.dailyChaptersPublished ?? 0) + 1,
           lastChapterPublishReset: isNewDay
             ? Date.now()
             : prev.lastChapterPublishReset

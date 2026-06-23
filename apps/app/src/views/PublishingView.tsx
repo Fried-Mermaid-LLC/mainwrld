@@ -18,7 +18,7 @@ export const PublishingView = () => {
   const [selectedGenres, setSelectedGenres] = useState<string[]>(
     initialData?.genres || []
   )
-  const [hashtags, setHashtags] = useState(
+  const [hashtags, setHashtags] = useState<string>(
     initialData?.hashtags?.join(', ') || ''
   )
   const [coverImage, setCoverImage] = useState<string | null>(

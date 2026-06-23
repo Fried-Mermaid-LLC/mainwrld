@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import { CHAPTER_LIKES_THRESHOLD, buildBookShareUrl } from '@/config/constants'
-import type { User, Book, View } from '@/types'
+import type { User, Book, View, NotificationCategory } from '@/types'
 
 interface BooksDeps {
   user: User
@@ -23,7 +23,7 @@ interface BooksDeps {
   }) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
   awardPoints: (amount: number, reason: string) => void
   rewardedItems: Set<string>

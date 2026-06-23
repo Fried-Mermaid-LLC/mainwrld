@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { AppContext } from './AppContext'
+import type { NotificationCategory } from '@/types'
 import * as pushService from '@/services/pushService'
 import * as fbService from '@/services/firebaseService'
 import { convertFirestoreBook } from '@/utils/bookConverter'
@@ -38,7 +39,7 @@ type AddNotification = (
   targetId?: string,
   targetChapterIndex?: number,
   commentId?: string,
-  category?: string
+  category?: NotificationCategory
 ) => void
 
 type ReadingActivityMap = Record<

@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "dist",
+    "public": "apps/app/dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "CNAME"],
     "rewrites": [
       { "source": "/terms", "destination": "/terms.html" },
@@ -40,8 +40,8 @@
         "*.local"
       ],
       "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run lint || true",
-        "npm --prefix \"$RESOURCE_DIR\" run build"
+        "pnpm -C \"$RESOURCE_DIR\" run lint || true",
+        "pnpm -C \"$RESOURCE_DIR\" run build"
       ]
     }
   ],

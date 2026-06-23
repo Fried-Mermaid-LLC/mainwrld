@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import { ageFromBirthDate } from '@/utils/age'
 import { EXPLICIT_MIN_AGE } from '@/config/constants'
-import type { User, Relationship, AvatarConfig, View } from '@/types'
+import type { User, Relationship, AvatarConfig, View, NotificationCategory } from '@/types'
 
 type ReadingActivityMap = Record<
   string,
@@ -27,7 +27,7 @@ interface SocialDeps {
   }) => void
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: string
+    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
   setAllAvatarConfigs: Dispatch<SetStateAction<Record<string, AvatarConfig>>>
   setAllUnlockedItems: Dispatch<SetStateAction<Record<string, string[]>>>
