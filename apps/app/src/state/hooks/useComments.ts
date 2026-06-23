@@ -170,6 +170,17 @@ export function useComments({
     ) {
       setRewardedItems(prev => new Set(prev).add(rewardKey))
       awardPoints(1, `Your comment hit ${newLikes} likes!`)
+      addNotification(
+        'Points Earned',
+        `Your comment hit ${newLikes} likes — you earned 1 point!`,
+        'stars',
+        user.username,
+        user.username,
+        comment.bookId,
+        comment.chapterIndex,
+        comment.id,
+        'comments'
+      )
     }
   }
 

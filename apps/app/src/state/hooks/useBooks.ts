@@ -211,6 +211,17 @@ export function useBooks({
       ) {
         setRewardedItems(prev => new Set(prev).add(rewardKey))
         awardPoints(2, `${chapterTitle} hit ${chLikes[chapterIndex]} likes!`)
+        addNotification(
+          'Points Earned',
+          `Your chapter "${chapterTitle}" hit ${chLikes[chapterIndex]} likes — you earned 2 points!`,
+          'stars',
+          user.username,
+          user.username,
+          targetBook.id,
+          chapterIndex,
+          undefined,
+          'bookLikes'
+        )
       }
     }
 

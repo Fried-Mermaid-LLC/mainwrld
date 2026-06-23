@@ -156,6 +156,51 @@ export async function sendEmail(
   }
 }
 
+// Send via a Resend-hosted template (subject + HTML live in the Resend
+// dashboard, not in this codebase). Same fail-soft contract as sendEmail().
+export async function sendTemplateEmail(
+  to: string,
+  templateId: string,
+  variables?: Record<string, string | number>
+): Promise<SendResult> {
+  const key = RESEND_API_KEY.value()
+  if (!key || !to) {
+    logger.info('[MainWRLD] template email skipped (no key/recipient)', {
+      hasKey: !!key,
+      hasTo: !!to,
+    })
+    return { ok: false, error: 'missing key or recipient' }
+  }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        from: FROM,
+        to,
+        template: variables ? { id: templateId, variables } : { id: templateId },
+      }),
+    })
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      logger.warn('[MainWRLD] Resend template non-2xx', {
+        status: res.status,
+        detail,
+        templateId,
+      })
+      return { ok: false, status: res.status, error: detail }
+    }
+    logger.info('[MainWRLD] template email sent', { to, templateId })
+    return { ok: true, status: res.status }
+  } catch (err) {
+    logger.error('[MainWRLD] template email failed', { templateId, err })
+    return { ok: false, error: (err as Error)?.message }
+  }
+}
+
 // ============================================================
 // Reusable templates (shared by Stripe + Apple purchase paths so the two
 // rails send identical mail). Each returns { subject, html }.
