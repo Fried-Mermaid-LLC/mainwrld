@@ -462,6 +462,39 @@ export function useReading({
             }
           )
 
+          // Optimistic: mirror the published metadata locally so the profile /
+          // book preview show the real tagline, cover and chapter immediately
+          // instead of the stale draft values until the ~30s books poll lands.
+          const publishPatch: Partial<Book> = {
+            tagline: data.tagline || existingBook.tagline || '',
+            isExplicit: data.isExplicit ?? existingBook.isExplicit ?? false,
+            genres:
+              data.genres && data.genres.length > 0
+                ? data.genres
+                : existingBook.genres || [],
+            hashtags:
+              data.hashtags && data.hashtags.length > 0
+                ? data.hashtags
+                : existingBook.hashtags || [],
+            ...(cover
+              ? { coverImage: cover.coverImage, coverPath: cover.coverPath }
+              : {}),
+            coverColor: cover ? '#f5f5f5' : existingBook.coverColor,
+            chapterMeta: meta,
+            chaptersCount: Math.max(existingBook.chaptersCount || 0, order + 1),
+            likes: updatedLikes,
+            isDraft: false,
+            commentsEnabled: data.commentsEnabled ?? true
+          }
+          setBooks(prev =>
+            prev.map(b =>
+              b.id === currentPublishingId ? { ...b, ...publishPatch } : b
+            )
+          )
+          if (selectedBook?.id === currentPublishingId) {
+            setSelectedBook(prev => (prev ? { ...prev, ...publishPatch } : prev))
+          }
+
           // Notify users who have this book in their library about the new chapter
           const prevChapterCount = existingBook.chapterMeta?.length ?? 0
           if (
@@ -532,6 +565,31 @@ export function useReading({
           title: firstChapterTitle,
           authorUsername: user?.username || ''
         })
+
+        // Optimistic: insert the freshly published book so it appears on the
+        // profile with its real cover/tagline right away, instead of being
+        // absent (or stale) until the ~30s books poll picks it up. The
+        // subscription reconciles to server truth and de-dupes by id.
+        const optimisticBook = {
+          ...bookData,
+          author: {
+            username: user?.username || 'unknown',
+            displayName: user?.displayName || 'Unknown',
+            isOnline: false,
+            activity: 'Idle' as const,
+            position: [0, 0, 0] as [number, number, number],
+            isMutual: false,
+            points: 0,
+            admirersCount: 0,
+            mutualsCount: 0,
+            strikes: 0
+          },
+          likes: Array.isArray(bookData.likes) ? bookData.likes : [0],
+          isFavorite: false
+        } as unknown as Book
+        setBooks(prev =>
+          prev.some(b => b.id === bookId) ? prev : [optimisticBook, ...prev]
+        )
 
         // Notify admirers and mutuals about the new book
         const myAdmirers = relationships
@@ -673,9 +731,13 @@ export function useReading({
           meta.push({ id: chapterId, title: resolvedChapterTitle })
         } else {
           // Nothing to write (empty new chapter) — just persist the title.
-          await fbService.updateBook(bookId, {
-            title: title.trim() || existingBook.title
-          })
+          const nextTitle = title.trim() || existingBook.title
+          await fbService.updateBook(bookId, { title: nextTitle })
+          // Optimistic: reflect the new title immediately; the books
+          // subscription confirms with server truth within ~30s.
+          setBooks(prev =>
+            prev.map(b => (b.id === bookId ? { ...b, title: nextTitle } : b))
+          )
           setLastSelectedBookId(bookId)
           setLastSelectedChapterIndex(
             chapterIndex !== null ? chapterIndex.toString() : 'new'
@@ -695,6 +757,15 @@ export function useReading({
             title: title.trim() || existingBook.title,
             chapterMeta: meta
           }
+        )
+        // Optimistic: update chapterMeta locally so the just-saved chapter is
+        // immediately visible (and selectable in the editor) instead of
+        // blanking out until the ~30s books poll lands.
+        const nextTitle = title.trim() || existingBook.title
+        setBooks(prev =>
+          prev.map(b =>
+            b.id === bookId ? { ...b, title: nextTitle, chapterMeta: meta } : b
+          )
         )
       }
       setLastSelectedBookId(bookId)
@@ -733,6 +804,20 @@ export function useReading({
           chaptersCount: content.trim() ? 1 : 0,
           isDraft: true
         }
+      )
+      // Optimistic: mirror the persisted fields immediately.
+      setBooks(prev =>
+        prev.map(b =>
+          b.id === existingDraft.id
+            ? {
+                ...b,
+                title: title.trim() || existingDraft.title,
+                chapterMeta: [{ id: chapterId, title: resolvedChapterTitle }],
+                chaptersCount: content.trim() ? 1 : 0,
+                isDraft: true
+              }
+            : b
+        )
       )
     } else {
       // Create a new draft (schema 2): light doc + first chapter in subcollection.
@@ -773,6 +858,32 @@ export function useReading({
           authorUsername: user?.username || ''
         })
       }
+      // Optimistic: insert the freshly created draft so it appears in myWorks
+      // (and becomes the selected book in the editor) right away, rather than
+      // vanishing until the ~30s books poll picks it up. The subscription
+      // reconciles to server truth and de-dupes by id.
+      const optimisticBook = {
+        ...bookData,
+        id,
+        author: {
+          username: user?.username || 'unknown',
+          displayName: user?.displayName || 'Unknown',
+          isOnline: false,
+          activity: 'Idle' as const,
+          position: [0, 0, 0] as [number, number, number],
+          isMutual: false,
+          points: 0,
+          admirersCount: 0,
+          mutualsCount: 0,
+          strikes: 0
+        },
+        likes: Array.isArray(bookData.likes) ? bookData.likes : [0],
+        isFavorite: false,
+        price: 0
+      } as unknown as Book
+      setBooks(prev =>
+        prev.some(b => b.id === id) ? prev : [optimisticBook, ...prev]
+      )
     }
 
     setLastSelectedBookId(newBookId || 'new')

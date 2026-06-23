@@ -144,6 +144,14 @@ export const WriteView = () => {
   const dirtyDraftRef = useRef(false)
   const saveTimerRef = useRef<number | null>(null)
   const saveInFlightRef = useRef(false)
+  // Debounced autosave: scheduled on each text/chapter-title change so edits
+  // persist shortly after typing stops, instead of waiting up to the 30s tick.
+  // performDraftSave is referenced via a ref to avoid a declaration-order cycle
+  // (scheduleAutoSave is defined before performDraftSave but called by it later).
+  const autoSaveTimerRef = useRef<number | null>(null)
+  const performDraftSaveRef = useRef<
+    ((mode: 'manual' | 'auto') => Promise<string | null>) | null
+  >(null)
   // Touch origin for the editor, used to tell a tap (focus) from a scroll drag.
   const editorTouchStartRef = useRef<{ x: number; y: number } | null>(null)
   const latestStateRef = useRef({
@@ -387,10 +395,22 @@ export const WriteView = () => {
     ]
   )
 
+  const AUTOSAVE_DEBOUNCE_MS = 1500
+
+  // Restart the debounce window; fires an 'auto' save once edits pause.
+  const scheduleAutoSave = useCallback(() => {
+    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null
+      void performDraftSaveRef.current?.('auto')
+    }, AUTOSAVE_DEBOUNCE_MS)
+  }, [])
+
   const handleEditorInput = useCallback(
     (event: React.FormEvent<HTMLDivElement>) => {
       // Flag dirty BEFORE any early return so autosave never misses a change.
       dirtyDraftRef.current = true
+      scheduleAutoSave()
       updateWordCount()
       // The browser already scrolls the caret into view on input, so only
       // run our manual adjustment when a new block/line was created — that is
@@ -399,7 +419,7 @@ export const WriteView = () => {
       if (inputType === 'insertParagraph' || inputType === 'insertLineBreak')
         ensureCaretVisible()
     },
-    [updateWordCount, ensureCaretVisible]
+    [updateWordCount, ensureCaretVisible, scheduleAutoSave]
   )
 
   const handleEditorKeyDown = useCallback(
@@ -414,11 +434,12 @@ export const WriteView = () => {
         event.preventDefault()
         document.execCommand('insertParagraph')
         dirtyDraftRef.current = true
+        scheduleAutoSave()
         updateWordCount()
         ensureCaretVisible()
       }
     },
-    [updateWordCount, ensureCaretVisible]
+    [updateWordCount, ensureCaretVisible, scheduleAutoSave]
   )
 
   const setSavedIndicator = useCallback((state: 'saved' | 'idle' | 'error') => {
@@ -492,6 +513,12 @@ export const WriteView = () => {
     [onSaveDraft, setSavedIndicator, showToast]
   )
 
+  // Keep the ref pointed at the latest performDraftSave so the (stable)
+  // scheduleAutoSave callback always invokes the current closure.
+  useEffect(() => {
+    performDraftSaveRef.current = performDraftSave
+  }, [performDraftSave])
+
   // Enter is now handled explicitly in handleEditorKeyDown via
   // execCommand('insertParagraph'), so the brittle defaultParagraphSeparator
   // hint (poorly supported in the iOS WKWebView) is no longer needed.
@@ -528,6 +555,12 @@ export const WriteView = () => {
     // Apply a loaded chapter (or empty editor) and reset the editor bookkeeping.
     const applyContent = (content: string, nextChapterTitle: string) => {
       if (!editorRef.current) return
+      // Cancel any autosave queued for the chapter we're leaving so it can't
+      // fire against the freshly loaded one.
+      if (autoSaveTimerRef.current) {
+        window.clearTimeout(autoSaveTimerRef.current)
+        autoSaveTimerRef.current = null
+      }
       loadedEditorTargetRef.current = targetKey
       editorRef.current.innerHTML = content
       lastValidHtmlRef.current = content
@@ -581,6 +614,9 @@ export const WriteView = () => {
     return () => {
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current)
+      }
+      if (autoSaveTimerRef.current) {
+        window.clearTimeout(autoSaveTimerRef.current)
       }
     }
   }, [])
@@ -769,6 +805,7 @@ export const WriteView = () => {
               onChange={e => {
                 dirtyDraftRef.current = true
                 setChapterTitle(e.target.value)
+                scheduleAutoSave()
               }}
               className='w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium outline-none shadow-sm focus:ring-2 focus:ring-accent/10'
             />
