@@ -16,7 +16,7 @@ export const LIBRARY_FULL_TOAST = 'Read and remove some books in your library to
 // First-launch onboarding (F10). The welcome popup links to this tutorial book
 // from the MainWRLD account. Leave empty until the real book id is known — an
 // empty id hides the "Open tutorial book" CTA (the popup still shows).
-export const TUTORIAL_BOOK_ID = '';
+export const TUTORIAL_BOOK_ID = '25ea6ba3-9430-4852-9d68-e31121671b5f';
 export const MIN_WORD_COUNT = 150;
 export const MAX_DAILY_EARNED_POINTS = 25;
 export const COMMENT_LIKES_THRESHOLD = 50;
