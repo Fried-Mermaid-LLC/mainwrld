@@ -1,8 +1,10 @@
 packages:
   - "apps/*"
+  - "packages/*"
   - "functions"
 allowBuilds:
   "@firebase/util": true
+  '@scarf/scarf': false
   protobufjs: true
   sharp: true
   unrs-resolver: set this to true or false

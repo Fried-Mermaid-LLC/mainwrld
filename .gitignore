@@ -9,6 +9,10 @@ Thumbs.db
 .turbo/
 **/.turbo/
 
+# Build outputs
+**/dist/
+*.tsbuildinfo
+
 # Logs
 *.log
 
