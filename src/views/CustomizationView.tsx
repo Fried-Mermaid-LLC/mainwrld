@@ -4,6 +4,7 @@ import { AvatarLayers, AVATAR_ITEMS, getHairPosition, getFacePosition, HAIR_POSI
 import { SafeImg } from '@/components/SafeImg';
 import { AvatarCategory, AvatarConfig, AvatarGender, AvatarItem, User } from '@/types';
 import { useApp } from '@/state/AppContext';
+import * as fbService from '@/services/firebaseService';
 
 interface CustomizationViewProps {
     user: User;
@@ -17,7 +18,7 @@ interface CustomizationViewProps {
     getItemCost: (itemId: string) => number;
 }
 
-export const CustomizationView = () => {
+export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean } = {}) => {
     const {
         user,
         setUser,
@@ -28,6 +29,7 @@ export const CustomizationView = () => {
         isAdmin,
         getItemCost,
         setView,
+        firebaseUid,
     } = useApp()
     const onBack = () => setView('self-profile')
     const [activeCategory, setActiveCategory] = useState<AvatarCategory>('body');
@@ -169,9 +171,18 @@ export const CustomizationView = () => {
     // JEVON - logging avatar config for referencing
 
     const handleSave = () => {
-        if (localConfig) setAvatarConfig(localConfig);
-        console.log(localConfig);
-        onBack();
+        if (localConfig) {
+            setAvatarConfig(localConfig);
+            // Onboarding: persist immediately so the choice survives an app kill
+            // before the 2s debounced batch write, and so the gate (which keys off
+            // avatarConfig) clears to reveal the world.
+            if (onboarding && firebaseUid) {
+                fbService
+                    .updateUserProfile(firebaseUid, { avatarConfig: localConfig })
+                    .catch(console.error);
+            }
+        }
+        if (!onboarding) onBack();
     };
 
     useEffect(() => {
@@ -197,25 +208,39 @@ export const CustomizationView = () => {
         return (
             <div className="fixed inset-0 bg-white flex flex-col animate-in slide-in-from-right duration-500 z-[300]">
                 <header className="p-6 border-b flex justify-between items-center bg-white/80 backdrop-blur-md">
-                    <button onClick={onBack} className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">
-                        <span className="material-icons-round">arrow_back</span>
-                    </button>
-                    <h1 className="text-lg font-bold">Choose Your Style</h1>
+                    {onboarding ? (
+                        <div className="w-10" />
+                    ) : (
+                        <button onClick={onBack} className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">
+                            <span className="material-icons-round">arrow_back</span>
+                        </button>
+                    )}
+                    <h1 className="text-lg font-bold">{onboarding ? 'Create Your Character' : 'Choose Your Style'}</h1>
                     <div className="w-10" />
                 </header>
-                <div className="flex-1 flex items-center justify-center gap-8 p-8">
-                    <button onClick={() => handleGenderSelect('female')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-56">
-                        <div className="w-40 h-56 rounded-2xl overflow-hidden bg-gray-50">
-                            <SafeImg src={`${BASE}assets/avatar/body/female/A4.png`} alt="Female" className="w-full h-full object-contain" />
+                <div className="flex-1 flex flex-col items-center justify-center p-8">
+                    {onboarding && (
+                        <div className="text-center mb-10 max-w-xs">
+                            <h2 className="text-xl font-bold mb-2">Welcome to MainWRLD</h2>
+                            <p className="text-sm text-gray-400 leading-relaxed">
+                                Let's set up your character. Pick a starting look — you can fine-tune everything next.
+                            </p>
                         </div>
-                        <span className="text-sm font-bold uppercase tracking-widest"></span>
-                    </button>
-                    <button onClick={() => handleGenderSelect('male')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-56">
-                        <div className="w-40 h-56 rounded-2xl overflow-hidden bg-gray-50">
-                            <SafeImg src={`${BASE}assets/avatar/body/male/B4.png`} alt="Male" className="w-full h-full object-contain" />
-                        </div>
-                        <span className="text-sm font-bold uppercase tracking-widest"></span>
-                    </button>
+                    )}
+                    <div className="flex items-center justify-center gap-8">
+                        <button onClick={() => handleGenderSelect('female')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-44 md:w-56">
+                            <div className="w-32 md:w-40 h-44 md:h-56 rounded-2xl overflow-hidden bg-gray-50">
+                                <SafeImg src={`${BASE}assets/avatar/body/female/A4.png`} alt="Female" className="w-full h-full object-contain" />
+                            </div>
+                            <span className="text-sm font-bold uppercase tracking-widest">Female</span>
+                        </button>
+                        <button onClick={() => handleGenderSelect('male')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-44 md:w-56">
+                            <div className="w-32 md:w-40 h-44 md:h-56 rounded-2xl overflow-hidden bg-gray-50">
+                                <SafeImg src={`${BASE}assets/avatar/body/male/B4.png`} alt="Male" className="w-full h-full object-contain" />
+                            </div>
+                            <span className="text-sm font-bold uppercase tracking-widest">Male</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -224,14 +249,22 @@ export const CustomizationView = () => {
     return (
         <div className="fixed inset-0 bg-white flex flex-col animate-in slide-in-from-right duration-500 z-[300]">
             <header className="p-4 border-b flex justify-between items-center bg-white/80 backdrop-blur-md">
-                <button onClick={onBack} className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">
-                    <span className="material-icons-round">arrow_back</span>
-                </button>
+                {onboarding ? (
+                    <div className="w-10" />
+                ) : (
+                    <button onClick={onBack} className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">
+                        <span className="material-icons-round">arrow_back</span>
+                    </button>
+                )}
                 <div className="text-center">
-                    <h1 className="text-lg font-bold">Customize</h1>
-                    <p className="text-[10px] font-bold text-accent uppercase tracking-widest">{user.points} Points</p>
+                    <h1 className="text-lg font-bold">{onboarding ? 'Create Your Character' : 'Customize'}</h1>
+                    <p className="text-[10px] font-bold text-accent uppercase tracking-widest">
+                        {onboarding ? 'Make it yours' : `${user.points} Points`}
+                    </p>
                 </div>
-                <button onClick={handleSave} className="text-sm font-semibold text-accent hover:opacity-70 transition">Save</button>
+                <button onClick={handleSave} className="text-sm font-semibold text-accent hover:opacity-70 transition">
+                    {onboarding ? 'Done' : 'Save'}
+                </button>
             </header>
 
             <div className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-4 min-h-0 relative overflow-hidden">

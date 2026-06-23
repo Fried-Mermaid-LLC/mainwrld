@@ -11,7 +11,7 @@ import { TUTORIAL_BOOK_ID } from '@/config/constants'
 // TUTORIAL_BOOK_ID configured yet, the popup still appears but hides the "Open
 // tutorial book" CTA.
 export const WelcomePopup = () => {
-  const { user, userDataLoaded, setSelectedBook, setView, setUser, firebaseUid } =
+  const { user, userDataLoaded, avatarConfig, setSelectedBook, setView, setUser, firebaseUid } =
     useApp()
   const [closedThisSession, setClosedThisSession] = useState(false)
   const [dismissForever, setDismissForever] = useState(false)
@@ -20,6 +20,10 @@ export const WelcomePopup = () => {
   const shouldShow =
     userDataLoaded &&
     !!user?.username &&
+    // Hold the tutorial popup back until the appearance onboarding is done — the
+    // OnboardingGate (avatarConfig still null) sits below this popup's z-index,
+    // so showing both at once would stack the popup on top of character setup.
+    !!avatarConfig &&
     user.onboardingTutorialDismissed !== true &&
     !closedThisSession
 
