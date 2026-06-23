@@ -16,13 +16,16 @@ name: Deploy to Firebase Hosting
 #   - Storage Admin                    (storage.rules release)
 #   - Cloud Functions Admin + Service Account User + Cloud Build Editor
 #     + Artifact Registry Writer + Secret Manager Secret Accessor (functions)
-# Until those roles are granted the backend step is BEST-EFFORT: it is marked
-# continue-on-error so a 403 never reds the run (hosting above is the critical
-# release), and `storage` is dropped from --only because the CI service account
-# lacks Storage Admin — its default-bucket lookup 403s and aborts the WHOLE
-# deploy command (so nothing, not even rules/functions, ships). Storage rules are
-# deployed manually in that interim. Grant the roles above, then re-add `storage`
-# to --only and drop continue-on-error to restore full, enforced backend CI.
+# The CI service account currently only has Hosting + rules access, so the
+# backend step deploys ONLY firestore:rules + database — the rules-drift guard
+# this step exists for. `storage` and `functions` are deployed MANUALLY:
+#   - storage 403s on the default-bucket lookup (no Storage Admin) and aborts
+#     the whole deploy command;
+#   - functions 403s on the Cloud Billing API (and needs the Cloud Functions
+#     roles above).
+# The step is also marked continue-on-error so any residual 403 never reds the
+# run (hosting above is the critical release). Grant the roles above, then re-add
+# storage,functions to --only and drop continue-on-error for full backend CI.
 
 on:
   push:
@@ -86,20 +89,19 @@ jobs:
       # script) so the secret can't leak through shell expansion. functions
       # build runs via firebase.json's predeploy hook, which needs functions/
       # deps installed first.
-      - name: Deploy backend (rules + functions)
-        # Best-effort (see header). `storage` is omitted because the CI service
-        # account lacks Storage Admin: its default-bucket lookup 403s and would
-        # abort the entire deploy, so dropping it lets rules + database +
-        # functions still ship. continue-on-error keeps a residual IAM 403 from
-        # failing the run; storage rules are deployed manually until the roles
-        # in the header are granted.
+      - name: Deploy backend rules (firestore + database)
+        # Deploys firestore:rules + database only — the rules-drift guard this
+        # step exists for. storage (no Storage Admin) and functions (Cloud
+        # Billing API + Cloud Functions roles) 403 with the current CI service
+        # account and are deployed manually (see header). continue-on-error keeps
+        # a residual 403 from reding the run; hosting above already shipped.
+        # No functions deps/build needed now that functions is out of --only.
         continue-on-error: true
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
-          npm --prefix functions ci
           npx firebase-tools@15 deploy \
-            --only firestore:rules,database,functions \
+            --only firestore:rules,database \
             --project mainwrld-f7acf --non-interactive --force
