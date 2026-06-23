@@ -4,8 +4,10 @@ export const ACCENT_COLOR = '#eb6871';
 // `${SHARE_BASE}/book/<id>`. SHARE_BASE is the single source of truth shared by
 // web + iOS; the `/book/**` Hosting rewrite routes it to the `ogBook` Cloud
 // Function (per-book OG tags for link unfurling + a redirect into the SPA).
-// Swap to the custom domain here once it's live (also update the AASA host).
-export const SHARE_BASE = 'https://mainwrld-f7acf.web.app';
+// The custom domain mainwrld.com is live on Firebase Hosting (the `web.app`
+// origin still resolves, so old links keep working). To open shared links
+// directly in the iOS app, the AASA `applinks` host must include mainwrld.com.
+export const SHARE_BASE = 'https://mainwrld.com';
 export const buildBookShareUrl = (id: string) => `${SHARE_BASE}/book/${id}`;
 
 export const WORLD_RADIUS = 50;

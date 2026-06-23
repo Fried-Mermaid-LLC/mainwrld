@@ -15,15 +15,16 @@ import './index.css'
 
 // Shared-book deep links on native (F09). The bundled iOS app loads from
 // capacitor://localhost, so window.location is never the tapped share URL — a
-// Universal Link tap (`https://mainwrld-f7acf.web.app/book/<id>`) arrives here
-// instead. Stash the id where resolveInitialView reads it (cold start) AND
-// dispatch an event the AppProvider listens for (warm tap). Registered before
-// React mounts so a cold-start tap is captured even if it fires early.
-// Universal Links are fully configured: the apple-app-site-association is
-// hosted (public/.well-known/) and App.entitlements carries the Associated
-// Domains key (applinks:mainwrld-f7acf.web.app), granted by the MainWRLD
-// provisioning profile. So an installed app receives the tap here; without the
-// app installed the link falls back to the Safari web preview.
+// Universal Link tap (`https://mainwrld.com/book/<id>`) arrives here instead.
+// Stash the id where resolveInitialView reads it (cold start) AND dispatch an
+// event the AppProvider listens for (warm tap). Registered before React mounts
+// so a cold-start tap is captured even if it fires early. Universal Links are
+// fully configured: the apple-app-site-association is hosted (public/.well-known/)
+// and App.entitlements carries the Associated Domains key (applinks:mainwrld.com),
+// granted by the MainWRLD provisioning profile. So an installed app receives the
+// tap here; without the app installed the link falls back to the Safari web
+// preview. Legacy web.app links open only via that web preview (not listed in
+// applinks).
 if (Capacitor.isNativePlatform()) {
   CapApp.addListener('appUrlOpen', ({ url }) => {
     try {

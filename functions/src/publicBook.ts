@@ -20,7 +20,10 @@ import { getFirestore } from 'firebase-admin/firestore'
 // Draft / missing / unshareable books return a generic "unavailable" response
 // that never leaks the title.
 
-const SITE = 'https://mainwrld-f7acf.web.app'
+// Canonical public origin (live custom domain on Firebase Hosting). Used for
+// the per-book og:url and the fallback share image, so unfurled previews match
+// the mainwrld.com link that's actually shared (see SHARE_BASE in the SPA).
+const SITE = 'https://mainwrld.com'
 const FALLBACK_IMAGE = `${SITE}/logo.png`
 
 interface PublicBookPreview {
