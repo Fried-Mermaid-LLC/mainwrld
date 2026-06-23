@@ -212,6 +212,11 @@ export class StripeWebhookService {
           ? session.payment_intent
           : session.payment_intent?.id) || session.id;
       const amountTotal = session.amount_total ?? 0;
+      // amount_total includes any sales tax Stripe Tax added; tax is a platform
+      // pass-through liability, so the 80/20 split is computed on the pre-tax
+      // base (which equals the seller's fixed transfer at checkout).
+      const amountTax = session.total_details?.amount_tax ?? 0;
+      const preTax = amountTotal - amountTax;
       if (!bookId)
         return { status: 200, body: 'skipped: book_purchase missing bookId' };
 
@@ -231,7 +236,8 @@ export class StripeWebhookService {
           }
           const userSnap = await t.get(userRef);
           const userData = (userSnap.data() as Record<string, unknown>) || {};
-          const platformFee = Math.round(amountTotal * 0.2);
+          const sellerNet = Math.round(preTax * 0.8);
+          const platformFee = preTax - sellerNet;
           const userUpdate: Record<string, unknown> = {
             ownedBookIds: FieldValue.arrayUnion(bookId),
             purchasedBookIds: FieldValue.arrayUnion(bookId),
@@ -247,9 +253,11 @@ export class StripeWebhookService {
             sellerUid,
             bookId,
             rail: 'cash',
-            priceUsd: amountTotal / 100,
+            priceUsd: preTax / 100,
+            taxUsd: amountTax / 100,
+            totalChargedUsd: amountTotal / 100,
             platformFeeUsd: platformFee / 100,
-            sellerNetUsd: (amountTotal - platformFee) / 100,
+            sellerNetUsd: sellerNet / 100,
             stripeSessionId: session.id,
             stripePaymentIntentId: paymentIntentId,
             livemode: event.livemode,

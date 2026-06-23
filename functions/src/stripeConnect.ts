@@ -527,20 +527,39 @@ export const createBookCheckoutSession = onCall<
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      // Stripe Tax needs a buyer address to pick the jurisdiction, then adds
+      // sales tax on top of the price for any state where MainWRLD (the
+      // merchant of record) has an active tax registration.
+      billing_address_collection: 'required',
+      automatic_tax: { enabled: true },
       line_items: [
         {
           price_data: {
             currency: 'usd',
-            product_data: { name: book.title || 'MainWRLD book' },
+            product_data: {
+              name: book.title || 'MainWRLD book',
+              // Digital Books — non-subscription, permanent rights. Some states
+              // exempt digital books, so this is more accurate than the
+              // account-default general tax code.
+              tax_code: 'txcd_10302000',
+            },
             unit_amount: unitAmount,
+            // Price is pre-tax; sales tax is added on top at checkout.
+            tax_behavior: 'exclusive',
           },
           quantity: 1,
         },
       ],
       discounts: stripeCouponId ? [{ coupon: stripeCouponId }] : undefined,
       payment_intent_data: {
-        application_fee_amount: Math.round(chargedAmount * PLATFORM_FEE_RATE),
-        transfer_data: { destination },
+        // Seller's 80% is a FIXED transfer on the pre-tax, post-discount price.
+        // Using transfer_data.amount (instead of application_fee_amount) keeps
+        // the collected sales tax with the platform — the merchant of record
+        // that has to remit it — instead of leaking it into the seller payout.
+        transfer_data: {
+          destination,
+          amount: Math.round(chargedAmount * (1 - PLATFORM_FEE_RATE)),
+        },
       },
       client_reference_id: buyerUid,
       metadata: {

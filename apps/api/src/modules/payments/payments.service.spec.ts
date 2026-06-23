@@ -107,19 +107,23 @@ describe('PaymentsService', () => {
       });
     });
 
-    it('happy path returns {url} with 80/20 application_fee_amount', async () => {
+    it('happy path returns {url} with 80% seller transfer + tax enabled', async () => {
       seedBook({ price: 9.99 });
       const res = await svc.createBookCheckout('buyer1', {
         bookId: 'b1',
       } as any);
       expect(res).toEqual({ url: 'https://checkout.url' });
       const args = stripeMock.checkout.sessions.create.mock.calls[0]![0];
-      // unitAmount = 999, no coupon -> chargedAmount = 999, fee = round(999*0.2)=200
+      // unitAmount = 999, no coupon -> chargedAmount = 999, seller transfer =
+      // round(999*0.8)=799 (the platform keeps the 200 fee + any sales tax).
       expect(args.line_items[0].price_data.unit_amount).toBe(999);
-      expect(args.payment_intent_data.application_fee_amount).toBe(200);
+      expect(args.line_items[0].price_data.tax_behavior).toBe('exclusive');
+      expect(args.automatic_tax.enabled).toBe(true);
+      expect(args.payment_intent_data.application_fee_amount).toBeUndefined();
       expect(args.payment_intent_data.transfer_data.destination).toBe(
         'acct_seller',
       );
+      expect(args.payment_intent_data.transfer_data.amount).toBe(799);
       expect(args.client_reference_id).toBe('buyer1');
       expect(args.discounts).toBeUndefined();
       expect(stripeMock.coupons.create).not.toHaveBeenCalled();
@@ -143,13 +147,13 @@ describe('PaymentsService', () => {
         couponId: 'c1',
       } as any);
       expect(res).toEqual({ url: 'https://checkout.url' });
-      // discount = min(500, 999-50=949) = 500, charged = 499, fee = round(499*0.2)=100
+      // discount = min(500, 999-50=949) = 500, charged = 499, seller transfer = round(499*0.8)=399
       expect(stripeMock.coupons.create).toHaveBeenCalledWith(
         expect.objectContaining({ amount_off: 500, currency: 'usd' }),
       );
       const args = stripeMock.checkout.sessions.create.mock.calls[0]![0];
       expect(args.discounts).toEqual([{ coupon: 'coupon_x' }]);
-      expect(args.payment_intent_data.application_fee_amount).toBe(100);
+      expect(args.payment_intent_data.transfer_data.amount).toBe(399);
       expect(args.metadata.couponId).toBe('c1');
     });
 
@@ -167,8 +171,8 @@ describe('PaymentsService', () => {
         expect.objectContaining({ amount_off: 949 }),
       );
       const args = stripeMock.checkout.sessions.create.mock.calls[0]![0];
-      // charged = 999 - 949 = 50, fee = round(50*0.2) = 10
-      expect(args.payment_intent_data.application_fee_amount).toBe(10);
+      // charged = 999 - 949 = 50, seller transfer = round(50*0.8) = 40
+      expect(args.payment_intent_data.transfer_data.amount).toBe(40);
     });
 
     it('ignores an already-used coupon (no discount, no stripe coupon)', async () => {
@@ -183,7 +187,7 @@ describe('PaymentsService', () => {
       expect(stripeMock.coupons.create).not.toHaveBeenCalled();
       const args = stripeMock.checkout.sessions.create.mock.calls[0]![0];
       expect(args.discounts).toBeUndefined();
-      expect(args.payment_intent_data.application_fee_amount).toBe(200);
+      expect(args.payment_intent_data.transfer_data.amount).toBe(799);
       expect(args.metadata.couponId).toBe('');
     });
 
