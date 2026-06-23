@@ -55,6 +55,23 @@ const styleMesh = (child: any, tint?: string) => {
     : prepMaterial(child.material, tint)
 }
 
+// The man_animated.glb mesh nodes were authored with names that don't line up
+// 1:1 with the AVATAR_ITEMS ids the rest of the app persists / shows in the 2D
+// customiser:
+//   - The two "Face 2" alternates are named "M_Eye_2 variation_2" and
+//     "M_Eye_2 variation_3" (a space, and numbered from 2). After GLTFLoader
+//     sanitises whitespace to "_" these become "M_Eye_2_variation_2/3". Item
+//     M_Eye_2_variation_2 lines up with node ..._2 already, but item
+//     M_Eye_2_variation_1 had no node and rendered an invisible face. Comparing
+//     each node's embedded baseColorTexture against the 2D PNG previews, the
+//     dark-lipped "Alt" (item ..._1, PNG M_Eye_2_v1) is node ..._variation_3.
+//   - "M_Hair4 " carries a trailing space -> sanitised "M_Hair4_".
+// The woman_animated_v2.glb model is already consistent (no aliases needed).
+const AVATAR_NODE_ALIASES: Record<string, string> = {
+  M_Eye_2_variation_1: 'M_Eye_2_variation_3',
+  M_Hair4: 'M_Hair4_'
+}
+
 // -----------------------------
 // Avatar Model
 // -----------------------------
@@ -137,6 +154,14 @@ export const AvatarModel: React.FC<{
     const matchedIds = new Set<string>()
     let bodyMatched = false
 
+    // Resolve every active id to the exact (sanitised) GLB node name it should
+    // light up, then match by equality. Substring matching (the old `includes`)
+    // made a base id like "M_Eye_1" also light up "M_Eye_1_variation_1/2",
+    // stacking three overlapping eye meshes; equality + the alias table fixes
+    // both that and the M_Eye_2/M_Hair4 name mismatches.
+    const nodeToId = new Map<string, string>()
+    for (const id of activeIds) nodeToId.set(AVATAR_NODE_ALIASES[id] ?? id, id)
+
     scene.traverse((child: any) => {
       if (!child.isMesh) return
 
@@ -150,13 +175,11 @@ export const AvatarModel: React.FC<{
         return
       }
 
-      for (let id of activeIds) {
-        if (child.name.includes(id)) {
-          child.visible = true
-          matchedIds.add(id)
-          styleMesh(child)
-          break
-        }
+      const id = nodeToId.get(child.name)
+      if (id) {
+        child.visible = true
+        matchedIds.add(id)
+        styleMesh(child)
       }
     })
 
