@@ -1,0 +1,89 @@
+name: Deploy API to Cloud Run
+
+# Builds the NestJS API (apps/api) into a container and deploys it to Cloud Run
+# on push to main. firebase-admin authenticates via the Cloud Run runtime
+# service account (ADC) — no key file is baked into the image. Secrets come from
+# Secret Manager (the same names firebase functions:secrets uses).
+#
+# Required repo secrets:
+#   GCP_SA_KEY     JSON key of a deployer service account with: Artifact
+#                  Registry Writer, Cloud Run Admin, Service Account User.
+#   CLOUD_RUN_SA   email of the RUNTIME service account the service runs as;
+#                  needs Firestore User, Firebase Auth Admin, Storage Object
+#                  Admin, FCM, and Secret Manager Secret Accessor.
+# One-time setup: create an Artifact Registry docker repo named `mainwrld` in
+# us-central1, and ensure the Secret Manager secrets below exist.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/types/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: api-cloudrun
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: mainwrld-f7acf
+  REGION: us-central1
+  SERVICE: mainwrld-api
+  REPO: mainwrld
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @mainwrld/types build
+      - run: pnpm --filter @mainwrld/api typecheck
+      - run: pnpm --filter @mainwrld/api test
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push image
+        run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}:${{ github.sha }}"
+          docker build -f apps/api/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image "$IMAGE" \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --min-instances 1 \
+            --timeout 3600 \
+            --service-account "${{ secrets.CLOUD_RUN_SA }}" \
+            --set-env-vars "NODE_ENV=production,FIREBASE_PROJECT_ID=${{ env.PROJECT_ID }},FIREBASE_STORAGE_BUCKET=mainwrld-f7acf.firebasestorage.app,FIREBASE_DATABASE_URL=https://mainwrld-f7acf-default-rtdb.firebaseio.com,CORS_ORIGINS=https://mainwrld-f7acf.web.app,SITE_URL=https://mainwrld-f7acf.web.app" \
+            --set-secrets "RESEND_API_KEY=RESEND_API_KEY:latest,STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest,STRIPE_TEST_SECRET_KEY=STRIPE_TEST_SECRET_KEY:latest,STRIPE_LIVE_WEBHOOK_SECRET=STRIPE_LIVE_WEBHOOK_SECRET:latest,STRIPE_TEST_WEBHOOK_SECRET=STRIPE_TEST_WEBHOOK_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,APPLE_ISSUER_ID=APPLE_ISSUER_ID:latest,APPLE_KEY_ID=APPLE_KEY_ID:latest,APPLE_BUNDLE_ID=APPLE_BUNDLE_ID:latest,APPLE_PRIVATE_KEY=APPLE_PRIVATE_KEY:latest,APPLE_ENV=APPLE_ENV:latest,INTERNAL_CRON_SECRET=INTERNAL_CRON_SECRET:latest"

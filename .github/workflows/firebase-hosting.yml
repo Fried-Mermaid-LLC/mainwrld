@@ -78,6 +78,11 @@ jobs:
           # work (X06). Without it the bundle throws at import and the web app
           # is a blank white screen.
           VITE_FIREBASE_DATABASE_URL: ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
+          # Base URL of the NestJS API (Cloud Run / api.mainwrld.com). REQUIRED
+          # by lib/apiClient.ts — without it the bundle throws at import and the
+          # web app is a blank white screen (same failure class as the Firebase
+          # vars above).
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
 
       - name: Deploy to Firebase Hosting (live)
         uses: FirebaseExtended/action-hosting-deploy@v0
