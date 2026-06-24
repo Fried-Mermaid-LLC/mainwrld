@@ -35,6 +35,15 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Allow cleartext HTTP to local-network hosts (e.g. the dev
+		     NestJS API at http://192.168.1.44:3000) without disabling ATS
+		     globally. Scoped to local network only, so it needs no App
+		     Store review justification. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIBackgroundModes</key>
