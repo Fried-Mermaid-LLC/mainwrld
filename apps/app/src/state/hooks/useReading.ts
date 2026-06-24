@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
-import { MAX_DAILY_CHAPTERS, MAX_LIBRARY_SIZE, LIBRARY_FULL_TOAST } from '@/config/constants'
+import { MAX_DAILY_CHAPTERS, libraryLimitFor, LIBRARY_FULL_TOAST } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import type { User, Book, BookProgress, View, Relationship, NotificationCategory } from '@/types'
 
@@ -246,8 +246,9 @@ export function useReading({
   }
 
   const handleSaveToLibrary = (bookId: string) => {
-    // F07: cap the library at MAX_LIBRARY_SIZE. Read the latest data from the
-    // ref so the count is correct under rapid consecutive saves.
+    // F07: cap the free library at FREE_LIBRARY_SIZE; premium members are
+    // uncapped (libraryLimitFor → Infinity). Read the latest data from the ref
+    // so the count is correct under rapid consecutive saves.
     const currentUd = userBookDataRef.current[user.username] || {
       ownedBookIds: [],
       bookProgress: {},
@@ -259,7 +260,8 @@ export function useReading({
     ])
     // Re-saving a book already in the library is a no-op and not capped; only a
     // genuinely new add is blocked once the library is full.
-    if (!alreadyInLibrary.has(bookId) && alreadyInLibrary.size >= MAX_LIBRARY_SIZE) {
+    const libraryLimit = libraryLimitFor(user.isPremium)
+    if (!alreadyInLibrary.has(bookId) && alreadyInLibrary.size >= libraryLimit) {
       showToast(LIBRARY_FULL_TOAST, 'error')
       return
     }

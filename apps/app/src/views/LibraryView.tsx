@@ -1,9 +1,10 @@
-import { MAX_LIBRARY_SIZE } from '@/config/constants'
+import { FREE_LIBRARY_SIZE } from '@/config/constants'
 import { CoverImg } from '@/components/sharedComponents'
 import { useApp } from '@/state/AppContext'
 
 export const LibraryView = () => {
   const {
+    user,
     setView,
     books,
     setSelectedBook,
@@ -25,7 +26,9 @@ export const LibraryView = () => {
             Library
           </h1>
           <p className='text-[13px] font-semibold text-[#9aa1a9] tracking-[0.13px] leading-[1.2]'>
-            {ownedBooks.length}/{MAX_LIBRARY_SIZE} Books
+            {user.isPremium
+              ? `${ownedBooks.length} Books`
+              : `${ownedBooks.length}/${FREE_LIBRARY_SIZE} Books`}
           </p>
         </div>
       </header>

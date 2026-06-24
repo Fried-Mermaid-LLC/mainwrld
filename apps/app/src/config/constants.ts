@@ -11,9 +11,15 @@ export const SHARE_BASE = 'https://mainwrld.com';
 export const buildBookShareUrl = (id: string) => `${SHARE_BASE}/book/${id}`;
 
 export const WORLD_RADIUS = 50;
-export const MAX_LIBRARY_SIZE = 35;
-// Shown when a reader tries to add a book past MAX_LIBRARY_SIZE (F07).
-export const LIBRARY_FULL_TOAST = 'Read and remove some books in your library to add more';
+// Library cap (F07). Free accounts can keep up to FREE_LIBRARY_SIZE saved books;
+// premium members have an unlimited library. Enforced client-side in
+// useReading.handleSaveToLibrary, and reflected in the LibraryView header.
+export const FREE_LIBRARY_SIZE = 35;
+// Resolve a user's library cap — Infinity (uncapped) for premium members.
+export const libraryLimitFor = (isPremium?: boolean): number =>
+  isPremium ? Infinity : FREE_LIBRARY_SIZE;
+// Shown when a free reader tries to save a book past FREE_LIBRARY_SIZE (F07).
+export const LIBRARY_FULL_TOAST = 'Your library is full. Upgrade to premium for unlimited books, or remove some to add more.';
 
 // First-launch onboarding (F10). The welcome popup links to this tutorial book
 // from the MainWRLD account. Leave empty until the real book id is known — an
@@ -111,7 +117,8 @@ export const SKIN_TONE_COLORS: Record<string, string> = {
 export default {
   ACCENT_COLOR,
   WORLD_RADIUS,
-  MAX_LIBRARY_SIZE,
+  FREE_LIBRARY_SIZE,
+  libraryLimitFor,
   MIN_WORD_COUNT,
   MAX_DAILY_EARNED_POINTS,
   COMMENT_LIKES_THRESHOLD,
