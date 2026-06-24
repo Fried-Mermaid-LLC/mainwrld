@@ -8,7 +8,7 @@ import * as pushService from '@/services/pushService'
 import { MIN_SIGNUP_AGE } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import { ageFromBirthDate } from '@/utils/age'
-import { sendWelcomeEmail } from '@/config/config'
+import { usersApi } from '@/services/api/usersApi'
 import { parseShareBookId } from './useUI'
 import { convertFirestoreBook } from '@/utils/bookConverter'
 import type { User, View, Book, NotificationCategory } from '@/types'
@@ -333,9 +333,15 @@ export function useAuthActions({
         .then((users: any[]) => setRegisteredUsers(users))
         .catch(console.error)
 
-      // Send welcome email asynchronously (non-blocking)
+      // Send welcome email asynchronously (non-blocking). The API derives the
+      // recipient from the caller's auth token; failures are logged, never
+      // thrown, so a mail hiccup never blocks sign-up.
       if (email) {
-        sendWelcomeEmail(email, displayName, username)
+        usersApi
+          .sendWelcomeEmail()
+          .catch((err) =>
+            console.error('[MainWRLD] Welcome email failed:', err),
+          )
       }
       addNotification(
         'Welcome to MainWRLD!',

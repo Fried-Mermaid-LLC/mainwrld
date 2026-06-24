@@ -1,14 +1,14 @@
 import React, { useState } from 'react'
 import { Button, Input } from '@/components/sharedComponents'
 import { useApp } from '@/state/AppContext'
-import { sendPasswordReset } from '@/config/config'
+import { sendPasswordReset } from '@/services/authService'
 
 export const ForgotPasswordView = () => {
   const { setView, registeredUsers, showToast } = useApp()
   const onBack = () => setView('login')
-  // Branded reset email via the sendPasswordReset callable (Resend). The server
-  // never reveals whether the address has an account, so we always show the
-  // same "check your email" confirmation.
+  // Branded reset email via the API (/auth/password-reset, Resend server-side).
+  // The server never reveals whether the address has an account, so we always
+  // show the same "check your email" confirmation.
   const onResetPassword = async (email: string) => {
     await sendPasswordReset(email)
   }

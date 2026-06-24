@@ -2,17 +2,19 @@
   "name": "@mainwrld/api",
   "version": "1.0.0",
   "private": true,
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.{ts,tsx}\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -28,12 +30,15 @@
     "@nestjs/platform-express": "11.1.27",
     "@nestjs/swagger": "^11.4.4",
     "@nestjs/terminus": "^11.1.1",
+    "@react-email/components": "1.0.12",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "firebase-admin": "13.10.0",
     "nestjs-pino": "^4.6.1",
     "obscenity": "0.4.6",
     "pino-http": "^11.0.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "stripe": "22.2.3",
@@ -48,6 +53,8 @@
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
     "@types/node": "26.0.0",
+    "@types/react": "19.1.1",
+    "@types/react-dom": "19.1.1",
     "@types/supertest": "7.2.0",
     "eslint": "9.39.4",
     "eslint-config-prettier": "10.1.8",
@@ -68,7 +75,8 @@
     "moduleFileExtensions": [
       "js",
       "json",
-      "ts"
+      "ts",
+      "tsx"
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
@@ -76,7 +84,7 @@
       "<rootDir>/testing/jest-setup.ts"
     ],
     "transform": {
-      "^.+\\.(t|j)s$": [
+      "^.+\\.(t|j)sx?$": [
         "ts-jest",
         {
           "tsconfig": "tsconfig.spec.json"

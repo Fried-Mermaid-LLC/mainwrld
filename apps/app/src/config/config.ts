@@ -1,5 +1,3 @@
-import { getFunctions, httpsCallable } from "firebase/functions";
-
 export const BASE = import.meta.env.BASE_URL;
 
 // Stripe runs on LIVE everywhere — local dev, TestFlight, and the mainwrld.com
@@ -40,41 +38,9 @@ export const STRIPE_COUPON_PAYMENT_LINKS: Record<string, string> = {
   coupon_1000: "",
 };
 
-export const RESEND_FROM_EMAIL = "noreply@mainwrld.com";
-export const RESEND_SUBJECT = "Welcome to MainWRLD!";
-
-// Sends the post-signup welcome email via the `sendWelcomeEmail` callable
-// Cloud Function (Resend lives server-side). Best-effort: failures are logged,
-// never thrown, so a mail hiccup never blocks sign-up. The recipient is taken
-// from the caller's auth token server-side; `email` is sent only as a fallback.
-export const sendWelcomeEmail = async (
-  email: string,
-  displayName: string,
-  username: string,
-) => {
-  try {
-    const fn = httpsCallable<
-      { email: string; displayName: string; username: string },
-      { success: boolean }
-    >(getFunctions(), "sendWelcomeEmail");
-    await fn({ email, displayName, username });
-    console.log("[MainWRLD] Welcome email sent");
-  } catch (err) {
-    console.error("[MainWRLD] Welcome email failed:", err);
-  }
-};
-
-// Sends the branded "forgot password" email via the `sendPasswordReset`
-// callable Cloud Function (Resend + an Admin-SDK reset link, server-side).
-// The server always resolves with success — even for unknown addresses — so it
-// never leaks which emails have accounts; only a transport failure rejects.
-export const sendPasswordReset = async (email: string) => {
-  const fn = httpsCallable<{ email: string }, { success: boolean }>(
-    getFunctions(),
-    "sendPasswordReset",
-  );
-  await fn({ email });
-};
+// Welcome + password-reset emails now go through the API (usersApi
+// .sendWelcomeEmail / authService.sendPasswordReset), which renders the React
+// Email templates and sends via Resend server-side.
 
 export default {
   BASE,
@@ -82,8 +48,4 @@ export default {
   STRIPE_PREMIUM_PAYMENT_LINK,
   COUPON_PRODUCTS,
   STRIPE_COUPON_PAYMENT_LINKS,
-  RESEND_FROM_EMAIL,
-  RESEND_SUBJECT,
-  sendWelcomeEmail,
-  sendPasswordReset,
 };

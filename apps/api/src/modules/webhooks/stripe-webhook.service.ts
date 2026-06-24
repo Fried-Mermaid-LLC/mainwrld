@@ -111,7 +111,8 @@ export class StripeWebhookService {
         .get();
       if (!q.empty) uid = q.docs[0].id;
     }
-    if (!uid) return { status: 200, body: 'skipped: account has no linked user' };
+    if (!uid)
+      return { status: 200, body: 'skipped: account has no linked user' };
 
     const eventRef = this.stripeEvents.doc(event.id);
     const userRef = this.users.doc(uid);

@@ -15,11 +15,11 @@ export {
   moderateUsername,
 } from './moderate.js'
 export { getChapterContent } from './chapters.js'
-export { verifyAppleReceipt } from './verifyAppleReceipt.js'
-export { sendWelcomeEmail } from './sendWelcomeEmail.js'
-export { sendPasswordReset } from './sendPasswordReset.js'
-export { sendRenewalReminders } from './sendRenewalReminders.js'
-export { stripeWebhook } from './stripeWebhook.js'
+// Apple receipt verification, the Stripe webhook, welcome/password-reset
+// emails, and the renewal-reminder cron all moved to the NestJS API
+// (apps/api). Their Cloud Functions + the shared email.ts were removed once
+// the client, Stripe Dashboard webhook URL, and Cloud Scheduler were pointed
+// at the API.
 export { ogBook } from './publicBook.js'
 export {
   createStripeAccountLink,

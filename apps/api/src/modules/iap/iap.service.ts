@@ -100,7 +100,8 @@ export class IapService {
       );
       const info = await client.getTransactionInfo(transactionId);
       signedTx = info.signedTransactionInfo ?? '';
-      if (!signedTx) throw new NotFoundException('Transaction not found at Apple.');
+      if (!signedTx)
+        throw new NotFoundException('Transaction not found at Apple.');
     } catch (err) {
       this.logger.error(
         `verifyAppleReceipt: getTransactionInfo failed for ${user.uid}`,
@@ -116,7 +117,13 @@ export class IapService {
     // Production verification technically needs the numeric App Apple ID.
     let payload: Record<string, unknown>;
     try {
-      const verifier = new SignedDataVerifier([], true, env, bundleId, undefined);
+      const verifier = new SignedDataVerifier(
+        [],
+        true,
+        env,
+        bundleId,
+        undefined,
+      );
       payload = (await verifier.verifyAndDecodeTransaction(
         signedTx,
       )) as unknown as Record<string, unknown>;
@@ -157,7 +164,9 @@ export class IapService {
       if (exp > 0 && exp < Date.now()) return { credited: false };
     }
 
-    const txRef = this.db.collection(COLLECTIONS.iapTransactions).doc(transactionId);
+    const txRef = this.db
+      .collection(COLLECTIONS.iapTransactions)
+      .doc(transactionId);
     const userRef = this.db.collection(COLLECTIONS.users).doc(user.uid);
     const expiresMs = (payload.expiresDate as number) ?? 0;
 
@@ -194,7 +203,11 @@ export class IapService {
         result.isPremium = true;
       }
       if (couponValue) {
-        const coupon = { id: `buy_${transactionId}`, value: couponValue, used: false };
+        const coupon = {
+          id: `buy_${transactionId}`,
+          value: couponValue,
+          used: false,
+        };
         t.update(userRef, { coupons: FieldValue.arrayUnion(coupon) });
         result.couponAdded = coupon;
       }

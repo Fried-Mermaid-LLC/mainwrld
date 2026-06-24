@@ -10,11 +10,9 @@ import {
 } from '../../infra/firebase/firebase.constants';
 import { EmailService } from '../../shared/email/email.service';
 import {
-  emailLayout,
-  escapeHtml,
+  monetizationApprovedEmail,
+  monetizationDeniedEmail,
 } from '../../shared/email/email.templates';
-
-const SITE_URL = 'https://mainwrld.com';
 
 // Monetization side-effects (ported from the onBookMonetized trigger). Now that
 // all book writes go through the API, these run INLINE from the monetization
@@ -81,30 +79,17 @@ export class MonetizationEffectsService {
         );
       }
       await Promise.all(writes);
-      this.logger.log(`onApproved fan-out complete: ${bookId} (${owners.size})`);
+      this.logger.log(
+        `onApproved fan-out complete: ${bookId} (${owners.size})`,
+      );
     } catch (err) {
       this.logger.error(`onApproved fan-out failed: ${bookId}`, err as Error);
     }
 
     const author = await this.email.userContact(authorUid);
     if (author.email) {
-      await this.email.send(
-        author.email,
-        'Your monetization request has been accepted',
-        emailLayout({
-          preheader: `"${title}" is approved for sale on MainWRLD.`,
-          heading: 'Your monetization request was accepted',
-          bodyHtml: `
-            <p style="margin:0 0 14px">Hi ${escapeHtml(author.displayName)},</p>
-            <p style="margin:0 0 14px">Good news — your request to monetize
-              <strong>"${escapeHtml(title)}"</strong> has been accepted.
-              Readers can now purchase it, and you'll earn 80% of every sale.</p>
-            <p style="margin:0">You can track sales and payouts from your
-              earnings settings.</p>
-          `,
-          cta: { label: 'View your book', url: SITE_URL },
-        }),
-      );
+      const mail = monetizationApprovedEmail(author.displayName, title);
+      await this.email.send(author.email, mail.subject, mail.html);
     }
   }
 
@@ -130,30 +115,21 @@ export class MonetizationEffectsService {
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      this.logger.error(`onDenied notification failed: ${bookId}`, err as Error);
+      this.logger.error(
+        `onDenied notification failed: ${bookId}`,
+        err as Error,
+      );
     }
     const author = await this.email.userContact(
       after.authorUid as string | undefined,
     );
     if (author.email) {
-      await this.email.send(
-        author.email,
-        'Your monetization request has been denied',
-        emailLayout({
-          preheader: `An update on your request to monetize "${title}".`,
-          heading: 'Your monetization request was denied',
-          bodyHtml: `
-            <p style="margin:0 0 14px">Hi ${escapeHtml(author.displayName)},</p>
-            <p style="margin:0 0 14px">Your request to monetize
-              <strong>"${escapeHtml(title)}"</strong> was denied because of:
-              <strong>${escapeHtml(reasonText)}</strong>.</p>
-            <p style="margin:0">If you think this was a mistake or you've
-              addressed the issue, you may be able to submit again from the
-              book's menu.</p>
-          `,
-          cta: { label: 'Open MainWRLD', url: SITE_URL },
-        }),
+      const mail = monetizationDeniedEmail(
+        author.displayName,
+        title,
+        reasonText,
       );
+      await this.email.send(author.email, mail.subject, mail.html);
     }
   }
 

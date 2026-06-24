@@ -9,6 +9,7 @@
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    "jsx": "react-jsx",
     "allowSyntheticDefaultImports": true,
     "target": "ES2023",
     "types": ["node", "jest"],
