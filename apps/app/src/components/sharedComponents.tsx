@@ -30,7 +30,7 @@ export const Input = ({ label, type = 'text', value, onChange, placeholder, desc
       maxLength={maxLength}
       onChange={(e) => onChange && onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-2 focus:ring-accent/20 outline-none transition-all"
+      className="w-full min-w-0 max-w-full appearance-none bg-gray-50 dark:bg-gray-900 border-none rounded-2xl px-6 py-4 text-sm font-medium focus:ring-2 focus:ring-accent/20 outline-none transition-all"
     />
     {description && <p className="text-[8px] font-bold text-gray-300 uppercase tracking-tighter ml-2">{description}</p>}
   </div>
