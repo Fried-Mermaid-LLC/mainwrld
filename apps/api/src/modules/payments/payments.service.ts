@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   type DocumentReference,
+  FieldValue,
   type Firestore,
 } from 'firebase-admin/firestore';
 import type Stripe from 'stripe';
@@ -21,6 +22,19 @@ import type { BookCheckoutDto } from './dto/payments.dto';
 
 const DEFAULT_ORIGIN = 'https://mainwrld-f7acf.web.app';
 const usd = (cents: number) => Math.round(cents) / 100;
+
+// True when Stripe reports the stored connected account doesn't exist for the
+// active key. Happens after a test/live switch (the account was created with the
+// other key) or if the connected account was deleted / access revoked. We treat
+// it as "no account" and re-onboard rather than surfacing a 500.
+function isAccountGone(err: unknown): boolean {
+  const e = err as { code?: string; param?: string } | null;
+  return (
+    !!e &&
+    (e.code === 'resource_missing' || e.code === 'account_invalid') &&
+    (e.param === 'account' || e.param === undefined)
+  );
+}
 
 export interface AccountStatus {
   stripeAccountId?: string;
@@ -78,27 +92,59 @@ export class PaymentsService {
       throw new NotFoundException('User profile missing.');
     const data = userSnap.data() as Record<string, unknown>;
 
+    const email = (data.email as string) || tokenEmail || undefined;
     let accountId = data.stripeAccountId as string | undefined;
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'US',
-        email: (data.email as string) || tokenEmail || undefined,
-        business_type: 'individual',
-        capabilities: { transfers: { requested: true } },
-        metadata: { uid },
-      });
-      accountId = account.id;
-      await userRef.set({ stripeAccountId: accountId }, { merge: true });
+      accountId = await this.createExpressAccount(stripe, userRef, uid, email);
     }
 
-    const link = await stripe.accountLinks.create({
-      account: accountId,
-      type: 'account_onboarding',
-      return_url: `${safe}/?connect_return=true`,
-      refresh_url: `${safe}/?connect_refresh=true`,
+    try {
+      const link = await stripe.accountLinks.create({
+        account: accountId,
+        type: 'account_onboarding',
+        return_url: `${safe}/?connect_return=true`,
+        refresh_url: `${safe}/?connect_refresh=true`,
+      });
+      return { url: link.url };
+    } catch (err) {
+      // The stored account belongs to the other (test/live) key or no longer
+      // exists — drop it, create a fresh one for this key, and retry once.
+      if (!isAccountGone(err)) throw err;
+      accountId = await this.createExpressAccount(stripe, userRef, uid, email);
+      const link = await stripe.accountLinks.create({
+        account: accountId,
+        type: 'account_onboarding',
+        return_url: `${safe}/?connect_return=true`,
+        refresh_url: `${safe}/?connect_refresh=true`,
+      });
+      return { url: link.url };
+    }
+  }
+
+  private async createExpressAccount(
+    stripe: Stripe,
+    userRef: DocumentReference,
+    uid: string,
+    email?: string,
+  ): Promise<string> {
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country: 'US',
+      email,
+      business_type: 'individual',
+      capabilities: { transfers: { requested: true } },
+      metadata: { uid },
     });
-    return { url: link.url };
+    await userRef.set(
+      {
+        stripeAccountId: account.id,
+        payoutsEnabled: false,
+        chargesEnabled: false,
+        detailsSubmitted: false,
+      },
+      { merge: true },
+    );
+    return account.id;
   }
 
   async syncAccountStatus(uid: string, mode?: string): Promise<AccountStatus> {
@@ -116,7 +162,28 @@ export class PaymentsService {
       };
     }
     const stripe = this.stripe.forMode(mode);
-    const account = await stripe.accounts.retrieve(accountId);
+    let account: Stripe.Account;
+    try {
+      account = await stripe.accounts.retrieve(accountId);
+    } catch (err) {
+      // Stored account doesn't exist for this key (test/live switch or deleted).
+      // Forget it so the next onboarding starts clean, and report not-connected.
+      if (!isAccountGone(err)) throw err;
+      await userRef.set(
+        {
+          stripeAccountId: FieldValue.delete(),
+          payoutsEnabled: false,
+          chargesEnabled: false,
+          detailsSubmitted: false,
+        },
+        { merge: true },
+      );
+      return {
+        payoutsEnabled: false,
+        chargesEnabled: false,
+        detailsSubmitted: false,
+      };
+    }
     const status: AccountStatus = {
       stripeAccountId: accountId,
       payoutsEnabled: !!account.payouts_enabled,

@@ -216,7 +216,56 @@ describe('PaymentsService', () => {
     });
   });
 
+  // Mimics a stripe-node StripeInvalidRequestError for a missing account.
+  const accountGoneError = () =>
+    Object.assign(new Error("No such account: 'acct_old'"), {
+      code: 'resource_missing',
+      param: 'account',
+    });
+
+  describe('createAccountLink', () => {
+    it('reuses the stored account when it is valid', async () => {
+      fs.seed('users/u1', { stripeAccountId: 'acct_existing' });
+      const { url } = await svc.createAccountLink('u1', undefined, 'live');
+      expect(url).toBe('https://onboard.link');
+      expect(stripeMock.accounts.create).not.toHaveBeenCalled();
+      expect(stripeMock.accountLinks.create.mock.calls[0]![0].account).toBe(
+        'acct_existing',
+      );
+    });
+
+    it('re-onboards when the stored account is gone for this key', async () => {
+      fs.seed('users/u1', { stripeAccountId: 'acct_old' });
+      stripeMock.accountLinks.create.mockRejectedValueOnce(accountGoneError());
+      const { url } = await svc.createAccountLink('u1', 'me@example.com', 'live');
+      expect(url).toBe('https://onboard.link');
+      expect(stripeMock.accounts.create).toHaveBeenCalledTimes(1);
+      expect(fs.dump('users/u1')!.stripeAccountId).toBe('acct_new');
+      // the retry targets the freshly created account
+      expect(stripeMock.accountLinks.create.mock.calls[1]![0].account).toBe(
+        'acct_new',
+      );
+    });
+  });
+
   describe('syncAccountStatus', () => {
+    it('forgets the stored account and reports not-connected when it is gone', async () => {
+      fs.seed('users/u1', {
+        stripeAccountId: 'acct_old',
+        payoutsEnabled: true,
+      });
+      stripeMock.accounts.retrieve.mockRejectedValueOnce(accountGoneError());
+      const status = await svc.syncAccountStatus('u1', 'live');
+      expect(status).toEqual({
+        payoutsEnabled: false,
+        chargesEnabled: false,
+        detailsSubmitted: false,
+      });
+      const user = fs.dump('users/u1')!;
+      expect(user.stripeAccountId).toBeUndefined();
+      expect(user.payoutsEnabled).toBe(false);
+    });
+
     it('returns all-false and writes nothing when no connected account', async () => {
       fs.seed('users/u1', { username: 'alice' });
       const status = await svc.syncAccountStatus('u1');
