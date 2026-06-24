@@ -20,3 +20,6 @@ Thumbs.db
 .firebase/
 functions/lib/
 service-account.json
+
+# Local files
+local/
