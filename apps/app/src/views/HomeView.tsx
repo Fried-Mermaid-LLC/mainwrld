@@ -7,6 +7,7 @@ import { WORLD_RADIUS } from '@/config/constants'
 import { BASE } from '@/config/config'
 import { MovingAvatar, Player } from '@/components/three/threeComponents'
 import { VirtualJoystick } from '@/components/VirtualJoystick'
+import { WorldLoadingOverlay } from '@/components/WorldLoadingOverlay'
 import { SafeImg } from '@/components/SafeImg'
 import { ModelErrorBoundary } from '@/components/three/ModelErrorBoundary'
 import type { User } from '@/types'
@@ -185,6 +186,11 @@ export const HomeView = () => {
           }}
         />
       </div>
+      {/* Splash-style cover that hides the world until its GLB models finish
+          streaming in, so the avatars don't all pop into an empty scene at
+          once. Rendered last + z-[300] so it sits above the HUD and bottom nav,
+          just like the native launch splash. */}
+      <WorldLoadingOverlay />
     </div>
   )
 }
