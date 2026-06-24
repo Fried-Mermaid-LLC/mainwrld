@@ -21,18 +21,20 @@ const BookCard = ({
   book,
   onSelect,
   cover,
-  fullWidth = false
+  fullWidth = false,
+  large = false
 }: {
   book: Book
   onSelect: (b: Book) => void
   cover: React.ReactNode
   fullWidth?: boolean
+  large?: boolean
 }) => (
   <button
     type='button'
     onClick={() => onSelect(book)}
     className={`${
-      fullWidth ? 'w-full' : 'flex-shrink-0 w-[150px]'
+      fullWidth ? 'w-full' : large ? 'flex-shrink-0 w-[300px]' : 'flex-shrink-0 w-[150px]'
     } flex flex-col gap-[10px] text-left cursor-pointer transition-transform active:scale-95`}
   >
     <div
@@ -406,39 +408,43 @@ export const ExploreView = () => {
           <button
             type='button'
             onClick={() => onSelect(spotlightBook)}
-            className='w-full text-left flex flex-col gap-4 bg-white border border-[#eaeaea] rounded-[20px] p-4 shadow-[0px_14px_34px_0px_rgba(0,0,0,0.12)] transition-transform active:scale-[0.98]'
+            className='w-full max-w-[1242px] text-left flex flex-col sm:flex-row gap-5 sm:gap-7 sm:items-stretch bg-white border border-[#eaeaea] rounded-[20px] p-4 sm:p-6 shadow-[0px_14px_34px_0px_rgba(0,0,0,0.12)] transition-transform active:scale-[0.98]'
           >
-            <div className='self-start inline-flex items-center gap-[7px] bg-[#ef4f49] rounded-full pl-3 pr-3.5 py-[7px]'>
-              <span className='material-icons-round text-[14px] text-white'>
-                auto_awesome
-              </span>
-              <span className='text-[13px] font-semibold uppercase tracking-[0.13px] text-white leading-[1.2]'>
-                Star of the Week
-              </span>
-            </div>
+            {/* Cover — fixed 300px column on wide screens, mirrors the rail size */}
             <div
-              className='relative aspect-[2/3] w-[196px] max-w-full rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
+              className='relative aspect-[2/3] w-[196px] sm:w-[300px] flex-shrink-0 max-w-full rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
               style={{ backgroundColor: spotlightBook.coverColor || '#fbdddd' }}
             >
               <CoverImg book={spotlightBook} />
             </div>
-            <div className='flex flex-col gap-2 w-full'>
-              <h2 className='text-[26px] font-bold leading-[1.2] text-[#1a1a1a]'>
-                {spotlightBook.title}
-              </h2>
-              <p className='text-[11px] font-semibold uppercase tracking-[0.66px] text-[#9aa1a9] leading-[1.2]'>
-                By {spotlightBook.author.displayName}
-              </p>
-            </div>
-            {spotlightBook.tagline && (
-              <p className='text-[14px] italic text-[#9aa1a9]'>
-                "{spotlightBook.tagline}"
-              </p>
-            )}
-            <div className='self-start inline-flex items-center bg-[#eceef1] rounded-full px-3.5 py-[7px]'>
-              <span className='text-[11px] font-semibold uppercase tracking-[0.66px] text-[#1a1a1a] leading-[1.2]'>
-                {spotlightBook.genres?.[0] || 'Featured'}
-              </span>
+            {/* Meta column — fills the space to the right of the cover */}
+            <div className='flex flex-col gap-4 flex-1 min-w-0 sm:py-1'>
+              <div className='self-start inline-flex items-center gap-[7px] bg-[#ef4f49] rounded-full pl-3 pr-3.5 py-[7px]'>
+                <span className='material-icons-round text-[14px] text-white'>
+                  auto_awesome
+                </span>
+                <span className='text-[13px] font-semibold uppercase tracking-[0.13px] text-white leading-[1.2]'>
+                  Star of the Week
+                </span>
+              </div>
+              <div className='flex flex-col gap-2 w-full'>
+                <h2 className='text-[26px] sm:text-[32px] font-bold leading-[1.15] text-[#1a1a1a]'>
+                  {spotlightBook.title}
+                </h2>
+                <p className='text-[11px] font-semibold uppercase tracking-[0.66px] text-[#9aa1a9] leading-[1.2]'>
+                  By {spotlightBook.author.displayName}
+                </p>
+              </div>
+              {spotlightBook.tagline && (
+                <p className='text-[14px] sm:text-[15px] italic text-[#9aa1a9] leading-[1.5]'>
+                  "{spotlightBook.tagline}"
+                </p>
+              )}
+              <div className='self-start inline-flex items-center bg-[#eceef1] rounded-full px-3.5 py-[7px] mt-auto'>
+                <span className='text-[11px] font-semibold uppercase tracking-[0.66px] text-[#1a1a1a] leading-[1.2]'>
+                  {spotlightBook.genres?.[0] || 'Featured'}
+                </span>
+              </div>
             </div>
           </button>
         )}
@@ -458,16 +464,16 @@ export const ExploreView = () => {
                   onClick={handleClick}
                   className='flex-shrink-0 flex flex-col items-center gap-[6px] cursor-pointer transition-transform active:scale-95'
                 >
-                  <div className='relative size-16 drop-shadow-[0px_6px_9px_rgba(0,0,0,0.08)]'>
-                    <div className='size-16 rounded-full p-[2px] bg-[#eaeaea]'>
-                      <div className='size-full rounded-full bg-white overflow-hidden relative flex items-center justify-center text-accent text-xl font-black'>
+                  <div className='relative size-32 drop-shadow-[0px_6px_9px_rgba(0,0,0,0.08)]'>
+                    <div className='size-32 rounded-full p-[4px] bg-[#eaeaea]'>
+                      <div className='size-full rounded-full bg-white overflow-hidden relative flex items-center justify-center text-accent text-4xl font-black'>
                         {avatarConfigs[author.user.username] ? (
                           <AvatarLayers
                             avatarConfig={avatarConfigs[author.user.username]}
                             containerClassName='absolute left-1/2'
                             containerStyle={{
-                              width: '90px',
-                              height: '125px',
+                              width: '180px',
+                              height: '250px',
                               transform: 'translateX(-50%) scale(1.42)',
                               transformOrigin: 'top center',
                               top: '6.5%'
@@ -478,8 +484,8 @@ export const ExploreView = () => {
                         )}
                       </div>
                     </div>
-                    <div className='absolute bottom-0 right-0 size-6 rounded-full bg-[#eaeaea] border-2 border-white flex items-center justify-center'>
-                      <span className='text-[11px] font-bold text-[#1a1a1a]'>
+                    <div className='absolute bottom-0 right-0 size-12 rounded-full bg-[#eaeaea] border-4 border-white flex items-center justify-center'>
+                      <span className='text-[20px] font-bold text-[#1a1a1a]'>
                         {i + 1}
                       </span>
                     </div>
@@ -554,7 +560,7 @@ export const ExploreView = () => {
                   <div
                     className={
                       isExpanded
-                        ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-[14px]'
+                        ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-[14px]'
                         : 'flex gap-[14px] overflow-x-auto no-scrollbar -mx-6 px-6'
                     }
                   >
@@ -565,6 +571,7 @@ export const ExploreView = () => {
                         onSelect={onSelect}
                         cover={<CoverImg book={b} />}
                         fullWidth={isExpanded}
+                        large={!isExpanded}
                       />
                     ))}
                   </div>

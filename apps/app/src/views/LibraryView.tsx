@@ -30,9 +30,9 @@ export const LibraryView = () => {
         </div>
       </header>
 
-      {/* Content — 2-column grid, 16px gutters/padding */}
+      {/* Content — responsive grid: 2 cols mobile, 4 tablet, 6 desktop */}
       {ownedBooks.length > 0 ? (
-        <div className='grid grid-cols-2 gap-4 p-4'>
+        <div className='grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 p-4'>
           {ownedBooks.map(b => {
             const progressData = getUserBookProgress(b.id)
             const scrollProgress = progressData.scrollProgress || 0
