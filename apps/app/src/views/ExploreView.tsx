@@ -6,6 +6,52 @@ import { GENRE_LIST } from '@/config/constants'
 import type { Book, User } from '@/types'
 import { useApp } from '@/state/AppContext'
 
+// Section heading — Label/L from the design: 14px, 600, uppercase,
+// letterSpacing 0.14px, text/primary #1a1a1a.
+const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+  <p className='text-[14px] font-semibold uppercase tracking-[0.14px] text-[#1a1a1a] leading-[1.2]'>
+    {children}
+  </p>
+)
+
+// BookCoverCard from the design: 150px column, 196px tinted cover (rounded 14),
+// 10px gap to the meta block. Title is Title/S 15px bold, author Label/S 11px
+// 600 uppercase letterSpacing 0.66px in text/secondary #9aa1a9.
+const BookCard = ({
+  book,
+  onSelect,
+  cover,
+  fullWidth = false
+}: {
+  book: Book
+  onSelect: (b: Book) => void
+  cover: React.ReactNode
+  fullWidth?: boolean
+}) => (
+  <button
+    type='button'
+    onClick={() => onSelect(book)}
+    className={`${
+      fullWidth ? 'w-full' : 'flex-shrink-0 w-[150px]'
+    } flex flex-col gap-[10px] text-left cursor-pointer transition-transform active:scale-95`}
+  >
+    <div
+      className='relative h-[196px] w-full rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
+      style={{ backgroundColor: book.coverColor || '#fbdddd' }}
+    >
+      {cover}
+    </div>
+    <div className='flex flex-col gap-[4px] w-full overflow-hidden'>
+      <p className='text-[15px] font-bold leading-[1.15] text-[#1a1a1a] line-clamp-2'>
+        {book.title}
+      </p>
+      <p className='text-[11px] font-semibold uppercase tracking-[0.66px] text-[#9aa1a9] truncate'>
+        {book.author.displayName}
+      </p>
+    </div>
+  </button>
+)
+
 export const ExploreView = () => {
   const {
     books: rawBooks,
@@ -223,31 +269,34 @@ export const ExploreView = () => {
   }, [trendingBooks, userFavoriteGenres])
 
   return (
-    <div className='fixed inset-0 bg-[#fbfbfc] overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-500'>
-      <header className='p-6 sticky top-0 bg-white/90 backdrop-blur-2xl z-50 border-b border-gray-100'>
-        <div className='flex gap-4 items-center'>
-          <div className='flex-1 bg-gray-100/50 rounded-2xl flex items-center px-4 py-3.5 gap-3 border border-gray-100'>
-            <span className='material-icons-round text-gray-400'>search</span>
+    <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-500'>
+      {/* Header — 64px row, 24px side padding, holds the 48px search bar */}
+      <header className='px-6 sticky top-0 bg-white/90 backdrop-blur-2xl z-50'>
+        <div className='flex gap-3 h-12 items-center'>
+          <div className='flex-1 h-12 bg-[#f4f5f7] rounded-[16px] flex items-center px-4 gap-2'>
+            <span className='material-icons-round text-[20px] text-[#c2c8cf]'>
+              search
+            </span>
             <input
-              placeholder='Search books, users, #hashtags...'
+              placeholder='Search books or users...'
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className='bg-transparent outline-none text-sm w-full font-medium placeholder:text-gray-400'
+              className='bg-transparent outline-none text-[15px] w-full text-[#1a1a1a] placeholder:text-[#c2c8cf]'
             />
           </div>
           <button
             onClick={() => setShowFilter(!showFilter)}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+            className={`size-12 rounded-[16px] flex items-center justify-center transition-all ${
               showFilter
-                ? 'bg-accent text-white shadow-lg shadow-accent/30'
-                : 'bg-white text-gray-400 border border-gray-100 hover:bg-gray-50'
+                ? 'bg-accent text-white'
+                : 'bg-[#f4f5f7] text-[#9aa1a9]'
             }`}
           >
-            <span className='material-icons-round'>tune</span>
+            <span className='material-icons-round text-[22px]'>tune</span>
           </button>
         </div>
         {showFilter && (
-          <div className='mt-4 p-5 bg-white rounded-3xl space-y-5 animate-in slide-in-from-top border border-gray-100 shadow-xl shadow-black/[0.03]'>
+          <div className='mt-3 p-5 bg-white rounded-[20px] space-y-5 animate-in slide-in-from-top border border-[#eaeaea] shadow-[0px_14px_34px_0px_rgba(0,0,0,0.12)]'>
             <div className='flex flex-wrap gap-2'>
               {GENRE_LIST.map(g => (
                 <button
@@ -259,22 +308,22 @@ export const ExploreView = () => {
                         : [...prev, g]
                     )
                   }
-                  className={`px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase transition-all tracking-wider ${
+                  className={`px-4 py-2 rounded-[12px] text-[11px] font-semibold uppercase transition-all tracking-[0.66px] ${
                     selectedGenres.includes(g)
-                      ? 'bg-accent text-white border-accent'
-                      : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100'
+                      ? 'bg-accent text-white'
+                      : 'bg-[#eceef1] text-[#9aa1a9]'
                   }`}
                 >
                   {g}
                 </button>
               ))}
             </div>
-            <div className='flex justify-between items-center border-t border-gray-50 pt-4'>
-              <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
+            <div className='flex justify-between items-center border-t border-[#eaeaea] pt-4'>
+              <p className='text-[11px] font-semibold text-[#9aa1a9] uppercase tracking-[0.66px]'>
                 Sort order
               </p>
               <select
-                className='text-[10px] font-bold bg-gray-50 px-3 py-2 rounded-lg outline-none cursor-pointer text-gray-700'
+                className='text-[11px] font-semibold bg-[#eceef1] px-3 py-2 rounded-[10px] outline-none cursor-pointer text-[#1a1a1a]'
                 value={sortOrder}
                 onChange={e =>
                   setSortOrder(e.target.value as 'newest' | 'oldest')
@@ -288,36 +337,33 @@ export const ExploreView = () => {
         )}
       </header>
 
-      <main className='space-y-12 py-8'>
+      {/* Content — 32px between sections, 24px side padding */}
+      <div className='flex flex-col gap-8 px-6 pt-3'>
         {/* User Search Results */}
         {filteredUsers.length > 0 && (
-          <section className='px-6 space-y-3'>
-            <h3 className='text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-2'>
-              People
-            </h3>
-            <div className='bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm'>
+          <section className='flex flex-col gap-4'>
+            <SectionTitle>People</SectionTitle>
+            <div className='bg-white rounded-[20px] border border-[#eaeaea] overflow-hidden'>
               {filteredUsers.map((u: User) => (
                 <button
                   key={u.username}
                   onClick={() => onUserSelect(u)}
-                  className='w-full p-4 flex items-center gap-4 border-b border-gray-50 last:border-none hover:bg-gray-50 transition-colors active:scale-[0.98]'
+                  className='w-full p-4 flex items-center gap-3 border-b border-[#eaeaea] last:border-none transition-colors active:scale-[0.98]'
                 >
-                  <div className='w-11 h-11 rounded-2xl bg-accent/10 flex items-center justify-center text-accent text-lg font-bold flex-shrink-0'>
+                  <div className='size-11 rounded-full bg-[#fbdddd] flex items-center justify-center text-accent text-lg font-bold flex-shrink-0'>
                     {u.displayName[0]}
                   </div>
                   <div className='text-left flex-1 min-w-0'>
-                    <p className='text-sm font-bold truncate'>
+                    <p className='text-[13px] font-semibold text-[#1a1a1a] tracking-[0.13px] truncate'>
                       {u.displayName}
                     </p>
-                    <p className='text-[10px] text-gray-400 font-bold'>
+                    <p className='text-[11px] text-[#9aa1a9] font-semibold'>
                       @{u.username}
                     </p>
                   </div>
-                  <div className='flex items-center gap-1 text-gray-300'>
-                    <span className='material-icons-round text-sm'>
-                      chevron_right
-                    </span>
-                  </div>
+                  <span className='material-icons-round text-[20px] text-[#c2c8cf]'>
+                    chevron_right
+                  </span>
                 </button>
               ))}
             </div>
@@ -326,60 +372,28 @@ export const ExploreView = () => {
 
         {/* When searching — show flat results list */}
         {query && (
-          <section className='space-y-6'>
-            <div className='px-6'>
-              <h3 className='text-sm font-bold uppercase tracking-widest text-gray-900'>
-                {isHashtagSearch
-                  ? `#${cleanQuery}`
-                  : `Results for "${searchQuery}"`}
-                <span className='text-gray-300 ml-2'>
-                  ({filteredBooks.length})
-                </span>
-              </h3>
-            </div>
+          <section className='flex flex-col gap-4'>
+            <SectionTitle>
+              {isHashtagSearch ? `#${cleanQuery}` : `Results for "${searchQuery}"`}
+              <span className='text-[#c2c8cf] ml-2'>({filteredBooks.length})</span>
+            </SectionTitle>
             {filteredBooks.length > 0 ? (
-              <div className='flex overflow-x-auto no-scrollbar gap-6 px-6 pb-4 flex-wrap'>
-                {filteredBooks.map((b: any) => (
-                  <div
+              <div className='flex flex-wrap gap-[14px]'>
+                {filteredBooks.map((b: Book) => (
+                  <BookCard
                     key={b.id}
-                    onClick={() => onSelect(b)}
-                    className='flex-shrink-0 w-44 space-y-4 group cursor-pointer transition-all active:scale-95'
-                  >
-                    <div
-                      className='aspect-[2/3] rounded-lg shadow-xl border-4 border-white overflow-hidden relative transition-transform group-hover:-translate-y-2'
-                      style={{ backgroundColor: b.coverColor }}
-                    >
-                      <MatureCover book={b} />
-                    </div>
-                    <div className='px-2 space-y-1'>
-                      <p className='text-sm font-bold line-clamp-1'>
-                        {b.title}
-                      </p>
-                      <p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider'>
-                        {b.author.displayName}
-                      </p>
-                      {b.hashtags?.length > 0 && (
-                        <div className='flex flex-wrap gap-1 mt-1'>
-                          {b.hashtags.slice(0, 3).map((h: string) => (
-                            <span
-                              key={h}
-                              className='text-[8px] font-bold text-accent/70 bg-accent/5 px-2 py-0.5 rounded-full'
-                            >
-                              #{h}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    book={b}
+                    onSelect={onSelect}
+                    cover={<MatureCover book={b} />}
+                  />
                 ))}
               </div>
             ) : (
-              <div className='flex flex-col items-center justify-center py-20 text-gray-300'>
+              <div className='flex flex-col items-center justify-center py-20 text-[#c2c8cf]'>
                 <span className='material-icons-round text-4xl mb-4'>
                   search_off
                 </span>
-                <p className='text-[10px] font-bold uppercase tracking-widest'>
+                <p className='text-[11px] font-semibold uppercase tracking-[0.66px]'>
                   No books found
                 </p>
               </div>
@@ -387,151 +401,121 @@ export const ExploreView = () => {
           </section>
         )}
 
-        {/* Star of the week Section — only when not searching */}
+        {/* Star of the Week — only when not searching */}
         {!query && spotlightBook && (
-          <section className='px-6'>
-            <div
-              className='relative group cursor-pointer overflow-hidden rounded-2x1 bg-[#090b12] shadow-2xl shadow-black/10 border border-white/10 transition-all duration-300 hover:-translate-y-1 active:scale-[0.98]'
-              onClick={() => onSelect(spotlightBook)}
-            >
-              <div
-                className='absolute inset-0 opacity-70'
-                style={{
-                  background: `radial-gradient(circle at 30% 90%, ${spotlightBook.coverColor}66 0%, transparent 72%), linear-gradient(140deg, #0c1324 0%, #101115 45%, #23181d 100%)`
-                }}
-              />
-              <div
-                className='absolute -left-20 top-6 h-40 w-40 rounded-full blur-3xl opacity-35'
-                style={{ backgroundColor: spotlightBook.coverColor }}
-              />
-              <div className='absolute right-0 bottom-0 w-full h-1/2 bg-gradient-to-t from-black/25 to-transparent' />
-
-              <div className='relative p-6 sm:p-8'>
-                <div className='flex items-start justify-between gap-4 mb-5'>
-                  <div className='inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-white'>
-                    <span className='material-icons-round text-[15px]'>
-                      auto_awesome
-                    </span>
-                    <span className='text-[9px] font-black uppercase tracking-[0.25em]'>
-                      Star of the Week
-                    </span>
-                  </div>
-                </div>
-
-                <div className='flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-7'>
-                  <div
-                    className='w-28 h-40 sm:w-32 sm:h-48 flex-shrink-0 shadow-2xl border border-white/25 transform -rotate-3 group-hover:rotate-0 transition-transform duration-300 overflow-hidden relative'
-                    style={{ backgroundColor: spotlightBook.coverColor }}
-                  >
-                    <CoverImg book={spotlightBook} />
-                  </div>
-
-                  <div className='space-y-3 flex-1 min-w-0'>
-                    <h2 className='text-2xl sm:text-3xl font-display text-white line-clamp-2 leading-tight drop-shadow-sm'>
-                      {spotlightBook.title}
-                    </h2>
-                    <p className='text-[11px] text-white/80 font-semibold uppercase tracking-[0.16em]'>
-                      By {spotlightBook.author.displayName}
-                    </p>
-                    <p className='text-sm text-white/65 line-clamp-2 italic'>
-                      "{spotlightBook.tagline}"
-                    </p>
-
-                    <span className='inline-flex px-3 py-1.5 rounded-full bg-white/10 border border-white/20 textgit-white/90 text-[10px] font-bold uppercase tracking-wider mt-1'>
-                      {spotlightBook.genres?.[0] || 'Featured'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+          <button
+            type='button'
+            onClick={() => onSelect(spotlightBook)}
+            className='w-full text-left flex flex-col gap-4 bg-white border border-[#eaeaea] rounded-[20px] p-4 shadow-[0px_14px_34px_0px_rgba(0,0,0,0.12)] transition-transform active:scale-[0.98]'
+          >
+            <div className='self-start inline-flex items-center gap-[7px] bg-[#ef4f49] rounded-full pl-3 pr-3.5 py-[7px]'>
+              <span className='material-icons-round text-[14px] text-white'>
+                auto_awesome
+              </span>
+              <span className='text-[13px] font-semibold uppercase tracking-[0.13px] text-white leading-[1.2]'>
+                Star of the Week
+              </span>
             </div>
-          </section>
+            <div
+              className='relative h-[278px] w-[196px] rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
+              style={{ backgroundColor: spotlightBook.coverColor || '#fbdddd' }}
+            >
+              <CoverImg book={spotlightBook} />
+            </div>
+            <div className='flex flex-col gap-2 w-full'>
+              <h2 className='text-[26px] font-bold leading-[1.2] text-[#1a1a1a]'>
+                {spotlightBook.title}
+              </h2>
+              <p className='text-[11px] font-semibold uppercase tracking-[0.66px] text-[#9aa1a9] leading-[1.2]'>
+                By {spotlightBook.author.displayName}
+              </p>
+            </div>
+            {spotlightBook.tagline && (
+              <p className='text-[14px] italic text-[#9aa1a9]'>
+                "{spotlightBook.tagline}"
+              </p>
+            )}
+            <div className='self-start inline-flex items-center bg-[#eceef1] rounded-full px-3.5 py-[7px]'>
+              <span className='text-[11px] font-semibold uppercase tracking-[0.66px] text-[#1a1a1a] leading-[1.2]'>
+                {spotlightBook.genres?.[0] || 'Featured'}
+              </span>
+            </div>
+          </button>
         )}
 
-        {/* Top Authors Section */}
-        <section className='space-y-6'>
-          <div className='px-6 flex justify-between items-center'>
-            <h3 className='text-sm font-bold uppercase tracking-widest text-gray-900'>
-              Top Authors
-            </h3>
-          </div>
-          <div className='flex overflow-x-auto no-scrollbar gap-6 px-6 pb-2'>
+        {/* Top Authors */}
+        <section className='flex flex-col gap-4'>
+          <SectionTitle>Top Authors</SectionTitle>
+          <div className='flex gap-4 overflow-x-auto no-scrollbar -mx-6 px-6'>
             {topAuthors.map((author, i) => {
-              let handleClick
-              if (author.user.username === currentUsername) {
-                handleClick = () => onOwnSelect(author.user)
-              } else {
-                handleClick = () => onAuthorSelect(author.user)
-              }
-
+              const handleClick =
+                author.user.username === currentUsername
+                  ? () => onOwnSelect(author.user)
+                  : () => onAuthorSelect(author.user)
               return (
-                <div
+                <button
                   key={author.user.username}
                   onClick={handleClick}
-                  className='flex-shrink-0 flex flex-col items-center gap-3 group cursor-pointer transition-all active:scale-95 w-24'
+                  className='flex-shrink-0 flex flex-col items-center gap-[6px] cursor-pointer transition-transform active:scale-95'
                 >
-                  <div className='relative'>
-                    <div className='w-20 h-20 rounded-full bg-gradient-to-tr from-accent/20 to-accent/5 p-1 ring-2 ring-transparent group-hover:ring-accent transition-all'>
-                      <div className='w-full h-full rounded-full bg-white flex items-center justify-center text-accent text-xl font-black border-2 border-white shadow-sm overflow-hidden'>
+                  <div className='relative size-16 drop-shadow-[0px_6px_9px_rgba(0,0,0,0.08)]'>
+                    <div className='size-16 rounded-full p-[2px] bg-[#eaeaea]'>
+                      <div className='size-full rounded-full bg-white overflow-hidden relative flex items-center justify-center text-accent text-xl font-black'>
                         {avatarConfigs[author.user.username] ? (
-                          <div className='relative w-full h-full'>
-                            <AvatarLayers
-                              avatarConfig={avatarConfigs[author.user.username]}
-                              containerClassName='absolute left-1/2'
-                              containerStyle={{
-                                width: '90px',
-                                height: '125px',
-                                transform: 'translateX(-50%) scale(1.42)',
-                                transformOrigin: 'top center',
-                                top: '6.5%'
-                              }}
-                            />
-                          </div>
+                          <AvatarLayers
+                            avatarConfig={avatarConfigs[author.user.username]}
+                            containerClassName='absolute left-1/2'
+                            containerStyle={{
+                              width: '90px',
+                              height: '125px',
+                              transform: 'translateX(-50%) scale(1.42)',
+                              transformOrigin: 'top center',
+                              top: '6.5%'
+                            }}
+                          />
                         ) : (
                           author.user.displayName[0]
                         )}
                       </div>
                     </div>
-                    <div className='absolute -bottom-1 -right-1 w-7 h-7 bg-black rounded-full flex items-center justify-center border-2 border-white shadow-md'>
-                      <span className='text-[10px] font-black text-white'>
+                    <div className='absolute bottom-0 right-0 size-6 rounded-full bg-[#eaeaea] border-2 border-white flex items-center justify-center'>
+                      <span className='text-[11px] font-bold text-[#1a1a1a]'>
                         {i + 1}
                       </span>
                     </div>
                   </div>
-                  <div className='text-center space-y-0.5'>
-                    <p className='text-[11px] font-bold text-gray-900 leading-tight truncate w-20'>
+                  <div className='flex flex-col items-center gap-[2px]'>
+                    <p className='text-[13px] font-semibold text-[#1a1a1a] tracking-[0.13px] truncate max-w-[72px]'>
                       {author.user.displayName}
                     </p>
-                    <p className='text-[8px] font-bold text-accent uppercase tracking-widest'>
+                    <p className='text-[11px] font-semibold text-[#9aa1a9] uppercase tracking-[0.66px]'>
                       {author.totalLikes >= 1000
-                        ? (author.totalLikes / 1000).toFixed(1) + 'k'
+                        ? (author.totalLikes / 1000).toFixed(0) + 'K'
                         : author.totalLikes}{' '}
                       Likes
                     </p>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
         </section>
 
-        {/* Section Loops — only when not searching */}
+        {/* Trending / Recently Read / Recommended — only when not searching */}
         {!query &&
           [
-            { title: 'Trending Books', data: trendingBooks },
+            { title: 'Trending', data: trendingBooks },
             { title: 'Recently Read', data: recentlyRead },
             { title: 'Recommended', data: recommendedBooks }
           ].map(section => {
-            // Apply genre filter to section data if genres are selected
             let sectionData =
               selectedGenres.length > 0
                 ? section.data.filter((b: any) =>
                     selectedGenres.some(g => (b.genres || []).includes(g))
                   )
                 : section.data
-            // Apply sort order — but NOT to Recently Read, which must keep the
-            // lastRead-descending order from its memo. Re-sorting it by
-            // publishedDate (and flipping it with the newest/oldest toggle) is
-            // what made the most-recently-read book not show first.
+            // Recently Read keeps its lastRead-descending memo order; the others
+            // honour the newest/oldest filter toggle.
             if (section.title !== 'Recently Read') {
               sectionData = [...sectionData].sort((a: any, b: any) => {
                 const dateA = new Date(a.publishedDate).getTime()
@@ -544,12 +528,10 @@ export const ExploreView = () => {
               ? sectionData.slice(0, 20)
               : sectionData.slice(0, 6)
             return (
-              <section key={section.title} className='space-y-6'>
-                <div className='px-6 flex justify-between items-center'>
-                  <h3 className='text-sm font-bold uppercase tracking-widest text-gray-900'>
-                    {section.title}
-                  </h3>
-                  {sectionData.length > 6 && (
+              <section key={section.title} className='flex flex-col gap-4'>
+                <div className='flex justify-between items-center'>
+                  <SectionTitle>{section.title}</SectionTitle>
+                  {section.title !== 'Trending' && sectionData.length > 6 && (
                     <button
                       onClick={() =>
                         setExpandedSections(prev => {
@@ -562,104 +544,48 @@ export const ExploreView = () => {
                           return next
                         })
                       }
-                      className='text-[10px] font-bold text-accent uppercase tracking-widest hover:opacity-70 transition-opacity'
+                      className='text-[11px] font-semibold text-accent uppercase tracking-[0.66px] transition-opacity active:opacity-60'
                     >
                       {isExpanded ? 'Show Less' : 'See All'}
                     </button>
                   )}
                 </div>
-                <div
-                  className={
-                    isExpanded
-                      ? 'grid grid-cols-5 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8 gap-3 px-6 pb-4'
-                      : 'flex overflow-x-auto no-scrollbar gap-6 px-6 pb-4'
-                  }
-                >
-                  {displayData.length > 0 ? (
-                    displayData.map((b: any) => (
-                      <div
+                {displayData.length > 0 ? (
+                  <div
+                    className={
+                      isExpanded
+                        ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-[14px]'
+                        : 'flex gap-[14px] overflow-x-auto no-scrollbar -mx-6 px-6'
+                    }
+                  >
+                    {displayData.map((b: any) => (
+                      <BookCard
                         key={b.id}
-                        onClick={() => onSelect(b)}
-                        className={`${
-                          isExpanded ? 'w-full' : 'flex-shrink-0 w-44'
-                        } space-y-2 group cursor-pointer transition-all active:scale-95`}
-                      >
-                        <div
-                          className={`aspect-[2/3] ${
-                            isExpanded ? 'border-1' : 'border-2'
-                          } shadow-xl border-white overflow-hidden relative transition-transform group-hover:-translate-y-2`}
-                          style={{ backgroundColor: b.coverColor }}
-                        >
-                          <CoverImg book={b} />
-                          <div className='absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10' />
-                          {b.isMature && (
-                            <div className='absolute top-4 right-4 bg-red-500/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[7px] font-bold text-white uppercase tracking-wider'>
-                              Mature
-                            </div>
-                          )}
-                          <div className='absolute bottom-4 left-4 right-4 flex justify-between opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 z-20'>
-                            <div className='flex items-center gap-1'>
-                              <span className='material-icons-round text-[10px] text-white'>
-                                favorite
-                              </span>
-                              <span className='text-[9px] font-bold text-white'>
-                                {Array.isArray(b.likes)
-                                  ? b.likes.reduce(
-                                      (a: number, c: number) => a + c,
-                                      0
-                                    )
-                                  : b.likes || 0}
-                              </span>
-                            </div>
-                            <div className='flex items-center gap-1'>
-                              <span className='material-icons-round text-[10px] text-white'>
-                                chat_bubble
-                              </span>
-                              <span className='text-[9px] font-bold text-white'>
-                                {b.commentsCount}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className='px-1 space-y-1'>
-                          <p className='text-[13px] font-bold text-gray-900 leading-tight line-clamp-1'>
-                            {b.title}
-                          </p>
-                          <p className='text-[9px] font-bold text-gray-400 uppercase tracking-[0.15em]'>
-                            {b.author.displayName}
-                          </p>
-                          <div className='flex gap-1.5 pt-1'>
-                            {b.genres.slice(0, 2).map((g: string) => (
-                              <span
-                                key={g}
-                                className='text-[8px] font-bold text-accent bg-accent/5 px-2 py-0.5 rounded-md uppercase tracking-wider'
-                              >
-                                {g}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className='px-6 py-12 text-center w-full bg-gray-50 rounded-3xl border-2 border-dashed border-gray-100'>
-                      <span className='material-icons-round text-3xl text-gray-200 mb-3'>
-                        {section.title === 'Recently Read'
-                          ? 'history'
-                          : 'auto_stories'}
-                      </span>
-                      <p className='text-xs text-gray-400 uppercase font-bold tracking-widest'>
-                        {section.title === 'Recently Read'
-                          ? 'Start reading to see history'
-                          : 'No stories found yet'}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                        book={b}
+                        onSelect={onSelect}
+                        cover={<CoverImg book={b} />}
+                        fullWidth={isExpanded}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className='py-12 text-center w-full bg-[#f4f5f7] rounded-[20px] flex flex-col items-center gap-3'>
+                    <span className='material-icons-round text-3xl text-[#c2c8cf]'>
+                      {section.title === 'Recently Read'
+                        ? 'history'
+                        : 'auto_stories'}
+                    </span>
+                    <p className='text-[11px] text-[#9aa1a9] uppercase font-semibold tracking-[0.66px]'>
+                      {section.title === 'Recently Read'
+                        ? 'Start reading to see history'
+                        : 'No stories found yet'}
+                    </p>
+                  </div>
+                )}
               </section>
             )
           })}
-      </main>
+      </div>
     </div>
   )
 }
