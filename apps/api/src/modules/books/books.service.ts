@@ -61,8 +61,20 @@ export class BooksService {
   }
 
   async getForUser(id: string, user: AuthUser): Promise<BookDoc> {
-    const snap = await this.col.doc(id).get();
-    if (!snap.exists) throw new NotFoundException('Book not found');
+    // Resolve by doc key first (app-created books key the doc by their `id`
+    // field), then fall back to a `where('id','==',id)` query so legacy/seeded
+    // docs whose key differs from their id field still resolve. Without this
+    // fallback a shared `/book/<id>` link's preview (public.loadBook DOES have
+    // the fallback) loads, but the post-auth upgrade to the full book-detail
+    // page — which routes through here via getBook — fails and the visitor is
+    // stranded on the preview (F09). Keep this in lockstep with
+    // PublicBookService.loadBook so both paths resolve the same set of books.
+    let snap = await this.col.doc(id).get();
+    if (!snap.exists) {
+      const q = await this.col.where('id', '==', id).limit(1).get();
+      if (q.empty) throw new NotFoundException('Book not found');
+      snap = q.docs[0];
+    }
     const data = { id: snap.id, ...snap.data() } as BookDoc;
     // Drafts are visible only to the author or an admin.
     if (data.isDraft && data.authorUid !== user.uid && !user.admin) {

@@ -64,6 +64,10 @@ export class PublicService {
       isMature: !!(b.isMature ?? b.isExplicit),
       isCompleted: !!b.isCompleted,
       publishedDate: (b.publishedDate as string) || '',
+      // Pricing for the preview's Buy CTA (the purchase itself stays gated).
+      price: Number(b.price) || 0,
+      isMonetized: !!b.isMonetized,
+      isFree: !!b.isFree,
     };
   }
 

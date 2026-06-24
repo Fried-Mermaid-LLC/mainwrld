@@ -19,6 +19,7 @@ import { useReading } from './hooks/useReading'
 import { useAdmin } from './hooks/useAdmin'
 import { useAuthActions } from './hooks/useAuthActions'
 import { useUserDataLoader } from './hooks/useUserDataLoader'
+import { useUrlSync } from './hooks/useUrlSync'
 import { usePayments } from './hooks/usePayments'
 import { usePersist } from './hooks/usePersist'
 import { useAppLifecycle } from './hooks/useAppLifecycle'
@@ -426,6 +427,46 @@ export function useAppValue() {
     return () => window.removeEventListener('mainwrld:open-book', handler)
   }, [firebaseUid, favoriteBookIds, setSelectedBook, setView])
 
+  // Pending shared-book return (F09). A signed-out visitor who tapped Read/Buy
+  // on the public preview (or cold-loaded a `/book/<id>` link) has the book id
+  // stashed in sessionStorage. Open it the moment the user is FULLY ready —
+  // authenticated, profile loaded, AND past the appearance onboarding
+  // (avatarConfig set). So a fresh signup lands on the book only AFTER picking a
+  // character (the OnboardingGate + WelcomePopup overlays clear first), while an
+  // existing login (already has avatarConfig) lands on it right away. This is
+  // the SINGLE consumer of the pending id — decoupled from the auth listener, so
+  // it can't race the post-signup profile creation. Runs once.
+  const pendingBookOpenedRef = useRef(false)
+  useEffect(() => {
+    if (pendingBookOpenedRef.current) return
+    if (!firebaseUid || !userDataLoaded || !avatarConfig) return
+    let id: string | null = null
+    try {
+      id = sessionStorage.getItem('pendingShareBookId')
+    } catch {}
+    if (!id) return
+    pendingBookOpenedRef.current = true
+    try {
+      sessionStorage.removeItem('pendingShareBookId')
+    } catch {}
+    fbService
+      .getBook(id)
+      .then(fb => {
+        if (fb) {
+          setSelectedBook(convertFirestoreBook(fb, favoriteBookIds))
+          setView('book-detail')
+        }
+      })
+      .catch(() => {})
+  }, [
+    firebaseUid,
+    userDataLoaded,
+    avatarConfig,
+    favoriteBookIds,
+    setSelectedBook,
+    setView
+  ])
+
   // User-data loader lives in useUserDataLoader (Phase B). Runs the post-login
   // getUserProfile cascade and flips userDataLoaded true. Placed here (after the
   // persist effect, before the payment effects) so its effect registers in the
@@ -449,6 +490,28 @@ export function useAppValue() {
     setUserDataLoaded
   })
 
+  // Web navigation <-> URL sync (History API). Keeps the address bar in step
+  // with the `view`/selection state and restores it on Back/Forward + cold
+  // deep-loads. No-op on native. Placed after the user-data loader so the
+  // shared setters are direct refs; it gates its first apply on authLoading.
+  useUrlSync({
+    view,
+    selectedBook,
+    selectedProfileUser,
+    selectedChatUser,
+    readingChapterIndex,
+    setView,
+    setSelectedBook,
+    setSelectedProfileUser,
+    setSelectedChatUser,
+    setReadingChapterIndex,
+    registeredUsers,
+    mutuals: MUTUALS,
+    favoriteBookIds,
+    firebaseUid,
+    authLoading
+  })
+
 
   // Payments (Stripe web redirects + native IAP verify) live in usePayments
   // (Phase B). Placed after the user-data loader and before useAuthActions so its
@@ -463,7 +526,6 @@ export function useAppValue() {
     setUser,
     setFirebaseUid,
     setView,
-    setSelectedBook,
     setFavoriteBookIds,
     setAuthLoading,
     setUserDataLoaded,

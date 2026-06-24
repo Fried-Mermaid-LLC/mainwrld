@@ -62,22 +62,43 @@ export const PublicBookLandingPage: React.FC = () => {
 
   const isAuthed = !!firebaseUid && !!user?.username
 
+  // Open the real book-detail for an authenticated visitor. Fetch on demand
+  // (the book may not be in the visitor's live subscription) and rebuild the
+  // client Book shape so selectedBook.author is well-formed.
+  const openFullBook = async () => {
+    if (!preview || opening) return
+    setOpening(true)
+    try {
+      const fb = await fbService.getBook(preview.id)
+      if (fb) {
+        setSelectedBook(convertFirestoreBook(fb, favoriteBookIds))
+        setView('book-detail')
+      }
+    } finally {
+      setOpening(false)
+    }
+  }
+
+  // Auto-upgrade the preview to the fully loaded book page for a signed-in
+  // visitor (F09). The shared `/book/<id>` link otherwise depends solely on
+  // useAuthActions.openPendingShareBook firing at the right moment; if that
+  // misses (profile still loading, the auth listener fell through to its
+  // signed-out branch, or the id was already consumed) the authenticated
+  // visitor is stranded on the stripped preview and never reaches book-detail.
+  // Once the preview has loaded and the session is known, route them straight
+  // into the real page — no manual "Read" tap required.
+  useEffect(() => {
+    if (preview && isAuthed) {
+      void openFullBook()
+    }
+    // openFullBook is recreated each render; gate on the inputs that matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview, isAuthed])
+
   const onRead = async () => {
     if (!preview || opening) return
     if (isAuthed) {
-      // Logged-in: skip the gate, open the real book-detail. Fetch on demand
-      // (the book may not be in the visitor's live subscription) and rebuild
-      // the client Book shape so selectedBook.author is well-formed.
-      setOpening(true)
-      try {
-        const fb = await fbService.getBook(preview.id)
-        if (fb) {
-          setSelectedBook(convertFirestoreBook(fb, favoriteBookIds))
-          setView('book-detail')
-        }
-      } finally {
-        setOpening(false)
-      }
+      await openFullBook()
     } else {
       // Anonymous: keep the pending id (already stashed) so useAuthActions
       // routes the visitor into this book right after they authenticate.
@@ -146,6 +167,10 @@ export const PublicBookLandingPage: React.FC = () => {
     title: preview.title,
     isMature: preview.isMature
   } as Book
+
+  // Mirror the book-detail gate: a book is "for sale" when it's monetized, not
+  // explicitly free, and carries a price. Free/unmonetized books show only Read.
+  const isPaid = preview.isMonetized && !preview.isFree && preview.price > 0
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-24 animate-in fade-in duration-500'>
@@ -225,14 +250,38 @@ export const PublicBookLandingPage: React.FC = () => {
           </div>
         )}
 
-        <div className='w-full max-w-sm'>
-          <Button className='w-full' disabled={opening} onClick={onRead}>
-            <span className='material-icons-round text-sm'>auto_stories</span>{' '}
-            {opening ? 'Opening…' : 'Read'}
-          </Button>
+        <div className='w-full max-w-sm space-y-3'>
+          {isPaid ? (
+            <>
+              {/* Paid book: lead with Buy (price shown), keep Read alongside.
+                  For a signed-out visitor both gate to sign-in and return to
+                  the book afterwards; the actual purchase happens on the full
+                  book-detail page once authenticated. */}
+              <Button className='w-full' disabled={opening} onClick={onRead}>
+                <span className='material-icons-round text-sm'>shopping_bag</span>{' '}
+                {opening ? 'Opening…' : `Buy — $${preview.price.toFixed(2)}`}
+              </Button>
+              <Button
+                variant='secondary'
+                className='w-full'
+                disabled={opening}
+                onClick={onRead}
+              >
+                <span className='material-icons-round text-sm'>auto_stories</span>{' '}
+                {opening ? 'Opening…' : 'Read'}
+              </Button>
+            </>
+          ) : (
+            <Button className='w-full' disabled={opening} onClick={onRead}>
+              <span className='material-icons-round text-sm'>auto_stories</span>{' '}
+              {opening ? 'Opening…' : 'Read'}
+            </Button>
+          )}
           {!isAuthed && (
             <p className='text-[10px] text-gray-400 mt-4'>
-              Sign in or create a free account to start reading.
+              {isPaid
+                ? 'Sign in or create a free account to read or buy.'
+                : 'Sign in or create a free account to start reading.'}
             </p>
           )}
         </div>

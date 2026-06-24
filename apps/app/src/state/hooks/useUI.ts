@@ -1,41 +1,34 @@
 import { useState, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
+import { parsePath, isPublicInitialView } from '@/navigation/routes'
 import type { View, Book, User } from '@/types'
 
-// Firebase appends the reset params to whatever action URL is configured in
-// the console (Authentication → Templates → Password reset), so a reset email
-// lands on the app as ?mode=resetPassword&oobCode=…. Resolve that into the
-// reset-password view before the first paint — otherwise the SPA shows the
-// splash → landing screen and the link appears to "lead nowhere".
+// Resolve the view to paint before auth settles, straight from the URL. Covers:
+//   • the Firebase password-reset link (?mode=resetPassword&oobCode=…) — without
+//     this the SPA shows splash → landing and the link appears to "lead nowhere";
+//   • a shared book deep-link (F09): a `/book/<id>` link (or the `?book=<id>` the
+//     ogBook function redirects humans to) opens the public preview and stashes
+//     the id for the post-auth upgrade;
+//   • any other no-auth view (login / signup / legal) so a cold-loaded or
+//     deep-linked URL paints immediately instead of flashing the wrong screen.
+// Everything else falls back to `splash` until the auth listener decides
+// home vs landing (and useUrlSync re-applies authed deep routes).
 function resolveInitialView(): View {
   if (typeof window === 'undefined') return 'splash'
-  const params = new URLSearchParams(window.location.search)
-  if (params.get('mode') === 'resetPassword' && params.get('oobCode')) {
-    return 'reset-password'
-  }
-  // Shared book deep-link (F09): a `/book/<id>` link (or the `?book=<id>` the
-  // ogBook function redirects humans to) resolves into the public preview
-  // before first paint — same precedent as the reset-password link above.
-  const shareBookId = parseShareBookId()
-  if (shareBookId) {
-    try {
-      sessionStorage.setItem('pendingShareBookId', shareBookId)
-    } catch {}
-    return 'public-book'
+  const route = parsePath(window.location.pathname, window.location.search)
+  if (route) {
+    if (
+      (route.view === 'public-book' || route.view === 'book-detail') &&
+      route.bookId
+    ) {
+      try {
+        sessionStorage.setItem('pendingShareBookId', route.bookId)
+      } catch {}
+      return 'public-book'
+    }
+    if (isPublicInitialView(route.view)) return route.view
   }
   return 'splash'
-}
-
-// Extract the shared book id from the current URL, accepting BOTH the canonical
-// `/book/<id>` path (what crawlers/iOS see) and the `?book=<id>` query the
-// ogBook function redirects real humans to. Exported so useAuthActions can run
-// the SAME check to keep the onAuthStateChanged listener from bouncing a
-// signed-out deep-link visitor to `landing` (F09).
-export function parseShareBookId(): string | null {
-  if (typeof window === 'undefined') return null
-  const pathMatch = window.location.pathname.match(/^\/book\/([A-Za-z0-9_-]+)$/)
-  if (pathMatch) return pathMatch[1]
-  return new URLSearchParams(window.location.search).get('book')
 }
 
 // UI / navigation / coordinating-selection state. Foundation hook with no

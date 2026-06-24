@@ -28,6 +28,12 @@ export interface PublicBookPreview {
   isMature: boolean;          // renamed from isExplicit; legacy docs read via isMature ?? isExplicit
   isCompleted: boolean;
   publishedDate: string;
+  // Pricing surfaced so the public preview can show a "Buy" CTA to a signed-out
+  // visitor (the action itself gates to sign-in). Not sensitive — this is the
+  // public sale price; the monetization split / sellerUid stay server-only.
+  price: number;              // sale price in USD (0 when not for sale)
+  isMonetized: boolean;       // sold for cash
+  isFree: boolean;            // explicitly free to read despite monetization
 }
 
 export interface User {
@@ -305,7 +311,7 @@ export interface Book {
   permanentlyDemonetized?: boolean;
   // ---- Stripe Connect seller identity (F02) ----
   sellerUid?: string;                 // firebaseUid of the author at monetize time
-  sellerStripeAccountId?: string;     // acct_xxx the 80% is transferred to
+  sellerStripeAccountId?: string;     // acct_xxx the 70% is transferred to
 }
 
 export interface BookProgress {

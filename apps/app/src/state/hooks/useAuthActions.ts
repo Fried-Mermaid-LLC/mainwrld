@@ -9,15 +9,13 @@ import { MIN_SIGNUP_AGE } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import { ageFromBirthDate } from '@/utils/age'
 import { usersApi } from '@/services/api/usersApi'
-import { parseShareBookId } from './useUI'
-import { convertFirestoreBook } from '@/utils/bookConverter'
-import type { User, View, Book, NotificationCategory } from '@/types'
+import { parsePath, isPublicInitialView } from '@/navigation/routes'
+import type { User, View, NotificationCategory } from '@/types'
 
 interface AuthActionsDeps {
   setUser: Dispatch<SetStateAction<User>>
   setFirebaseUid: Dispatch<SetStateAction<string | null>>
   setView: Dispatch<SetStateAction<View>>
-  setSelectedBook: Dispatch<SetStateAction<Book | null>>
   setFavoriteBookIds: Dispatch<SetStateAction<Set<string>>>
   setAuthLoading: Dispatch<SetStateAction<boolean>>
   setUserDataLoaded: Dispatch<SetStateAction<boolean>>
@@ -50,7 +48,6 @@ export function useAuthActions({
   setUser,
   setFirebaseUid,
   setView,
-  setSelectedBook,
   setFavoriteBookIds,
   setAuthLoading,
   setUserDataLoaded,
@@ -63,48 +60,23 @@ export function useAuthActions({
   signUpForm,
   addNotification
 }: AuthActionsDeps) {
-  // Post-auth deep-link (F09): if the user arrived via a shared `/book/<id>`
-  // link and then signed in / signed up, land them INSIDE that book rather than
-  // on `home`. The pending id is stashed in sessionStorage by resolveInitialView
-  // (or the "Read" gate on the public landing page). Returns true when it
-  // navigated to the book, so callers fall back to their default view otherwise.
-  const openPendingShareBook = async (): Promise<boolean> => {
-    let id: string | null = null
-    try {
-      id = sessionStorage.getItem('pendingShareBookId')
-    } catch {}
-    if (!id) return false
-    try {
-      sessionStorage.removeItem('pendingShareBookId')
-    } catch {}
-    try {
-      const fb = await fbService.getBook(id)
-      if (fb) {
-        setSelectedBook(convertFirestoreBook(fb))
-        setView('book-detail')
-        return true
-      }
-    } catch {}
-    return false
-  }
-
   // Firebase Auth state listener - handles auto-login
   useEffect(() => {
     const timer = setTimeout(() => {
       const unsubscribe = onAuthStateChanged(auth, async firebaseUser => {
-        // A password-reset link opens the app unauthenticated. Without this
-        // guard the listener would bounce it to 'landing' ~1.5s after load and
-        // ResetPasswordView (opened by useUI on first paint) would be unmounted.
-        const params = new URLSearchParams(window.location.search)
-        const signedOutView: View =
-          params.get('mode') === 'resetPassword' && params.get('oobCode')
-            ? 'reset-password'
-            : // A shared `/book/<id>` deep-link (F09) must keep its public
-              // preview, not get bounced to landing, when the visitor has no
-              // session — mirrors the reset-password guard above.
-              parseShareBookId()
-              ? 'public-book'
+        // A deep-linked URL opens the app unauthenticated for no-auth views
+        // (password-reset, shared `/book/<id>` preview, login/signup/legal).
+        // Without this guard the listener would bounce every signed-out launch
+        // to 'landing' ~1.5s after load — unmounting the view useUI painted on
+        // first load. Mirror resolveInitialView's URL-driven choice here.
+        const route = parsePath(window.location.pathname, window.location.search)
+        const signedOutView: View = route
+          ? route.view === 'public-book' || route.view === 'book-detail'
+            ? 'public-book'
+            : isPublicInitialView(route.view)
+              ? route.view
               : 'landing'
+          : 'landing'
         if (firebaseUser) {
           try {
             const profile = await fbService.getUserProfile(firebaseUser.uid)
@@ -141,7 +113,16 @@ export function useAuthActions({
               // otherwise their first listen is rejected by the rules.
               await fbService.ensureUsernameClaim()
               setFirebaseUid(firebaseUser.uid)
-              if (!(await openPendingShareBook())) setView('home')
+              // Land on home, but never clobber a shared-book view the URL
+              // deep-linked into (F09): public-book (the preview, which
+              // auto-upgrades to book-detail) or book-detail itself if the
+              // auto-upgrade already fired. The pending-book effect in
+              // AppProvider opens the book once the user is fully ready (profile
+              // loaded + onboarding done), so the return is no longer applied
+              // here and can't race the post-signup profile creation.
+              setView(v =>
+                v === 'public-book' || v === 'book-detail' ? v : 'home'
+              )
               // Mark user online in Firestore on auth restore
               fbService
                 .updateUserProfile(firebaseUser.uid, {
@@ -221,7 +202,12 @@ export function useAuthActions({
       setFirebaseUid((result as any).uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)
-      if (!(await openPendingShareBook())) setView('home')
+      // Land on home; the pending shared-book deep-link (F09) is opened by the
+      // single pending-book effect in AppProvider once the user is fully ready
+      // (profile loaded + onboarding done). Applying it here too used to race
+      // that effect / the auth listener and bounce the user back to home,
+      // losing the book.
+      setView('home')
       // Mark user online in Firestore
       fbService
         .updateUserProfile((result as any).uid, {
@@ -332,7 +318,11 @@ export function useAuthActions({
       setFirebaseUid(result.uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)
-      if (!(await openPendingShareBook())) setView('home')
+      // Land on home; the pending shared-book deep-link (F09) is opened by the
+      // single pending-book effect in AppProvider (see handleLogin). For a fresh
+      // signup that effect waits for the appearance onboarding to finish
+      // (avatarConfig set), so the shared book opens only AFTER character setup.
+      setView('home')
 
       // Refresh registered users list
       fbService
