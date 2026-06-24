@@ -36,6 +36,10 @@ export const LibraryView = () => {
           {ownedBooks.map(b => {
             const progressData = getUserBookProgress(b.id)
             const scrollProgress = progressData.scrollProgress || 0
+            const chapterIndex = progressData.chapterIndex || 0
+            const chapterLabel =
+              b.chapterMeta?.[chapterIndex]?.title ||
+              `Chapter ${chapterIndex + 1}`
 
             return (
               <div
@@ -51,6 +55,9 @@ export const LibraryView = () => {
                   style={{ backgroundColor: b.coverColor || '#fbdddd' }}
                 >
                   <CoverImg book={b} />
+                  <p className='relative z-20 mb-1.5 text-[11px] font-semibold text-white tracking-[0.13px] leading-[1.2] line-clamp-1 [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]'>
+                    {chapterLabel}
+                  </p>
                   <div className='relative z-20 h-[6px] w-full bg-[#fcefef] rounded-full'>
                     <div
                       className='absolute left-0 top-px h-[4px] bg-[#ef4f49] rounded-full'
