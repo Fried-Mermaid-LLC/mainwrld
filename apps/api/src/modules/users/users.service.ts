@@ -21,6 +21,7 @@ import {
 import { EmailService } from '../../shared/email/email.service';
 import { welcomeEmail } from '../../shared/email/email.templates';
 import type { AuthUser } from '../../infra/auth/auth-user.interface';
+import { RewardsService } from '../rewards/rewards.service';
 import type { CreateProfileDto } from './dto/create-profile.dto';
 
 export type UserDoc = Record<string, unknown> & { uid: string };
@@ -71,6 +72,16 @@ const PROTECTED_FIELDS = new Set<string>([
   'stripeAccountUpdatedAt',
   'isAdmin',
   'purchasedBookIds',
+  // Points economy (server-authoritative via RewardsService). The client used to
+  // persist these on its 2s autosave, which would clobber server-side awards for
+  // likes from other users whenever the author was online. Now only the server
+  // (like milestones, daily claim, spin, membership reward) writes them.
+  'points',
+  'dailyEarnedPoints',
+  'lastPointsReset',
+  'lastClaimedPoints',
+  'membershipStartDate',
+  'lastMembershipRewardDate',
 ]);
 
 @Injectable()
@@ -81,6 +92,7 @@ export class UsersService {
     @Inject(FIRESTORE) private readonly db: Firestore,
     @Inject(FIREBASE_AUTH) private readonly auth: Auth,
     private readonly email: EmailService,
+    private readonly rewards: RewardsService,
   ) {}
 
   private get col() {
@@ -249,6 +261,9 @@ export class UsersService {
   // Own profile. Ban gate (defense-in-depth): block a banned user before any
   // home-screen state loads.
   async getMe(uid: string): Promise<UserDoc> {
+    // Membership reward (200 pts after 25h, then yearly) lands here instead of a
+    // client timer — best-effort, before the profile is read so it's reflected.
+    await this.rewards.applyMembershipReward(uid);
     const snap = await this.col.doc(uid).get();
     if (!snap.exists) throw new NotFoundException('User profile not found');
     const data = { uid, ...snap.data() } as UserDoc;
@@ -303,6 +318,25 @@ export class UsersService {
       );
     }
     if (Object.keys(clean).length) await this.col.doc(uid).update(clean);
+  }
+
+  // Daily points claim (server-authoritative cooldown + 25/day cap). Returns the
+  // claim outcome plus the refreshed profile so the client can sync its balance.
+  async claimDailyPoints(uid: string): Promise<{
+    claimed: boolean;
+    awarded: number;
+    nextAvailableAt: number | null;
+    user: UserDoc;
+  }> {
+    const outcome = await this.rewards.claimDaily(uid);
+    const snap = await this.col.doc(uid).get();
+    return { ...outcome, user: { uid, ...snap.data() } as UserDoc };
+  }
+
+  // Coupon-wheel spin: spend 150 points server-side. The coupon itself is still
+  // generated/stored client-side; this only debits the (server-owned) balance.
+  async spinWheel(uid: string): Promise<{ ok: boolean; points: number }> {
+    return this.rewards.spendForSpin(uid);
   }
 
   async addFcmToken(uid: string, token: string): Promise<void> {

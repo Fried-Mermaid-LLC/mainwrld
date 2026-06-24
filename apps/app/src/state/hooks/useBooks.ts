@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
-import { CHAPTER_LIKES_THRESHOLD, buildBookShareUrl } from '@/config/constants'
+import { buildBookShareUrl } from '@/config/constants'
 import type { User, Book, View, NotificationCategory } from '@/types'
 
 interface BooksDeps {
@@ -25,9 +25,6 @@ interface BooksDeps {
     title: string, message: string, icon: string, recipient?: string,
     sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
-  awardPoints: (amount: number, reason: string) => void
-  rewardedItems: Set<string>
-  setRewardedItems: Dispatch<SetStateAction<Set<string>>>
 }
 
 // Books domain (Phase B). Owns the books list + its Firestore subscription, the
@@ -44,10 +41,7 @@ export function useBooks({
   setView,
   showToast,
   showConfirm,
-  addNotification,
-  awardPoints,
-  rewardedItems,
-  setRewardedItems
+  addNotification
 }: BooksDeps) {
   const [books, setBooks] = useState<Book[]>([])
   const [booksLoading, setBooksLoading] = useState(true)
@@ -163,36 +157,60 @@ export function useBooks({
     }
   }, [likedBooks])
 
+  // Per-chapter like toggle. Points + milestone notifications are now awarded
+  // server-side (likeChapter endpoint), which is the only path that mutates a
+  // book's reader `likes` — so this just toggles optimistically and reconciles
+  // with the server's authoritative count. Self-likes are rejected (the server
+  // does too); we short-circuit to avoid a bad optimistic flip.
   const handleLike = async (bookId: string, chapterIndex: number = 0) => {
-    likedBooksInteracted.current = true
-    const likeKey = `${bookId}:${chapterIndex}`
-    const isLiked = likedBooks.has(likeKey)
-
     const targetBook = books.find(b => b.id === bookId)
     if (!targetBook) return
 
-    const chLikes = getChapterLikes(
-      targetBook.likes,
-      targetBook.chapterMeta?.length || 1
-    )
+    const authorUsername =
+      (targetBook as any).authorUsername || targetBook.author.username
+    if (authorUsername === user.username) return // can't like your own book
 
-    if (isLiked) {
-      const next = new Set(likedBooks)
-      next.delete(likeKey)
-      setLikedBooks(next)
-      chLikes[chapterIndex] = Math.max(0, (chLikes[chapterIndex] || 0) - 1)
-    } else {
-      const next = new Set(likedBooks)
-      next.add(likeKey)
-      setLikedBooks(next)
-      chLikes[chapterIndex] = (chLikes[chapterIndex] || 0) + 1
-      const chapterTitle =
-        targetBook.chapterMeta?.[chapterIndex]?.title ||
-        `Chapter ${chapterIndex + 1}`
-      const authorUsername =
-        (targetBook as any).authorUsername || targetBook.author.username
-      // Don't notify yourself about liking your own book (self-notification).
-      if (authorUsername !== user.username) {
+    likedBooksInteracted.current = true
+    const likeKey = `${bookId}:${chapterIndex}`
+    const wasLiked = likedBooks.has(likeKey)
+    const chapterCount = targetBook.chapterMeta?.length || 1
+    const prevCount = getChapterLikes(targetBook.likes, chapterCount)[chapterIndex] || 0
+
+    const applyCount = (count: number) =>
+      setBooks(prev =>
+        prev.map(b => {
+          if (b.id !== bookId) return b
+          const likesArr = getChapterLikes(b.likes, chapterCount)
+          likesArr[chapterIndex] = count
+          const updated = { ...b, likes: likesArr }
+          if (selectedBook && selectedBook.id === bookId) setSelectedBook(updated)
+          return updated
+        })
+      )
+
+    // Optimistic toggle.
+    const optimistic = new Set(likedBooks)
+    if (wasLiked) optimistic.delete(likeKey)
+    else optimistic.add(likeKey)
+    setLikedBooks(optimistic)
+    applyCount(wasLiked ? Math.max(0, prevCount - 1) : prevCount + 1)
+
+    try {
+      const res = await fbService.likeChapter(bookId, chapterIndex)
+      // Reconcile with the server's authoritative count + liked state.
+      applyCount(res.likes)
+      setLikedBooks(prev => {
+        const next = new Set(prev)
+        if (res.liked) next.add(likeKey)
+        else next.delete(likeKey)
+        return next
+      })
+      // Notify the author of a fresh like (milestone/points notifications are
+      // server-side now). Guarded above against self-likes.
+      if (res.liked) {
+        const chapterTitle =
+          targetBook.chapterMeta?.[chapterIndex]?.title ||
+          `Chapter ${chapterIndex + 1}`
         addNotification(
           'Chapter Liked',
           `${user?.displayName} liked ${chapterTitle} from "${targetBook.title}"`,
@@ -205,44 +223,12 @@ export function useBooks({
           'bookLikes'
         )
       }
-
-      // Earned points: award book author 2 pts when chapter hits like threshold
-      const rewardKey = `chapter:${bookId}:${chapterIndex}:${Math.floor(
-        chLikes[chapterIndex] / CHAPTER_LIKES_THRESHOLD
-      )}`
-      if (
-        chLikes[chapterIndex] % CHAPTER_LIKES_THRESHOLD === 0 &&
-        !rewardedItems.has(rewardKey) &&
-        targetBook.author.username === user.username
-      ) {
-        setRewardedItems(prev => new Set(prev).add(rewardKey))
-        awardPoints(2, `${chapterTitle} hit ${chLikes[chapterIndex]} likes!`)
-        addNotification(
-          'Points Earned',
-          `Your chapter "${chapterTitle}" hit ${chLikes[chapterIndex]} likes — you earned 2 points!`,
-          'stars',
-          user.username,
-          user.username,
-          targetBook.id,
-          chapterIndex,
-          undefined,
-          'bookLikes'
-        )
-      }
+    } catch (err) {
+      // Revert optimistic state on failure.
+      setLikedBooks(likedBooks)
+      applyCount(prevCount)
+      console.error(err)
     }
-
-    // Update locally for immediate UI feedback
-    setBooks(prev =>
-      prev.map(b => {
-        if (b.id !== bookId) return b
-        const updated = { ...b, likes: [...chLikes] }
-        if (selectedBook && selectedBook.id === bookId) setSelectedBook(updated)
-        return updated
-      })
-    )
-
-    // Persist to Firestore
-    fbService.updateBook(bookId, { likes: chLikes }).catch(console.error)
   }
 
   const handleToggleFavorite = (bookId: string) => {

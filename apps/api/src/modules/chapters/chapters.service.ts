@@ -133,10 +133,19 @@ export class ChaptersService {
     user: AuthUser,
     dto: CommitChapterDto,
   ): Promise<void> {
-    await this.assertAuthor(bookId, user);
+    const book = await this.assertAuthor(bookId, user);
+    // Mature flag: the incoming book update if present, else the stored value
+    // (legacy docs fall back to isExplicit). Relaxes the OpenAI layer to permit
+    // sexual/violent themes in Mature works while still blocking CSAM/illegal/etc.
+    const bu = dto.bookUpdates as
+      | { isMature?: boolean; isExplicit?: boolean }
+      | undefined;
+    const bk = book as { isMature?: boolean; isExplicit?: boolean };
+    const mature =
+      (bu?.isMature ?? bk.isMature ?? bk.isExplicit) === true;
     // Body prose: OpenAI only. Title: profanity + OpenAI.
-    if (dto.content) await this.assertClean(dto.content, false);
-    if (dto.title) await this.assertClean(dto.title, true);
+    if (dto.content) await this.assertClean(dto.content, false, mature);
+    if (dto.title) await this.assertClean(dto.title, true, mature);
 
     const bookUpdates = this.sanitizeBookUpdates(dto.bookUpdates);
     const batch = this.db.batch();
@@ -178,17 +187,25 @@ export class ChaptersService {
     await batch.commit();
   }
 
-  private async assertAuthor(bookId: string, user: AuthUser): Promise<void> {
+  private async assertAuthor(
+    bookId: string,
+    user: AuthUser,
+  ): Promise<Record<string, unknown>> {
     const snap = await this.booksCol().doc(bookId).get();
     if (!snap.exists) throw new NotFoundException('Book not found');
     const data = snap.data() as Record<string, unknown>;
     if (data.authorUid !== user.uid && !user.admin) {
       throw new ForbiddenException('Not the book author');
     }
+    return data;
   }
 
-  private async assertClean(text: string, checkProfanity: boolean): Promise<void> {
-    const verdict = await this.moderation.screen(text, checkProfanity);
+  private async assertClean(
+    text: string,
+    checkProfanity: boolean,
+    mature = false,
+  ): Promise<void> {
+    const verdict = await this.moderation.screen(text, checkProfanity, mature);
     if (verdict.flagged) {
       throw new UnprocessableEntityException({
         code: 'moderation-flagged',

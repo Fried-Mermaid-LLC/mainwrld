@@ -15,6 +15,7 @@ import {
   FIRESTORE,
 } from '../../infra/firebase/firebase.constants';
 import { ModerationService } from '../moderation/moderation.service';
+import { RewardsService } from '../rewards/rewards.service';
 import type { CreateCommentDto } from './dto/create-comment.dto';
 import type { UpdateCommentDto } from './dto/update-comment.dto';
 
@@ -28,6 +29,7 @@ export class CommentsService {
   constructor(
     @Inject(FIRESTORE) private readonly db: Firestore,
     private readonly moderation: ModerationService,
+    private readonly rewards: RewardsService,
   ) {}
 
   private get col() {
@@ -120,6 +122,24 @@ export class CommentsService {
       if (dto.likedBy !== undefined) patch.likedBy = dto.likedBy;
     }
     if (Object.keys(patch).length) await ref.update(patch);
+
+    // Server-authoritative points: when the accepted like count crosses a
+    // multiple of 50, award the comment author + notify (best-effort, never
+    // blocks the like). Keyed on patch.likes so a rejected own-comment like
+    // never awards.
+    if (patch.likes !== undefined) {
+      const oldLikes = (data.likes as number) || 0;
+      await this.rewards.onCommentLikesChanged(
+        {
+          id: (data.id as string) || ref.id,
+          authorUsername: data.authorUsername as string | undefined,
+          bookId: data.bookId as string | undefined,
+          chapterIndex: data.chapterIndex as number | null | undefined,
+        },
+        oldLikes,
+        patch.likes as number,
+      );
+    }
   }
 
   async remove(commentId: string, user: AuthUser): Promise<void> {

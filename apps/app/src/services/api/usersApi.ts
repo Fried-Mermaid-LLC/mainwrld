@@ -18,6 +18,16 @@ export const usersApi = {
   }) => api.post<any>('/users', data),
   patchMe: (data: Record<string, unknown>) =>
     api.patch<void>('/users/me', data),
+  // Server-authoritative daily points claim (cooldown + 25/day cap).
+  claimDaily: () =>
+    api.post<{
+      claimed: boolean;
+      awarded: number;
+      nextAvailableAt: number | null;
+      user: any;
+    }>('/users/me/claim-daily'),
+  // Spend 150 points for a coupon-wheel spin (coupon stays client-managed).
+  spin: () => api.post<{ ok: boolean; points: number }>('/users/me/spin'),
   sendWelcomeEmail: () => api.post<{ success: boolean }>('/users/me/welcome-email'),
   deleteMe: () => api.del<{ deletedUid: string }>('/users/me'),
 

@@ -14,6 +14,12 @@ export const booksApi = {
     }),
   favorite: (id: string, delta: 1 | -1) =>
     api.post<void>(`/books/${id}/favorite`, { delta }),
+  // Server-authoritative per-chapter like toggle. Returns the toggled state +
+  // the chapter's new aggregate count.
+  likeChapter: (id: string, chapterIndex: number) =>
+    api.post<{ liked: boolean; likes: number }>(`/books/${id}/like`, {
+      chapterIndex,
+    }),
 
   // ---- chapters subcollection ----
   listChapters: (bookId: string) =>

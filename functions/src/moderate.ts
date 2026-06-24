@@ -48,9 +48,29 @@ type ModerationResponse = {
   }>
 }
 
+// OpenAI moderation categories that are NEVER allowed, even in a work the
+// author flagged as Mature. Mature fiction may contain sexual/violent themes,
+// but child sexual content, illegal content, hate, harassment, and self-harm
+// promotion are always rejected. (Kept in sync with
+// apps/api/src/modules/moderation/moderation.service.ts — functions cannot
+// import from apps/api.)
+const ALWAYS_BLOCKED = new Set<string>([
+  'sexual/minors',
+  'illicit',
+  'illicit/violent',
+  'hate',
+  'hate/threatening',
+  'harassment',
+  'harassment/threatening',
+  'self-harm',
+  'self-harm/intent',
+  'self-harm/instructions',
+])
+
 const moderateText = async (
   text: string,
-  apiKey: string
+  apiKey: string,
+  mature = false
 ): Promise<{ flagged: boolean; topCategory?: string; score?: number }> => {
   // Empty / whitespace-only never triggers moderation.
   if (!text || !text.trim()) return { flagged: false }
@@ -69,9 +89,20 @@ const moderateText = async (
   const data = (await res.json()) as ModerationResponse
   const r = data.results?.[0]
   if (!r) return { flagged: false }
-  if (!r.flagged) return { flagged: false }
+  const active = Object.entries(r.categories)
+    .filter(([, on]) => on)
+    .map(([cat]) => cat)
+  // Mature works: only always-blocked categories are violations (sexual/violent
+  // themes are permitted). Non-mature works: any flagged category is a violation
+  // — the author can flag the work Mature to allow mature themes.
+  const violating = mature
+    ? active.filter((cat) => ALWAYS_BLOCKED.has(cat))
+    : active
+  if (violating.length === 0) return { flagged: false }
   // Pick the highest-scoring violating category for the audit record.
-  const top = Object.entries(r.category_scores).sort(([, a], [, b]) => b - a)[0]
+  const top = violating
+    .map((cat) => [cat, r.category_scores[cat] ?? 0] as const)
+    .sort(([, a], [, b]) => b - a)[0]
   return {
     flagged: true,
     topCategory: top?.[0],
@@ -85,12 +116,13 @@ const moderateText = async (
 const screen = async (
   text: string,
   apiKey: string,
-  checkProfanity = true
+  checkProfanity = true,
+  mature = false
 ): Promise<{ flagged: boolean; topCategory?: string; score?: number }> => {
   if (checkProfanity && containsProfanity(text))
     return { flagged: true, topCategory: 'profanity' }
   if (!apiKey) return { flagged: false }
-  return moderateText(text, apiKey)
+  return moderateText(text, apiKey, mature)
 }
 
 const logFlag = async (
@@ -146,8 +178,11 @@ export const moderateCommentOnCreate = onDocumentCreated(
 //
 // Chapter bodies live in the books/{id}/chapters subcollection (see
 // moderateChapterOnWrite below). This trigger only moderates the metadata that
-// still lives on the book doc — title and synopsis. A violation deletes the whole
-// book (and its chapter subcollection) via recursiveDelete.
+// still lives on the book doc — title and synopsis. This is a BACKSTOP: the API
+// already rejects flagged writes pre-publish (books.service.screenMetadata). A
+// violation here does NOT delete the book — it reverts it to a draft so it
+// leaves discovery while the author's work is preserved. Mature-aware so a work
+// flagged Mature isn't unpublished for permitted sexual/violent themes.
 
 export const moderateBookOnWrite = onDocumentUpdated(
   {
@@ -161,6 +196,7 @@ export const moderateBookOnWrite = onDocumentUpdated(
     const after = event.data?.after.data()
     if (!after) return
     const author = after.authorUsername as string | undefined
+    const mature = (after.isMature ?? after.isExplicit) === true
     const changedTexts: string[] = []
     const title = after.title as string | undefined
     const synopsis = after.synopsis as string | undefined
@@ -169,10 +205,12 @@ export const moderateBookOnWrite = onDocumentUpdated(
     if (changedTexts.length === 0) return
     for (const text of changedTexts) {
       // Title + synopsis are public-facing metadata → profanity layer applies.
-      const verdict = await screen(text, key)
+      const verdict = await screen(text, key, true, mature)
       if (!verdict.flagged) continue
-      // Cascade-delete the book and its chapter subcollection.
-      await getFirestore().recursiveDelete(event.data!.after.ref)
+      // Unpublish (revert to draft) instead of deleting — setting isDraft does
+      // not change title/synopsis, so the re-trigger returns early (no loop).
+      if (after.isDraft !== true)
+        await event.data!.after.ref.update({ isDraft: true })
       await logFlag(
         'Book',
         event.params.bookId,
@@ -180,7 +218,7 @@ export const moderateBookOnWrite = onDocumentUpdated(
         verdict.topCategory ?? 'unknown',
         verdict.score
       )
-      logger.info('moderated book removed (metadata)', {
+      logger.info('moderated book unpublished (metadata)', {
         id: event.params.bookId,
         category: verdict.topCategory,
         score: verdict.score,
@@ -193,10 +231,12 @@ export const moderateBookOnWrite = onDocumentUpdated(
 // ---- Chapters (schema 2 subcollection) ----
 //
 // Chapter bodies now live in books/{bookId}/chapters/{chapterId}. We moderate on
-// every write where the content changed (create or edit). A violation deletes the
-// whole parent book (and all its chapters) — keeping the previous take-down
-// semantics. authorUsername is denormalized onto the chapter doc so we can log
-// the flag without re-reading the parent.
+// every write where the content changed (create or edit). This is a BACKSTOP:
+// the API already rejects flagged chapter writes pre-publish
+// (chapters.service.commitWrite → assertClean). A violation here does NOT delete
+// the book — it reverts the parent to a draft so it leaves discovery while the
+// work is preserved. Mature-aware (reads the parent book's mature flag) so a
+// Mature work isn't unpublished for permitted sexual/violent themes.
 
 export const moderateChapterOnWrite = onDocumentWritten(
   {
@@ -222,12 +262,15 @@ export const moderateChapterOnWrite = onDocumentWritten(
 
     const author = after.authorUsername as string | undefined
     const bookId = event.params.bookId
+    // Mature flag lives on the parent book, not the chapter doc.
+    const bookRef = getFirestore().collection('books').doc(bookId)
+    const bookData = (await bookRef.get()).data() ?? {}
+    const mature = (bookData.isMature ?? bookData.isExplicit) === true
     for (const { text, checkProfanity } of texts) {
-      const verdict = await screen(text, key, checkProfanity)
+      const verdict = await screen(text, key, checkProfanity, mature)
       if (!verdict.flagged) continue
-      // Cascade-delete the parent book and all its chapters.
-      const bookRef = getFirestore().collection('books').doc(bookId)
-      await getFirestore().recursiveDelete(bookRef)
+      // Unpublish the parent book (revert to draft) instead of deleting it.
+      if (bookData.isDraft !== true) await bookRef.update({ isDraft: true })
       await logFlag(
         'Book',
         bookId,
@@ -235,7 +278,7 @@ export const moderateChapterOnWrite = onDocumentWritten(
         verdict.topCategory ?? 'unknown',
         verdict.score
       )
-      logger.info('moderated book removed (chapter)', {
+      logger.info('moderated book unpublished (chapter)', {
         id: bookId,
         chapterId: event.params.chapterId,
         category: verdict.topCategory,

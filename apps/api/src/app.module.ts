@@ -12,6 +12,7 @@ import { HealthModule } from './health/health.module';
 import { EmailModule } from './shared/email/email.module';
 import { ProfanityModule } from './shared/profanity/profanity.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { RewardsModule } from './modules/rewards/rewards.module';
 import { BooksModule } from './modules/books/books.module';
 import { SpotlightModule } from './modules/spotlight/spotlight.module';
 import { SocialModule } from './modules/social/social.module';
@@ -53,6 +54,7 @@ import { StreamModule } from './modules/stream/stream.module';
     EmailModule,
     ProfanityModule,
     ModerationModule,
+    RewardsModule,
     BooksModule,
     SpotlightModule,
     SocialModule,

@@ -15,6 +15,7 @@ import {
   FIRESTORE,
 } from '../../infra/firebase/firebase.constants';
 import { ModerationService } from '../moderation/moderation.service';
+import { RewardsService } from '../rewards/rewards.service';
 import type { CreateBookDto } from './dto/create-book.dto';
 import type { UpdateBookDto } from './dto/update-book.dto';
 
@@ -35,6 +36,7 @@ export class BooksService {
     @Inject(FIRESTORE) private readonly db: Firestore,
     @Inject(FIREBASE_STORAGE) private readonly storage: Storage,
     private readonly moderation: ModerationService,
+    private readonly rewards: RewardsService,
   ) {}
 
   private get col() {
@@ -72,7 +74,7 @@ export class BooksService {
   // — including server-managed ones (authorUid, monetization*, sellerUid, …) —
   // so `dto` carries only author-writable fields. authorUid is stamped here.
   async create(user: AuthUser, dto: CreateBookDto): Promise<BookDoc> {
-    await this.screenMetadata(dto.title, dto.tagline);
+    await this.screenMetadata(dto.title, dto.tagline, !!dto.isMature);
     // Per-chapter `likes` is a reader-driven aggregate, never author-authored.
     // An author seeding it would self-inflate the count that gates monetization
     // (100+ likes/chapter) and the spotlight ranking. Strip it on the author
@@ -112,7 +114,11 @@ export class BooksService {
     // self-inflate the monetization/spotlight signal (readers' likes never reach
     // this author-only endpoint anyway). Admins may still adjust counts.
     this.stripLikesUnlessAdmin(user, dto);
-    await this.screenMetadata(dto.title, dto.tagline);
+    // Mature flag for moderation: the incoming change if present, else the
+    // stored value (legacy docs fall back to isExplicit).
+    const ex = existing as { isMature?: boolean; isExplicit?: boolean };
+    const mature = (dto.isMature ?? ex.isMature ?? ex.isExplicit) === true;
+    await this.screenMetadata(dto.title, dto.tagline, mature);
     await ref.update({ ...dto, updatedAt: FieldValue.serverTimestamp() });
     const after = await ref.get();
     return { id, ...after.data() } as BookDoc;
@@ -133,13 +139,80 @@ export class BooksService {
 
   // `likes` is a server-managed reader aggregate. Non-admin callers (i.e. the
   // book's own author — the only non-admin who clears the ownership check) must
-  // never write it, or they could like their own book and forge the
-  // monetization/spotlight signal. Mutates the dto in place.
+  // never write it via the generic update, or they could like their own book and
+  // forge the monetization/spotlight signal. Reader likes go through likeChapter,
+  // which derives the count from a per-chapter likedBy set. Mutates the dto.
   private stripLikesUnlessAdmin(
     user: AuthUser,
     dto: { likes?: number[] },
   ): void {
     if (!user.admin) delete dto.likes;
+  }
+
+  // Server-authoritative per-chapter like toggle (the only path that mutates a
+  // book's reader `likes`). The truth is `chapterLikedBy.{i}` — a set of
+  // usernames — so a user can like a chapter at most once and authors can't like
+  // their own book. `likes[i]` is kept in sync as that set's size. On a NEW like
+  // that crosses a multiple of 10, the author is awarded points + notified
+  // (RewardsService, best-effort outside the transaction). Returns the toggled
+  // state + the chapter's new count for optimistic client reconciliation.
+  async likeChapter(
+    id: string,
+    user: AuthUser,
+    chapterIndex: number,
+  ): Promise<{ liked: boolean; likes: number }> {
+    const username = user.username;
+    if (!username) throw new ForbiddenException('No username on account');
+    const ref = this.col.doc(id);
+
+    const outcome = await this.db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) throw new NotFoundException('Book not found');
+      const book = snap.data() as BookDoc;
+      if (book.authorUid === user.uid) {
+        throw new ForbiddenException('Cannot like your own book');
+      }
+      const key = String(chapterIndex);
+      const likedByMap =
+        (book.chapterLikedBy as Record<string, string[]> | undefined) ?? {};
+      const arr = Array.isArray(likedByMap[key]) ? likedByMap[key] : [];
+      const likesArr = Array.isArray(book.likes)
+        ? (book.likes as number[]).slice()
+        : [];
+      while (likesArr.length <= chapterIndex) likesArr.push(0);
+
+      const oldCount = likesArr[chapterIndex] || 0;
+      const has = arr.includes(username);
+      const nextArr = has
+        ? arr.filter((u) => u !== username)
+        : [...arr, username];
+      const newCount = nextArr.length;
+      likesArr[chapterIndex] = newCount;
+
+      t.update(ref, {
+        [`chapterLikedBy.${key}`]: nextArr,
+        likes: likesArr,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { liked: !has, oldCount, newCount, book };
+    });
+
+    if (outcome.liked) {
+      await this.rewards.onChapterLikeChanged(
+        {
+          id,
+          authorUid: outcome.book.authorUid,
+          authorUsername: outcome.book.authorUsername,
+          chapterMeta: outcome.book.chapterMeta as
+            | Array<{ title?: string }>
+            | undefined,
+        },
+        chapterIndex,
+        outcome.oldCount,
+        outcome.newCount,
+      );
+    }
+    return { liked: outcome.liked, likes: outcome.newCount };
   }
 
   // Per-book favorites counter feeding the spotlight ranking. Best-effort; the
@@ -188,10 +261,14 @@ export class BooksService {
   // Pre-moderation for public-facing metadata (title + tagline/synopsis). A
   // flagged write is rejected (422) and recorded for the admin audit trail,
   // replacing the old post-write moderateBookOnWrite trigger.
-  private async screenMetadata(title?: string, tagline?: string): Promise<void> {
+  private async screenMetadata(
+    title?: string,
+    tagline?: string,
+    mature = false,
+  ): Promise<void> {
     for (const text of [title, tagline]) {
       if (!text) continue;
-      const verdict = await this.moderation.screen(text);
+      const verdict = await this.moderation.screen(text, true, mature);
       if (verdict.flagged) {
         throw new UnprocessableEntityException({
           code: 'moderation-flagged',

@@ -132,6 +132,14 @@ export const updateUserProfile = async (uid: string, data: any) => {
   );
 };
 
+// Server-authoritative daily points claim (cooldown + 25/day cap enforced
+// server-side). Returns the claim outcome + refreshed profile.
+export const claimDailyPoints = () => usersApi.claimDaily();
+
+// Spend 150 points for a coupon-wheel spin (the coupon itself stays
+// client-managed; this only debits the server-owned balance).
+export const spinCouponWheel = () => usersApi.spin();
+
 export const deleteCurrentAccount = async () => {
   try {
     await usersApi.deleteMe();
@@ -188,6 +196,10 @@ export const getBook = async (id: string) => {
 export const getAllBooks = () => booksApi.list();
 export const adjustBookFavorite = (bookId: string, delta: 1 | -1) =>
   booksApi.favorite(bookId, delta);
+// Server-authoritative per-chapter like toggle (replaces writing the likes array
+// directly). Awards the author points + notifies on milestones server-side.
+export const likeChapter = (bookId: string, chapterIndex: number) =>
+  booksApi.likeChapter(bookId, chapterIndex);
 
 // ---- chapters ----
 export const newChapterId = (_bookId: string): string => crypto.randomUUID();

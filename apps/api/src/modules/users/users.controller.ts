@@ -77,6 +77,18 @@ export class UsersController {
     await this.users.updateMe(user.uid, body, user.username);
   }
 
+  // Daily points claim (server-authoritative cooldown + 25/day cap).
+  @Post('me/claim-daily')
+  claimDaily(@CurrentUser() user: AuthUser) {
+    return this.users.claimDailyPoints(user.uid);
+  }
+
+  // Spend 150 points for a coupon-wheel spin (the coupon stays client-managed).
+  @Post('me/spin')
+  spin(@CurrentUser() user: AuthUser) {
+    return this.users.spinWheel(user.uid);
+  }
+
   @Post('me/fcm-tokens')
   @HttpCode(204)
   async addFcmToken(

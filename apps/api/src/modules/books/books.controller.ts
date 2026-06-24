@@ -15,6 +15,7 @@ import { BooksService } from './books.service';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { FavoriteDto, UploadCoverDto } from './dto/cover.dto';
+import { LikeChapterDto } from './dto/like.dto';
 
 @ApiTags('books')
 @ApiBearerAuth()
@@ -69,5 +70,16 @@ export class BooksController {
   @HttpCode(204)
   async favorite(@Param('id') id: string, @Body() dto: FavoriteDto) {
     await this.books.adjustFavorite(id, dto.delta);
+  }
+
+  // Server-authoritative per-chapter like toggle (any signed-in reader). Awards
+  // the author points + notifies on like milestones. Returns the toggled state.
+  @Post(':id/like')
+  like(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() dto: LikeChapterDto,
+  ) {
+    return this.books.likeChapter(id, user, dto.chapterIndex);
   }
 }
