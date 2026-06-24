@@ -227,15 +227,15 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                             </p>
                         </div>
                     )}
-                    <div className="flex items-center justify-center gap-8">
-                        <button onClick={() => handleGenderSelect('female')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-44 md:w-56">
-                            <div className="w-32 md:w-40 h-44 md:h-56 rounded-2xl overflow-hidden bg-gray-50">
+                    <div className="flex items-stretch justify-center gap-4 md:gap-8 w-full max-w-md">
+                        <button onClick={() => handleGenderSelect('female')} className="flex-1 min-w-0 flex flex-col items-center gap-4 p-4 md:p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 max-w-56">
+                            <div className="w-full aspect-32/44 rounded-2xl overflow-hidden bg-gray-50">
                                 <SafeImg src={`${BASE}assets/avatar/body/female/A4.png`} alt="Female" className="w-full h-full object-contain" />
                             </div>
                             <span className="text-sm font-bold uppercase tracking-widest">Female</span>
                         </button>
-                        <button onClick={() => handleGenderSelect('male')} className="flex flex-col items-center gap-4 p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 w-44 md:w-56">
-                            <div className="w-32 md:w-40 h-44 md:h-56 rounded-2xl overflow-hidden bg-gray-50">
+                        <button onClick={() => handleGenderSelect('male')} className="flex-1 min-w-0 flex flex-col items-center gap-4 p-4 md:p-6 rounded-3xl border-2 border-gray-200 hover:border-accent hover:bg-accent/5 transition-all active:scale-95 max-w-56">
+                            <div className="w-full aspect-32/44 rounded-2xl overflow-hidden bg-gray-50">
                                 <SafeImg src={`${BASE}assets/avatar/body/male/B4.png`} alt="Male" className="w-full h-full object-contain" />
                             </div>
                             <span className="text-sm font-bold uppercase tracking-widest">Male</span>
