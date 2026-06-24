@@ -25,6 +25,9 @@ export function convertFirestoreBook(
     },
     likes: Array.isArray(fb.likes) ? fb.likes : [fb.likes || 0],
     isFavorite: favoriteBookIds?.has(fb.id) ?? false,
-    price: fb.price ?? 0
+    price: fb.price ?? 0,
+    // Backward-compat: legacy docs store `isExplicit`, new docs `isMature`.
+    // Normalize so the rest of the app only reads `isMature`.
+    isMature: fb.isMature ?? fb.isExplicit ?? false
   } as Book
 }
