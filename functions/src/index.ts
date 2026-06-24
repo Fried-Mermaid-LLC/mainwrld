@@ -30,11 +30,12 @@ export {
   reviewMonetization,
   createBookCheckoutSession,
 } from './stripeConnect.js'
-export { onBookMonetized } from './monetization.js'
 export { cancelMembership } from './cancelMembership.js'
 export { mirrorPresence } from './presence.js'
 export { rotateSpotlight, rotateSpotlightNow } from './spotlight.js'
 export { enforceChatRateLimit } from './chatRateLimit.js'
 export { pruneExpiredMessages } from './pruneMessages.js'
 export { blockUnderageSignup } from './blockUnderageSignup.js'
-export { sendPushOnNotification } from './sendPushOnNotification.js'
+// NOTE: push fan-out now runs inline in the API (NotificationsService.pushFanout).
+// The old sendPushOnNotification onCreate trigger was removed to stop every
+// notification firing TWO pushes (inline + trigger) on iOS.

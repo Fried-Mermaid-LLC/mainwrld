@@ -2,31 +2,18 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 
 export const BASE = import.meta.env.BASE_URL;
 
-// Stripe Payment Link URLs differ between test and live modes. Vite sets
-// `import.meta.env.PROD` to true only in production builds (`vite build`),
-// false in `vite dev` — so local dev hits test mode automatically, and the
-// CI build deployed to mainwrld.com hits live. The slug after `test_` is
-// the same in both envs because Stripe assigns it deterministically per
-// account, but treat each URL as opaque.
-const isProd = import.meta.env.PROD;
+// Stripe runs on LIVE everywhere — local dev, TestFlight, and the mainwrld.com
+// web build all hit real Stripe and move real money. There is no test/live
+// toggle anymore; treat each Payment Link URL as opaque.
+export const STRIPE_PAYMENT_LINKS: Record<string, string> = {
+  points_100: "https://buy.stripe.com/4gM6oHdkrdiW52b35l6oo00",
+  points_300: "https://buy.stripe.com/00w28r6W3a6K3Y735l6oo01",
+  points_500: "https://buy.stripe.com/6oU4gz94b2Ei8en0Xd6oo02",
+  points_1000: "https://buy.stripe.com/8x2dR93JR5Qu52b7lB6oo03",
+};
 
-export const STRIPE_PAYMENT_LINKS: Record<string, string> = isProd
-  ? {
-      points_100: "https://buy.stripe.com/4gM6oHdkrdiW52b35l6oo00",
-      points_300: "https://buy.stripe.com/00w28r6W3a6K3Y735l6oo01",
-      points_500: "https://buy.stripe.com/6oU4gz94b2Ei8en0Xd6oo02",
-      points_1000: "https://buy.stripe.com/8x2dR93JR5Qu52b7lB6oo03",
-    }
-  : {
-      points_100: "https://buy.stripe.com/test_4gM6oHdkrdiW52b35l6oo00",
-      points_300: "https://buy.stripe.com/test_00w28r6W3a6K3Y735l6oo01",
-      points_500: "https://buy.stripe.com/test_6oU4gz94b2Ei8en0Xd6oo02",
-      points_1000: "https://buy.stripe.com/test_8x2dR93JR5Qu52b7lB6oo03",
-    };
-
-export const STRIPE_PREMIUM_PAYMENT_LINK = isProd
-  ? "https://buy.stripe.com/eVqeVdcgn92G3Y70Xd6oo04"
-  : "https://buy.stripe.com/test_eVqeVdcgn92G3Y70Xd6oo04";
+export const STRIPE_PREMIUM_PAYMENT_LINK =
+  "https://buy.stripe.com/eVqeVdcgn92G3Y70Xd6oo04";
 
 // Coupon shop. A purchased coupon is the same Coupon {id,value,used} the
 // spin wheel grants: `value` is the USD-face discount and `value * 100` is
@@ -46,19 +33,12 @@ export const COUPON_PRODUCTS = [
 // (e.g. metadata[sku]=coupon_100), exactly like the points packs, and paste
 // the URLs here. Until a link is filled in, the web "Buy" button surfaces a
 // "not yet available" toast instead of redirecting to an empty URL.
-export const STRIPE_COUPON_PAYMENT_LINKS: Record<string, string> = isProd
-  ? {
-      coupon_100: "",
-      coupon_300: "",
-      coupon_500: "",
-      coupon_1000: "",
-    }
-  : {
-      coupon_100: "",
-      coupon_300: "",
-      coupon_500: "",
-      coupon_1000: "",
-    };
+export const STRIPE_COUPON_PAYMENT_LINKS: Record<string, string> = {
+  coupon_100: "",
+  coupon_300: "",
+  coupon_500: "",
+  coupon_1000: "",
+};
 
 export const RESEND_FROM_EMAIL = "noreply@mainwrld.com";
 export const RESEND_SUBJECT = "Welcome to MainWRLD!";

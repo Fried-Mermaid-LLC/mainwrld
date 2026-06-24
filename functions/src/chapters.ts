@@ -76,7 +76,8 @@ export const getChapterContent = onCall<
       // client-writable (save-to-library), so honouring it would let anyone
       // read a paid book for free by adding it to their library. Library
       // holders from BEFORE monetization are grandfathered into purchasedBookIds
-      // server-side by the onBookMonetized trigger, so they keep access.
+      // server-side by the API's MonetizationEffectsService.onApproved (the
+      // approve endpoint), so they keep access.
       owns = (u.purchasedBookIds || []).includes(bookId)
     }
     if (!isFreeOrUnmonetized && !isPreview && !owns) {

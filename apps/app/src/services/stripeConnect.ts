@@ -14,11 +14,10 @@ export const openStripeUrl = async (url: string): Promise<void> => {
   window.location.href = url;
 };
 
-// Stripe Connect mode is explicit (VITE_STRIPE_MODE), defaulting to test so
-// device/dev testing is safe. The mode + origin are forwarded to the API which
-// picks the matching key and builds correct return/success URLs.
-const MODE: 'live' | 'test' =
-  import.meta.env.VITE_STRIPE_MODE === 'live' ? 'live' : 'test';
+// Stripe runs on LIVE everywhere — there is no test/live toggle anymore. The
+// mode + origin are still forwarded to the API, which picks the matching key
+// and builds correct return/success URLs.
+const MODE = 'live' as const;
 const origin = () =>
   typeof window !== 'undefined' ? window.location.origin : '';
 

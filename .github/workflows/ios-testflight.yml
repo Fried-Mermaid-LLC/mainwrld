@@ -6,14 +6,6 @@ on:
     paths:
       - "apps/app/**"
   workflow_dispatch:
-    inputs:
-      stripe_mode:
-        description: 'Stripe Connect mode — keep "test" for TestFlight; choose "live" only for an App Store release build'
-        type: choice
-        options:
-          - test
-          - live
-        default: test
 
 concurrency:
   group: ios-testflight
@@ -53,9 +45,6 @@ jobs:
       - name: Build web
         run: pnpm run build:web
         env:
-          # TestFlight defaults to Stripe TEST. Only a manual run dispatched with
-          # stripe_mode=live (an App Store release build) takes real payments.
-          VITE_STRIPE_MODE: ${{ github.event.inputs.stripe_mode || 'test' }}
           # Base URL of the NestJS API (Cloud Run / api.mainwrld.com). REQUIRED
           # by lib/apiClient.ts — without it the bundle throws at import and the
           # native app dies on the bootGuard "Couldn't start the app" screen.
