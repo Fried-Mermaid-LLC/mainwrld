@@ -40,6 +40,21 @@ export const adminApi = {
       `/admin/users/${encodeURIComponent(uid)}/strikes`,
       { reportId }
     ),
+  // Counterpart to addStrike. `strikes` is a server-managed/protected field, so
+  // reducing it must go through this admin endpoint — a profile PATCH would drop
+  // it (own profile) or no-op (another user's).
+  removeStrike: (uid: string) =>
+    api.del<{ strikes: number }>(
+      `/admin/users/${encodeURIComponent(uid)}/strikes`
+    ),
+
+  // Terminal book take-down. Stamps server-managed flags (takenDown/isMonetized)
+  // that the author-facing PATCH /books/:id whitelists away, so it must run
+  // through this admin endpoint.
+  takeDownBook: (bookId: string) =>
+    api.post<{ bookId: string }>(
+      `/admin/books/${encodeURIComponent(bookId)}/takedown`
+    ),
 
   rotateSpotlight: () => api.post<{ ok: boolean; bookId?: string }>('/spotlight/rotate'),
 };

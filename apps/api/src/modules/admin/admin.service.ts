@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   PreconditionFailedException,
 } from '@nestjs/common';
 import type { Auth } from 'firebase-admin/auth';
@@ -27,6 +28,32 @@ export class AdminService {
 
   private get users() {
     return this.db.collection(COLLECTIONS.users);
+  }
+
+  // Terminal moderation take-down of a book. takenDown/takenDownAt/isMonetized
+  // are SERVER-MANAGED: the author-facing PATCH /books/:id whitelists them out
+  // (CreateBookDto omits them on purpose), so a take-down routed through that
+  // endpoint silently loses every flag except isDraft/isFree. This dedicated
+  // admin path stamps them with admin authority. `takenDown` is the gate read
+  // by chapters/monetization services; demonetize + hide complete the take-down.
+  // Permanent by design: firestore.rules forbid clearing takenDown or
+  // re-publishing a taken-down book.
+  async takeDownBook(bookId: string): Promise<{ bookId: string }> {
+    const ref = this.db.collection(COLLECTIONS.books).doc(bookId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new NotFoundException('Book not found');
+    }
+    await ref.update({
+      takenDown: true,
+      takenDownAt: new Date().toISOString(),
+      isMonetized: false,
+      isFree: false,
+      isDraft: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    this.logger.log(`takeDownBook complete: ${bookId}`);
+    return { bookId };
   }
 
   async setAdmin(
@@ -161,5 +188,23 @@ export class AdminService {
       banned = true;
     }
     return { strikes, banned };
+  }
+
+  // Remove one strike (admin "reduce strike" action). The counterpart to
+  // addStrike: `strikes` is a PROTECTED_FIELD on PATCH /users/me, and a
+  // moderator editing ANOTHER user's profile has no self-patch path — so this
+  // MUST run through a dedicated admin endpoint, not updateUserProfile (which
+  // is a no-op for a non-self uid). Clamped at 0; never auto-unbans.
+  async removeStrike(targetUid: string): Promise<{ strikes: number }> {
+    const ref = this.users.doc(targetUid);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new NotFoundException('User not found');
+    }
+    const current = (snap.data()?.strikes as number) || 0;
+    const strikes = Math.max(0, current - 1);
+    await ref.update({ strikes });
+    this.logger.log(`removeStrike ${targetUid}: ${current} -> ${strikes}`);
+    return { strikes };
   }
 }

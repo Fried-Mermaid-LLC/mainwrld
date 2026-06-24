@@ -189,17 +189,12 @@ export function useAdmin({
     // deleted book is unrecoverable). Demonetize + hide as a draft + stamp the
     // terminal `takenDown` flag. The book can then never be read (chapters.ts
     // blocks taken-down books), re-published or re-monetized (firestore.rules +
-    // submitMonetizationRequest enforce permanence). The isMonetized true→false
-    // transition also fires onBookMonetized → stamps the permanence flags.
-    fbService
-      .updateBook(bookId, {
-        takenDown: true,
-        takenDownAt: new Date().toISOString(),
-        isMonetized: false,
-        isFree: false,
-        isDraft: true
-      })
-      .catch(console.error)
+    // submitMonetizationRequest enforce permanence).
+    //
+    // takenDown/takenDownAt/isMonetized are server-managed: the author-facing
+    // PATCH /books/:id whitelists them out, so this MUST go through the dedicated
+    // admin endpoint, which stamps them server-side with admin authority.
+    fbService.takeDownBook(bookId).catch(console.error)
     // Optimistic: hide the book from client lists immediately (AdminDashboard +
     // readers filter on isDraft). takenDown* are server-side gates, not rendered.
     setBooks(prev =>
@@ -267,9 +262,10 @@ export function useAdmin({
   const handleRemoveStrike = (username: string) => {
     const targetUser = registeredUsers.find(u => u.username === username)
     if (targetUser?.uid && targetUser.strikes > 0) {
-      fbService
-        .updateUserProfile(targetUser.uid, { strikes: targetUser.strikes - 1 })
-        .catch(console.error)
+      // `strikes` is server-managed (PROTECTED on PATCH /users/me) and this
+      // targets ANOTHER user, so updateUserProfile is a no-op here — route
+      // through the dedicated admin endpoint that decrements server-side.
+      fbService.removeStrikeFromUser(targetUser.uid).catch(console.error)
     }
     setRegisteredUsers(prev =>
       prev.map(u =>

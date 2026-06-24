@@ -248,4 +248,55 @@ describe('AdminService', () => {
       expect(fs.dump('users/admin1')!.strikes).toBe(0);
     });
   });
+
+  describe('removeStrike', () => {
+    it('decrements the strike count by one', async () => {
+      fs.seed('users/t1', { username: 'victim', strikes: 2 });
+
+      const res = await svc.removeStrike('t1');
+
+      expect(res).toEqual({ strikes: 1 });
+      expect(fs.dump('users/t1')!.strikes).toBe(1);
+    });
+
+    it('clamps at zero (never negative)', async () => {
+      fs.seed('users/t1', { username: 'victim', strikes: 0 });
+
+      const res = await svc.removeStrike('t1');
+
+      expect(res).toEqual({ strikes: 0 });
+      expect(fs.dump('users/t1')!.strikes).toBe(0);
+    });
+
+    it('throws NotFound for a missing user (no write)', async () => {
+      await expect(svc.removeStrike('ghost')).rejects.toThrow('User not found');
+      expect(fs.dump('users/ghost')).toBeUndefined();
+    });
+  });
+
+  describe('takeDownBook', () => {
+    it('stamps the server-managed take-down flags the author DTO drops', async () => {
+      fs.seed('books/b1', {
+        title: 'Guide',
+        isDraft: false,
+        isFree: true,
+        isMonetized: true,
+      });
+
+      const res = await svc.takeDownBook('b1');
+
+      expect(res).toEqual({ bookId: 'b1' });
+      const after = fs.dump('books/b1')!;
+      expect(after.takenDown).toBe(true);
+      expect(typeof after.takenDownAt).toBe('string');
+      expect(after.isMonetized).toBe(false);
+      expect(after.isFree).toBe(false);
+      expect(after.isDraft).toBe(true);
+    });
+
+    it('throws NotFound for a missing book (no write)', async () => {
+      await expect(svc.takeDownBook('ghost')).rejects.toThrow('Book not found');
+      expect(fs.dump('books/ghost')).toBeUndefined();
+    });
+  });
 });

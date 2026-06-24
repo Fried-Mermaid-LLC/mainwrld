@@ -404,5 +404,8 @@ export const subscribeToReports = (cb: Cb<any[]>): Unsub =>
 
 export const addStrikeToUser = (uid: string, reportId?: string) =>
   adminApi.addStrike(uid, reportId);
+export const removeStrikeFromUser = (uid: string) =>
+  adminApi.removeStrike(uid);
 export const banUser = (uid: string) => adminApi.ban(uid);
 export const unbanUser = (uid: string) => adminApi.unban(uid);
+export const takeDownBook = (bookId: string) => adminApi.takeDownBook(bookId);
