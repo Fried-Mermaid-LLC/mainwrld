@@ -2,7 +2,15 @@ import React from 'react';
 import { Book } from '@/types';
 import { BASE } from '@/config/config';
 
-export const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false }: any) => {
+export const Spinner = ({ className = '' }: { className?: string }) => (
+  <span
+    className={`inline-block w-5 h-5 rounded-full border-2 border-current border-t-transparent animate-spin ${className}`}
+    role="status"
+    aria-label="Loading"
+  />
+);
+
+export const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, loading = false }: any) => {
   const base = "h-14 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2";
   const styles: any = {
     primary: "bg-accent text-white shadow-xl shadow-accent/20",
@@ -11,8 +19,10 @@ export const Button = ({ children, onClick, variant = 'primary', className = '',
     ghost: "text-gray-400 hover:text-accent",
     destructive: "bg-red-500/10 text-red-500"
   };
+  const isDisabled = disabled || loading;
   return (
-    <button disabled={disabled} onClick={onClick} className={`${base} ${styles[variant]} ${className} ${disabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
+    <button disabled={isDisabled} onClick={onClick} className={`${base} ${styles[variant]} ${className} ${isDisabled ? 'opacity-30 cursor-not-allowed' : ''}`}>
+      {loading && <Spinner />}
       {children}
     </button>
   );
@@ -51,6 +61,7 @@ export const CoverImg = ({ book }: { book: Book }) => book.coverImage ? (
 
 export default {
   Button,
+  Spinner,
   Input,
   CoverImg,
 };

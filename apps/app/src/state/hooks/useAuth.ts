@@ -34,6 +34,10 @@ export function useAuth() {
   })
   const [loginForm, setLoginForm] = useState({ username: '', password: '' })
   const [authError, setAuthError] = useState<string | null>(null)
+  // In-flight flag for the login/signup actions (NOT the initial session
+  // restore, which is authLoading). Drives the spinner + disabled submit button
+  // on LoginView / SignupView so the form can't be double-submitted.
+  const [authBusy, setAuthBusy] = useState(false)
   // Admin authority lives ONLY in the Firebase Auth custom claim `admin`,
   // set by the setAdmin Cloud Function (Stage 2c) and enforced server-side by
   // Firestore Rules + the admin-gated callables. This client state mirrors the
@@ -76,6 +80,8 @@ export function useAuth() {
     setLoginForm,
     authError,
     setAuthError,
+    authBusy,
+    setAuthBusy,
     hasAdminClaim,
     setHasAdminClaim,
     isAdmin

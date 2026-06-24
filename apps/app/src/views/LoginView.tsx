@@ -4,7 +4,7 @@ import { SafeImg } from '@/components/SafeImg'
 import { useApp } from '@/state/AppContext'
 
 export const LoginView = () => {
-  const { setView, setAuthError, loginForm, setLoginForm, authError, handleLogin } = useApp()
+  const { setView, setAuthError, loginForm, setLoginForm, authError, authBusy, handleLogin } = useApp()
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto animate-in fade-in duration-500'>
       <button
@@ -57,8 +57,8 @@ export const LoginView = () => {
           {authError}
         </p>
       )}
-      <Button className='w-full max-w-sm shrink-0' onClick={handleLogin}>
-        Continue
+      <Button className='w-full max-w-sm shrink-0' onClick={handleLogin} loading={authBusy}>
+        {authBusy ? 'Logging in…' : 'Continue'}
       </Button>
       <button
         onClick={() => {

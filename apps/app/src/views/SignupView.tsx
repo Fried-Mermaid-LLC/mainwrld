@@ -2,7 +2,7 @@ import { Button, Input } from '@/components/sharedComponents'
 import { useApp } from '@/state/AppContext'
 
 export const SignupView = () => {
-  const { setView, setAuthError, signUpForm, setSignUpForm, authError, handleSignup } = useApp()
+  const { setView, setAuthError, signUpForm, setSignUpForm, authError, authBusy, handleSignup } = useApp()
   return (
     <div className='fixed inset-0 bg-white p-8 overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500'>
       <header className='flex items-center gap-4 mb-10'>
@@ -76,8 +76,8 @@ export const SignupView = () => {
             {authError}
           </p>
         )}
-        <Button className='w-full' onClick={handleSignup}>
-          Join MainWRLD
+        <Button className='w-full' onClick={handleSignup} loading={authBusy}>
+          {authBusy ? 'Creating account…' : 'Join MainWRLD'}
         </Button>
       </div>
     </div>

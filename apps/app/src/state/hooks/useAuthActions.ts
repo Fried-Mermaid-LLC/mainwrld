@@ -22,6 +22,7 @@ interface AuthActionsDeps {
   setAuthLoading: Dispatch<SetStateAction<boolean>>
   setUserDataLoaded: Dispatch<SetStateAction<boolean>>
   setAuthError: Dispatch<SetStateAction<string | null>>
+  setAuthBusy: Dispatch<SetStateAction<boolean>>
   setRegisteredUsers: Dispatch<SetStateAction<any[]>>
   firebaseUid: string | null
   BLANK_USER: User
@@ -54,6 +55,7 @@ export function useAuthActions({
   setAuthLoading,
   setUserDataLoaded,
   setAuthError,
+  setAuthBusy,
   setRegisteredUsers,
   firebaseUid,
   BLANK_USER,
@@ -192,6 +194,7 @@ export function useAuthActions({
   }
 
   const handleLogin = async () => {
+    setAuthBusy(true)
     try {
       const result = await fbService.logIn(
         loginForm.username,
@@ -228,12 +231,16 @@ export function useAuthActions({
         .catch(console.error)
     } catch (err: any) {
       setAuthError(err.message || 'Invalid username or password.')
+    } finally {
+      setAuthBusy(false)
     }
   }
 
   const handleSignup = async () => {
     const { username, displayName, password, email } = signUpForm
 
+    setAuthBusy(true)
+    try {
     // Validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
@@ -360,6 +367,9 @@ export function useAuthActions({
       } else {
         setAuthError(err.message || 'Signup failed. Please try again.')
       }
+    }
+    } finally {
+      setAuthBusy(false)
     }
   }
 
