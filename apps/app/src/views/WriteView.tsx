@@ -135,6 +135,10 @@ export const WriteView = () => {
   const [unpublishConfirmIdx, setUnpublishConfirmIdx] = useState<number | null>(
     null
   )
+  // Mirror keyboardOffset into a ref so the stable ensureCaretVisible callback
+  // can read the live toolbar position without being re-created each keystroke.
+  const keyboardOffsetRef = useRef(0)
+  keyboardOffsetRef.current = keyboardOffset
   const editorRef = useRef<HTMLDivElement>(null)
   const loadedEditorTargetRef = useRef('')
   const lastValidHtmlRef = useRef('')
@@ -144,6 +148,12 @@ export const WriteView = () => {
   const dirtyDraftRef = useRef(false)
   const saveTimerRef = useRef<number | null>(null)
   const saveInFlightRef = useRef(false)
+  // Debounced word-count recompute. innerText + innerHTML serialization + a
+  // React re-render are all O(document) and were running on every keystroke,
+  // which lags large chapters. We coalesce them to fire shortly after typing.
+  const wordCountTimerRef = useRef<number | null>(null)
+  // Coalesces ensureCaretVisible so rapid keystrokes queue at most one rAF.
+  const caretRafRef = useRef<number | null>(null)
   // Debounced autosave: scheduled on each text/chapter-title change so edits
   // persist shortly after typing stops, instead of waiting up to the 30s tick.
   // performDraftSave is referenced via a ref to avoid a declaration-order cycle
@@ -219,7 +229,11 @@ export const WriteView = () => {
       return
     }
 
-    requestAnimationFrame(() => {
+    // Coalesce: if a frame is already pending, let it do the work. Typing fast
+    // would otherwise queue one forced-reflow rAF per character.
+    if (caretRafRef.current != null) return
+    caretRafRef.current = requestAnimationFrame(() => {
+      caretRafRef.current = null
       const selection = window.getSelection()
       // No selection or an unreadable (0/0) rect: do nothing and let the
       // browser's native caret-into-view scrolling handle it. Jumping to
@@ -231,16 +245,24 @@ export const WriteView = () => {
       range.collapse(false)
       const rect = range.getBoundingClientRect()
       const containerRect = scrollContainer.getBoundingClientRect()
-      const padding = 56
 
       if (rect.top === 0 && rect.bottom === 0) return
 
+      // The formatting toolbar (h-12 = 48px) is a fixed bar sitting at
+      // `bottom: keyboardOffset`, overlapping the bottom of the scroll
+      // container. Reserve its height plus a comfortable gap so the active
+      // line never slides under it and always keeps breathing room below.
+      const TOOLBAR_HEIGHT = 48
+      const BOTTOM_GAP = 96
+      const bottomPad = keyboardOffsetRef.current + TOOLBAR_HEIGHT + BOTTOM_GAP
+      const topPad = 96
+
       // Only adjust scroll when the caret is genuinely outside the visible band.
-      if (rect.bottom > containerRect.bottom - padding) {
+      if (rect.bottom > containerRect.bottom - bottomPad) {
         scrollContainer.scrollTop +=
-          rect.bottom - (containerRect.bottom - padding)
-      } else if (rect.top < containerRect.top + padding) {
-        scrollContainer.scrollTop -= containerRect.top + padding - rect.top
+          rect.bottom - (containerRect.bottom - bottomPad)
+      } else if (rect.top < containerRect.top + topPad) {
+        scrollContainer.scrollTop -= containerRect.top + topPad - rect.top
       }
     })
   }, [])
@@ -296,11 +318,38 @@ export const WriteView = () => {
     }
   }, [calculateWordCount, onNotify])
 
+  // Debounced wrapper around the heavy recompute. Keeps the live counter close
+  // to current without paying the full-document cost on every keystroke.
+  const WORD_COUNT_DEBOUNCE_MS = 250
+  const scheduleWordCountUpdate = useCallback(() => {
+    if (wordCountTimerRef.current) window.clearTimeout(wordCountTimerRef.current)
+    wordCountTimerRef.current = window.setTimeout(() => {
+      wordCountTimerRef.current = null
+      updateWordCount()
+    }, WORD_COUNT_DEBOUNCE_MS)
+  }, [updateWordCount])
+
+  // Run any pending recompute immediately (on blur / before save & publish) so
+  // the counter, canPublish gate and lastValidHtmlRef reflect the final text.
+  const flushWordCountUpdate = useCallback(() => {
+    if (wordCountTimerRef.current) {
+      window.clearTimeout(wordCountTimerRef.current)
+      wordCountTimerRef.current = null
+    }
+    updateWordCount()
+  }, [updateWordCount])
+
   const handleBeforeInput = useCallback(
     (event: React.FormEvent<HTMLDivElement>) => {
       const nativeEvent = event.nativeEvent as InputEvent
       if (!nativeEvent?.inputType?.startsWith('insert') || !editorRef.current)
         return
+
+      // Fast path: when comfortably below the limit, skip the expensive
+      // innerText read + full-text word count on every insert. The cached
+      // count can lag a debounce window, but the 200-word margin dwarfs any
+      // realistic drift, so the hard cap below is never reached unguarded.
+      if (wordCountRef.current < MAX_WORD_COUNT - 200) return
 
       const currentCount = calculateWordCount(editorRef.current.innerText || '')
       const remainingWords = MAX_WORD_COUNT - currentCount
@@ -411,15 +460,16 @@ export const WriteView = () => {
       // Flag dirty BEFORE any early return so autosave never misses a change.
       dirtyDraftRef.current = true
       scheduleAutoSave()
-      updateWordCount()
-      // The browser already scrolls the caret into view on input, so only
-      // run our manual adjustment when a new block/line was created — that is
-      // the one case native scrolling can momentarily get wrong.
-      const inputType = (event.nativeEvent as InputEvent).inputType
-      if (inputType === 'insertParagraph' || inputType === 'insertLineBreak')
+      scheduleWordCountUpdate()
+      // Keep the caret above the fixed formatting toolbar on every edit. The
+      // browser's native caret-into-view scroll is unaware of that overlapping
+      // bar, so without this the active line slides invisibly underneath it.
+      // Skip IME composition so we never fight predictive text / dictation.
+      const ie = event.nativeEvent as InputEvent
+      if (!ie.isComposing && ie.inputType !== 'insertCompositionText')
         ensureCaretVisible()
     },
-    [updateWordCount, ensureCaretVisible, scheduleAutoSave]
+    [scheduleWordCountUpdate, ensureCaretVisible, scheduleAutoSave]
   )
 
   const handleEditorKeyDown = useCallback(
@@ -435,11 +485,11 @@ export const WriteView = () => {
         document.execCommand('insertParagraph')
         dirtyDraftRef.current = true
         scheduleAutoSave()
-        updateWordCount()
+        scheduleWordCountUpdate()
         ensureCaretVisible()
       }
     },
-    [updateWordCount, ensureCaretVisible, scheduleAutoSave]
+    [scheduleWordCountUpdate, ensureCaretVisible, scheduleAutoSave]
   )
 
   const setSavedIndicator = useCallback((state: 'saved' | 'idle' | 'error') => {
@@ -618,6 +668,12 @@ export const WriteView = () => {
       if (autoSaveTimerRef.current) {
         window.clearTimeout(autoSaveTimerRef.current)
       }
+      if (wordCountTimerRef.current) {
+        window.clearTimeout(wordCountTimerRef.current)
+      }
+      if (caretRafRef.current != null) {
+        cancelAnimationFrame(caretRafRef.current)
+      }
     }
   }, [])
 
@@ -679,10 +735,11 @@ export const WriteView = () => {
 
   return (
     <div
-      className={`fixed inset-0 bg-white flex flex-col animate-in fade-in duration-500 overflow-hidden ${
+      className={`fixed inset-0 bg-white flex flex-col items-center animate-in fade-in duration-500 overflow-hidden ${
         isWriting ? 'pb-0' : 'pb-20'
       }`}
     >
+      <div className='w-full max-w-3xl flex-1 flex flex-col min-h-0'>
       {isWriting ? (
         <header className='px-4 py-3 border-b border-gray-50 flex justify-between items-center gap-3 bg-white z-50 animate-in slide-in-from-top-2 duration-200'>
           <div className='flex flex-col min-w-0'>
@@ -854,7 +911,7 @@ export const WriteView = () => {
                 spellCheck='true'
                 data-placeholder='Start writing your chapter…'
                 className={`w-full bg-transparent border-none outline-none text-base leading-relaxed resize-none no-scrollbar focus:ring-0 rich-editor ${
-                  isWriting ? 'min-h-[70vh]' : 'min-h-[400px] px-6 py-5'
+                  isWriting ? 'min-h-[70vh] pb-[45vh]' : 'min-h-[400px] px-6 py-5'
                 }`}
                 style={{
                   WebkitUserSelect: 'text',
@@ -867,7 +924,12 @@ export const WriteView = () => {
                 onPaste={handlePaste}
                 onInput={handleEditorInput}
                 onFocus={() => setIsWriting(true)}
-                onBlur={() => setIsWriting(false)}
+                onBlur={() => {
+                  // Flush any debounced recompute so the counter / publish gate
+                  // reflect the final text the moment the editor is left.
+                  flushWordCountUpdate()
+                  setIsWriting(false)
+                }}
                 onTouchStart={e => {
                   const t = e.touches[0]
                   editorTouchStartRef.current = t
@@ -1004,10 +1066,11 @@ export const WriteView = () => {
         </div>
       </div>
       )}
+      </div>
 
       {isWriting && (
         <div
-          className='fixed left-0 right-0 z-[80] h-12 bg-white/95 backdrop-blur-xl border-t border-gray-100 flex items-center gap-0.5 px-2 overflow-x-auto no-scrollbar animate-in slide-in-from-bottom-2 duration-150'
+          className='fixed left-1/2 -translate-x-1/2 w-full max-w-3xl z-80 h-12 bg-white/95 backdrop-blur-xl border-t border-gray-100 flex items-center gap-0.5 px-2 overflow-x-auto no-scrollbar animate-in slide-in-from-bottom-2 duration-150'
           style={{ bottom: keyboardOffset }}
         >
           {FORMAT_ACTIONS.map((action, idx) =>
