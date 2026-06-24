@@ -23,8 +23,14 @@ export const WorldLoadingOverlay = () => {
   }, [active])
 
   useEffect(() => {
-    // Normal path: a load cycle ran and has now gone idle at 100%.
-    if (startedRef.current && !active && progress >= 100) setDone(true)
+    // Normal path: a load cycle ran and has now gone idle at 100%. Wait a beat
+    // after the GLBs are in so the renderer has a frame or two to actually paint
+    // the scene before we fade the cover out — otherwise the reveal can flash an
+    // empty world for an instant.
+    if (startedRef.current && !active && progress >= 100) {
+      const reveal = setTimeout(() => setDone(true), 1000)
+      return () => clearTimeout(reveal)
+    }
   }, [active, progress])
 
   useEffect(() => {
