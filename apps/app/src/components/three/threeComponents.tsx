@@ -378,7 +378,7 @@ export const Player: React.FC<{
       meshRef.current.rotation.y = Math.atan2(direction.x, direction.z)
     }
 
-    const idealOffset = new THREE.Vector3(0, 5, 8).add(meshRef.current.position)
+    const idealOffset = new THREE.Vector3(0, 3.2, 5).add(meshRef.current.position)
     camera.position.lerp(idealOffset, 0.1)
     camera.lookAt(
       meshRef.current.position.x,
