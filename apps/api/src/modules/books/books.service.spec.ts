@@ -1,4 +1,5 @@
 import { BooksService } from './books.service';
+import { ChapterMetaDto } from './dto/create-book.dto';
 import {
   FakeFirestore,
   createFakeModeration,
@@ -73,6 +74,27 @@ describe('BooksService', () => {
         authorUsername: 'dtoname',
       } as any);
       expect(book.authorUsername).toBe('dtoname');
+    });
+
+    it('persists nested chapterMeta DTO instances as plain objects', async () => {
+      // The ValidationPipe hydrates chapterMeta into ChapterMetaDto instances;
+      // Firestore rejects objects with a custom prototype, so create() must
+      // strip them back to plain objects.
+      const meta = Object.assign(new ChapterMetaDto(), {
+        id: 'c1',
+        title: 'Chapter 1',
+      });
+      const book = await svc.create(makeAuthUser({ uid: 'u1' }), {
+        id: 'b1',
+        title: 'T',
+        chapterMeta: [meta],
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.chapterMeta).toEqual([{ id: 'c1', title: 'Chapter 1' }]);
+      expect(Object.getPrototypeOf(stored.chapterMeta[0])).toBe(
+        Object.prototype,
+      );
+      expect(book.chapterMeta).toEqual([{ id: 'c1', title: 'Chapter 1' }]);
     });
 
     it('drops a client-supplied likes array on create (non-admin)', async () => {

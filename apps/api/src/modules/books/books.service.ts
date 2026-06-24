@@ -6,6 +6,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { instanceToPlain } from 'class-transformer';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import type { Storage } from 'firebase-admin/storage';
 import type { AuthUser } from '../../infra/auth/auth-user.interface';
@@ -85,8 +86,12 @@ export class BooksService {
     const id =
       dto.id && /^[A-Za-z0-9_-]{1,128}$/.test(dto.id) ? dto.id : this.col.doc().id;
     const { id: _ignored, ...rest } = dto;
+    // The ValidationPipe (transform: true) hydrates nested @Type() fields like
+    // `chapterMeta` into class instances (ChapterMetaDto). Firestore rejects
+    // objects with a custom prototype, so strip prototypes back to plain
+    // objects before writing.
     const data = {
-      ...rest,
+      ...instanceToPlain(rest),
       id,
       authorUid: user.uid,
       authorUsername: user.username ?? dto.authorUsername ?? null,
@@ -119,7 +124,12 @@ export class BooksService {
     const ex = existing as { isMature?: boolean; isExplicit?: boolean };
     const mature = (dto.isMature ?? ex.isMature ?? ex.isExplicit) === true;
     await this.screenMetadata(dto.title, dto.tagline, mature);
-    await ref.update({ ...dto, updatedAt: FieldValue.serverTimestamp() });
+    // See create(): nested @Type() fields arrive as class instances; Firestore
+    // only serializes plain objects.
+    await ref.update({
+      ...instanceToPlain(dto),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
     const after = await ref.get();
     return { id, ...after.data() } as BookDoc;
   }
