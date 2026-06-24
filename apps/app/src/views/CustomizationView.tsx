@@ -1,6 +1,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { BASE } from '@/config/config';
 import { AvatarLayers, AVATAR_ITEMS, getHairPosition, getFacePosition, HAIR_POSITIONS, FACE_POSITIONS } from '@/components/avatar';
+import { AvatarPreview } from '@/components/three/AvatarPreview';
 import { SafeImg } from '@/components/SafeImg';
 import { AvatarCategory, AvatarConfig, AvatarGender, AvatarItem, User } from '@/types';
 import { useApp } from '@/state/AppContext';
@@ -269,7 +270,10 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
 
             <div className="flex-1 flex flex-col lg:flex-row min-h-0">
             <div className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-4 min-h-0 relative overflow-hidden">
-                {localConfig && (
+                {/* Admins tuning the 2D hair/face overlay positions (used by the
+                    profile thumbnails) need to see the 2D avatar; everyone else
+                    gets the live 3D model, same as the world in Home. */}
+                {localConfig && adjustMode ? (
                     <div className="relative w-52 md:w-64 aspect-[140/194] transition-transform duration-300 ease-out" style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}>
                         <AvatarLayers
                             avatarConfig={localConfig}
@@ -285,6 +289,8 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                             })()}
                         />
                     </div>
+                ) : (
+                    <AvatarPreview avatarConfig={localConfig} />
                 )}
 
                 {isAdmin && adjustMode && localConfig && (adjustTarget === 'face' || localConfig.hairId !== 'none') && (
@@ -332,14 +338,6 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                             <span className="material-icons-round text-sm mr-1 align-middle">swap_horiz</span>
                             Switch
                         </button>
-                    </div>
-                )}
-
-                {isAdmin && (
-                    <div className="absolute top-3 right-3 flex gap-1 z-50">
-                        <button onClick={() => setZoomLevel(z => Math.min(z + 0.5, 3))} className="w-8 h-8 rounded-full bg-white/80 backdrop-blur border flex items-center justify-center text-gray-500 hover:text-accent hover:border-accent transition text-sm font-bold">+</button>
-                        <button onClick={() => setZoomLevel(z => Math.max(z - 0.5, 1))} className="w-8 h-8 rounded-full bg-white/80 backdrop-blur border flex items-center justify-center text-gray-500 hover:text-accent hover:border-accent transition text-sm font-bold">−</button>
-                        {zoomLevel > 1 && <button onClick={() => setZoomLevel(1)} className="px-2 h-8 rounded-full bg-white/80 backdrop-blur border flex items-center justify-center text-gray-500 hover:text-accent hover:border-accent transition text-[10px] font-bold uppercase">Reset</button>}
                     </div>
                 )}
 

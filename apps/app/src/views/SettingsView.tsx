@@ -195,7 +195,7 @@ export const SettingsView = () => {
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500'>
-      <header className='p-6 flex items-center gap-4'>
+      <header className='p-6 flex items-center gap-4 max-w-2xl mx-auto w-full'>
         <button
           onClick={onBack}
           className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
@@ -353,7 +353,7 @@ export const SettingsView = () => {
         </div>
       )}
 
-      <div className='p-6 space-y-10 pb-32'>
+      <div className='p-6 space-y-10 pb-32 max-w-2xl mx-auto'>
         <section className='space-y-4'>
           <h3 className='text-[10px] font-bold text-gray-300 uppercase tracking-widest ml-4'>
             Account & Privacy

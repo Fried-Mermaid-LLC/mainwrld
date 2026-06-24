@@ -87,6 +87,7 @@ export const AvatarModel: React.FC<{
   skinColor?: string
   avatarConfig?: AvatarConfig
   isMoving?: boolean
+  hideLabel?: boolean
 }> = ({
   name,
   activity,
@@ -95,7 +96,8 @@ export const AvatarModel: React.FC<{
   isPlayer,
   skinColor,
   avatarConfig,
-  isMoving = false
+  isMoving = false,
+  hideLabel = false
 }) => {
   // Animated avatar models are served from public/characters_animated/. useGLTF
   // caches by URL, so the ~16MB man / ~11MB woman models load once and are
@@ -236,6 +238,7 @@ export const AvatarModel: React.FC<{
     >
       <primitive ref={avatarRef} object={scene} />
 
+      {!hideLabel && (
       <Html position={[0, 2.4, 0]} center distanceFactor={10}>
         <div className='flex flex-col items-center pointer-events-none select-none'>
           <div className='flex items-center gap-1.5 px-3 py-1 bg-white/95 dark:bg-black/90 backdrop-blur-md rounded-full shadow-lg border border-gray-100 dark:border-gray-800'>
@@ -256,6 +259,7 @@ export const AvatarModel: React.FC<{
           </div>
         </div>
       </Html>
+      )}
     </group>
   )
 }
