@@ -35,9 +35,24 @@ body {
   padding: 0;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
+  /* Dragging the joystick / rotating the camera was selecting viewport text
+     and the tab-bar labels. This is a native Capacitor app, so disable text
+     selection + the iOS long-press callout app-wide and opt selection back in
+     only where it's genuinely useful (inputs and the reader). */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   /* Dynamic viewport height accounts for iOS browser chrome / Dynamic
      Island. 100dvh = 100% of the visible viewport height. */
   height: 100dvh;
+}
+
+/* Re-enable selection where the user actually types or selects text. */
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 #root {

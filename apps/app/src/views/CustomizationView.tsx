@@ -321,7 +321,7 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                 )}
 
                 {!adjustMode && (
-                    <div className="absolute bottom-3 right-3 flex gap-2">
+                    <div className="absolute top-3 right-3 flex gap-2">
                         {isAdmin && (activeCategory === 'hair' || activeCategory === 'face') && localConfig && (activeCategory === 'face' || localConfig.hairId !== 'none') && (
                             <button
                                 onClick={() => { setAdjustTarget(activeCategory as 'hair' | 'face'); setAdjustMode(!adjustMode); }}
@@ -341,7 +341,8 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                     </div>
                 )}
 
-                {isAdmin && !adjustMode && (
+                {/* Export/Import временно скрыты (накладывались на Adjust). Не удалять — нужны для тюнинга позиций. */}
+                {false && isAdmin && !adjustMode && (
                     <div className="absolute bottom-3 left-3 flex gap-2">
                         <button onClick={handleExportPositions} className="px-3 py-1.5 rounded-full bg-white/80 backdrop-blur border text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent hover:border-accent transition">
                             <span className="material-icons-round text-sm mr-1 align-middle">download</span>

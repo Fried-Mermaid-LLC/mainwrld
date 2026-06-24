@@ -179,7 +179,7 @@ export const HomeView = () => {
           than calling setMoveDir: Player reads moveDir live every frame in
           useFrame, so in-place writes drive movement without re-rendering
           HomeView (and re-running the mutual-avatar layout) 60× a second. */}
-      <div className='absolute bottom-32 right-8 pointer-events-none'>
+      <div className='absolute bottom-16 right-8 pointer-events-none'>
         <VirtualJoystick
           onChange={(x, z) => {
             moveDir.set(x, 0, z)

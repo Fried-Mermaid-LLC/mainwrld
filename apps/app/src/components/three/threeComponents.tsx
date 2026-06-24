@@ -239,7 +239,7 @@ export const AvatarModel: React.FC<{
       <primitive ref={avatarRef} object={scene} />
 
       {!hideLabel && (
-      <Html position={[0, 2.4, 0]} center distanceFactor={10}>
+      <Html position={[0, 2.1, 0]} center distanceFactor={10}>
         <div className='flex flex-col items-center pointer-events-none select-none'>
           <div className='flex items-center gap-1.5 px-3 py-1 bg-white/95 dark:bg-black/90 backdrop-blur-md rounded-full shadow-lg border border-gray-100 dark:border-gray-800'>
             <div
@@ -252,8 +252,8 @@ export const AvatarModel: React.FC<{
             </span>
           </div>
 
-          <div className='mt-1 px-2 py-0.5 bg-accent/10 rounded-md border border-accent/20'>
-            <span className='text-[8px] font-bold uppercase tracking-widest text-accent'>
+          <div className='mt-0.5 px-1 py-px bg-accent/10 rounded-sm border border-accent/20'>
+            <span className='text-[4px] font-bold uppercase tracking-wider text-accent'>
               {activity}
             </span>
           </div>
