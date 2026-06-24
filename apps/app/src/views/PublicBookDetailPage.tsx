@@ -19,6 +19,7 @@ export const PublicBookDetailPage = () => {
     handleSaveToLibrary,
     handleRemoveFromLibrary,
     isBookInLibrary,
+    isBookPurchased,
     handleShareBook,
     handleToggleFavorite,
     handleDeleteBook,
@@ -37,6 +38,10 @@ export const PublicBookDetailPage = () => {
     (c: any) => c.bookId === book.id
   ).length
   const isOwned = getUserOwnedBookIds().has(book.id)
+  // Read access for a monetized book requires an actual purchase — merely saving
+  // it to the library (ownedBookIds) must not unlock reading. isOwned still
+  // drives library visibility (Save/Remove), but the Read/Buy gate uses this.
+  const isPurchased = isBookPurchased(book.id)
   const bookProgress: any = getUserBookProgress(book.id)
   const onBack = () => setView('explore')
   // Mature gate: a viewer who can't see mature content (toggle off / age
@@ -302,7 +307,7 @@ export const PublicBookDetailPage = () => {
         )}
 
         <div className='w-full max-w-sm space-y-3'>
-          {isOwned || isAuthor || book.isFree || !book.isMonetized ? (
+          {isPurchased || isAuthor || book.isFree || !book.isMonetized ? (
             <Button className='w-full' onClick={onRead}>
               <span className='material-icons-round text-sm'>auto_stories</span>{' '}
               {(bookProgress?.scrollProgress ?? 0) > 0 ? 'Continue' : 'Read'}

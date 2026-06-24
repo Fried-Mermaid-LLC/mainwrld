@@ -346,6 +346,17 @@ export function useReading({
     [userBookData, user.username]
   )
 
+  // True only for genuinely paid books. Unlike getUserOwnedBookIds() (which
+  // unions ownedBookIds + purchasedBookIds), this checks purchasedBookIds alone,
+  // so a monetized book merely saved to the library does NOT count as bought.
+  const isBookPurchased = useCallback(
+    (bookId: string): boolean => {
+      const purchased = userBookData[user.username]?.purchasedBookIds || []
+      return purchased.includes(bookId)
+    },
+    [userBookData, user.username]
+  )
+
   const handlePublish = async (data: any) => {
     try {
       // Daily chapter publish limit
@@ -964,6 +975,7 @@ export function useReading({
     handleSaveToLibrary,
     handleRemoveFromLibrary,
     isBookInLibrary,
+    isBookPurchased,
     handlePublish,
     handleRequestMonetization,
     handleSaveDraft,
