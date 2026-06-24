@@ -336,7 +336,12 @@ export const Player: React.FC<{
 }> = ({ moveDir, skinColor, avatarConfig }) => {
   const meshRef = useRef<THREE.Group>(null)
   const keys = useRef<Record<string, boolean>>({})
+  const zoom = useRef(1)
+  const pinchDist = useRef<number | null>(null)
   const [isMoving, setIsMoving] = useState(false)
+
+  const MIN_ZOOM = 0.5
+  const MAX_ZOOM = 2.5
 
   useEffect(() => {
     const handleDown = (e: KeyboardEvent) => {
@@ -346,12 +351,52 @@ export const Player: React.FC<{
       keys.current[e.code] = false
     }
 
+    const clampZoom = (v: number) =>
+      Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v))
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      zoom.current = clampZoom(zoom.current + e.deltaY * 0.001)
+    }
+
+    const touchDistance = (t: TouchList) => {
+      const dx = t[0].clientX - t[1].clientX
+      const dy = t[0].clientY - t[1].clientY
+      return Math.hypot(dx, dy)
+    }
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) pinchDist.current = touchDistance(e.touches)
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchDist.current != null) {
+        e.preventDefault()
+        const dist = touchDistance(e.touches)
+        const ratio = pinchDist.current / dist
+        zoom.current = clampZoom(zoom.current * ratio)
+        pinchDist.current = dist
+      }
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchDist.current = null
+    }
+
     window.addEventListener('keydown', handleDown)
     window.addEventListener('keyup', handleUp)
+    window.addEventListener('wheel', handleWheel, { passive: false })
+    window.addEventListener('touchstart', handleTouchStart, { passive: false })
+    window.addEventListener('touchmove', handleTouchMove, { passive: false })
+    window.addEventListener('touchend', handleTouchEnd)
 
     return () => {
       window.removeEventListener('keydown', handleDown)
       window.removeEventListener('keyup', handleUp)
+      window.removeEventListener('wheel', handleWheel)
+      window.removeEventListener('touchstart', handleTouchStart)
+      window.removeEventListener('touchmove', handleTouchMove)
+      window.removeEventListener('touchend', handleTouchEnd)
     }
   }, [])
 
@@ -378,7 +423,9 @@ export const Player: React.FC<{
       meshRef.current.rotation.y = Math.atan2(direction.x, direction.z)
     }
 
-    const idealOffset = new THREE.Vector3(0, 3.2, 5).add(meshRef.current.position)
+    const idealOffset = new THREE.Vector3(0, 3.2, 5)
+      .multiplyScalar(zoom.current)
+      .add(meshRef.current.position)
     camera.position.lerp(idealOffset, 0.1)
     camera.lookAt(
       meshRef.current.position.x,
