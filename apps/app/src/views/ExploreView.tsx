@@ -36,7 +36,7 @@ const BookCard = ({
     } flex flex-col gap-[10px] text-left cursor-pointer transition-transform active:scale-95`}
   >
     <div
-      className='relative h-[196px] w-full rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
+      className='relative aspect-[2/3] w-full rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
       style={{ backgroundColor: book.coverColor || '#fbdddd' }}
     >
       {cover}
@@ -417,7 +417,7 @@ export const ExploreView = () => {
               </span>
             </div>
             <div
-              className='relative h-[278px] w-[196px] rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
+              className='relative aspect-[2/3] w-[196px] max-w-full rounded-[14px] overflow-hidden bg-[#fbdddd] border border-[#eaeaea] shadow-[0px_6px_18px_0px_rgba(0,0,0,0.08)]'
               style={{ backgroundColor: spotlightBook.coverColor || '#fbdddd' }}
             >
               <CoverImg book={spotlightBook} />

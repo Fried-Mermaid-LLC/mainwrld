@@ -47,7 +47,7 @@ export const LibraryView = () => {
                 className='flex flex-col gap-2 cursor-pointer transition-transform active:scale-95'
               >
                 <div
-                  className='relative h-[190px] w-full rounded-[16px] overflow-hidden bg-[#fbdddd] flex flex-col justify-end px-3 py-[18px]'
+                  className='relative aspect-[2/3] w-full rounded-[16px] overflow-hidden bg-[#fbdddd] flex flex-col justify-end px-3 py-[18px]'
                   style={{ backgroundColor: b.coverColor || '#fbdddd' }}
                 >
                   <CoverImg book={b} />
