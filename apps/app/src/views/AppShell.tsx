@@ -198,8 +198,8 @@ export const AppShell: React.FC = () => {
       {renderView()}
       {showNav && (
         <nav
-          className='fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-6 pt-4 flex justify-around items-center z-[200]'
-          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
+          className='fixed left-1/2 -translate-x-1/2 z-[200] flex items-center gap-1 bg-white rounded-full shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 px-3 py-2'
+          style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}
         >
           {[
             { id: 'home', icon: 'home', label: 'Home' },
@@ -216,9 +216,9 @@ export const AppShell: React.FC = () => {
                 setWriteReturnView(null)
                 setView(tab.id as View)
               }}
-              className={`flex flex-col items-center gap-1 transition-all ${
+              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-full transition-all ${
                 view === tab.id
-                  ? 'text-accent scale-110'
+                  ? 'text-accent bg-accent/10 scale-105'
                   : 'text-gray-400 opacity-60'
               }`}
             >
