@@ -18,71 +18,66 @@ export const LibraryView = () => {
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-500'>
-      <header className='p-6 border-b border-gray-50 flex justify-between items-center'>
-        <div>
-          <h1 className='text-2xl font-bold'>Library</h1>
-          <p className='text-[10px] font-bold text-gray-300 uppercase tracking-widest'>
-            {ownedBooks.length}/{MAX_LIBRARY_SIZE} Saved
+      {/* Header — 64px row, centered title + count, 24px side padding */}
+      <header className='px-6 py-4 border-b border-[#eaeaea] flex items-center justify-center'>
+        <div className='flex flex-col items-center gap-1'>
+          <h1 className='text-[22px] font-bold leading-[1.24] text-[#1a1a1a]'>
+            Library
+          </h1>
+          <p className='text-[13px] font-semibold text-[#9aa1a9] tracking-[0.13px] leading-[1.2]'>
+            {ownedBooks.length}/{MAX_LIBRARY_SIZE} Books
           </p>
         </div>
-        <div className='w-24 h-2 bg-gray-50 rounded-full overflow-hidden'>
-          <div
-            className='h-full bg-accent'
-            style={{
-              width: `${(ownedBooks.length / MAX_LIBRARY_SIZE) * 100}%`
-            }}
-          />
-        </div>
       </header>
-      <div className='flex flex-wrap gap-4 p-6'>
-        {ownedBooks.map(b => {
-          const progressData = getUserBookProgress(b.id)
-          const scrollProgress = progressData.scrollProgress || 0
-          const chapterIndex = progressData.chapterIndex || 0
-          const currentChapterTitle =
-            b.chapterMeta?.[chapterIndex]?.title || null
 
-          return (
-            <div
-              key={b.id}
-              onClick={() => {
-                setSelectedBook(b)
-                setView('book-detail')
-              }}
-              className='space-y-2 cursor-pointer w-28'
-            >
+      {/* Content — 2-column grid, 16px gutters/padding */}
+      {ownedBooks.length > 0 ? (
+        <div className='grid grid-cols-2 gap-4 p-4'>
+          {ownedBooks.map(b => {
+            const progressData = getUserBookProgress(b.id)
+            const scrollProgress = progressData.scrollProgress || 0
+
+            return (
               <div
-                className='aspect-[2/3] rounded-2x1 shadow-lg overflow-hidden relative'
-                style={{ backgroundColor: b.coverColor }}
+                key={b.id}
+                onClick={() => {
+                  setSelectedBook(b)
+                  setView('book-detail')
+                }}
+                className='flex flex-col gap-2 cursor-pointer transition-transform active:scale-95'
               >
-                <CoverImg book={b} />
-                <div className='absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent z-20'>
-                  {currentChapterTitle && (
-                    <p className='text-xs text-white font-semibold mb-1 truncate'>
-                      {currentChapterTitle}
-                    </p>
-                  )}
-                  <p className='text-[10px] text-white/80 font-bold uppercase tracking-wider mb-1'>
-                    {scrollProgress}% Read
-                  </p>
-                  <div className='w-full h-1.5 bg-white/30 rounded-full overflow-hidden'>
+                <div
+                  className='relative h-[190px] w-full rounded-[16px] overflow-hidden bg-[#fbdddd] flex flex-col justify-end px-3 py-[18px]'
+                  style={{ backgroundColor: b.coverColor || '#fbdddd' }}
+                >
+                  <CoverImg book={b} />
+                  <div className='relative z-20 h-[6px] w-full bg-[#fcefef] rounded-full'>
                     <div
-                      className='h-full bg-accent'
+                      className='absolute left-0 top-px h-[4px] bg-[#ef4f49] rounded-full'
                       style={{ width: `${scrollProgress}%` }}
                     />
                   </div>
                 </div>
+                <div className='flex flex-col gap-1'>
+                  <p className='text-[13px] font-semibold text-[#1a1a1a] tracking-[0.13px] leading-[1.2] line-clamp-2'>
+                    {b.title}
+                  </p>
+                  <p className='text-[11px] font-semibold text-[#9aa1a9] tracking-[0.66px] uppercase truncate'>
+                    {b.author.displayName}
+                  </p>
+                </div>
               </div>
-              <div className='px-1'>
-                <p className='text-xs font-bold truncate'>{b.title}</p>
-                <p className='text-[10px] text-gray-400 font-semibold uppercase tracking-wider truncate'>
-                  {b.author.displayName}
-                </p>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className='flex flex-col items-center justify-center gap-3 py-24 text-[#c2c8cf]'>
+          <span className='material-icons-round text-4xl'>bookmarks</span>
+          <p className='text-[11px] font-semibold uppercase tracking-[0.66px]'>
+            Your library is empty
+          </p>
+        </div>
+      )}
     </div>
   )
 }
