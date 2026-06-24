@@ -90,7 +90,7 @@ describe('StripeWebhookService', () => {
       },
     });
 
-    it('grants ownership, computes a 20% platform fee, writes the purchase, and emails the buyer', async () => {
+    it('grants ownership, computes a 30% platform fee, writes the purchase, and emails the buyer', async () => {
       fs.seed('users/buyer1', { points: 0 });
       stubEvent(checkoutEvent(bookSession()));
 
@@ -102,10 +102,10 @@ describe('StripeWebhookService', () => {
       expect(user.purchasedBookIds).toEqual(['b1']);
 
       const purchase = fs.dump('bookPurchases/pi_book_1')!;
-      // platformFee = round(1000 * 0.2) = 200 -> $2.00; net = $8.00.
-      expect(purchase.platformFeeUsd).toBe(2);
+      // platformFee = round(1000 * 0.3) = 300 -> $3.00; net = $7.00.
+      expect(purchase.platformFeeUsd).toBe(3);
       expect(purchase.priceUsd).toBe(10);
-      expect(purchase.sellerNetUsd).toBe(8);
+      expect(purchase.sellerNetUsd).toBe(7);
       expect(purchase.buyerUid).toBe('buyer1');
       expect(purchase.sellerUid).toBe('seller1');
       expect(purchase.bookId).toBe('b1');

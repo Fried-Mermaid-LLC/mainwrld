@@ -332,11 +332,11 @@ export const MonetizationRequestView = () => {
               </h4>
               <div className='flex justify-between text-xs font-bold'>
                 <span>You keep</span>
-                <span className='text-accent'>80%</span>
+                <span className='text-accent'>70%</span>
               </div>
               <div className='flex justify-between text-xs font-bold text-gray-400'>
                 <span>MainWRLD</span>
-                <span>20%</span>
+                <span>30%</span>
               </div>
             </div>
             <Button

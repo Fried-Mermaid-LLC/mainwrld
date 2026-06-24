@@ -315,7 +315,7 @@ export const PublicBookDetailPage = () => {
           ) : (
             <>
               {/* Cash-only purchase (web + iOS). Real card payment via Stripe
-                  with the 80/20 split + payout; an optional coupon discounts it.
+                  with the 70/30 split + payout; an optional coupon discounts it.
                   On iOS openStripeUrl opens it in an in-app browser. */}
               {availableCoupons.length > 0 && (
                 <div className='space-y-2'>

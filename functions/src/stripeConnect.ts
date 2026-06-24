@@ -14,9 +14,9 @@ import Stripe from 'stripe'
 //   • Seller payouts — Express onboarding (bank + KYC + tax form, all held by
 //     Stripe), account-status sync, balance, dashboard login link.
 //   • Reader cash checkout — a destination charge that automatically splits
-//     80% to the seller's connected account / 20% MainWRLD application fee.
+//     70% to the seller's connected account / 30% MainWRLD application fee.
 // Plus the request lifecycle (submit / admin review) and the in-app POINTS
-// purchase rail (pays the author 80% in points, no cash leaves the economy).
+// purchase rail (pays the author 70% in points, no cash leaves the economy).
 //
 // Required secrets (set both before deploy — see docs/features/F02 §7):
 //   firebase functions:secrets:set STRIPE_SECRET_KEY        # live mode key
@@ -28,7 +28,7 @@ const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY')
 const STRIPE_TEST_SECRET_KEY = defineSecret('STRIPE_TEST_SECRET_KEY')
 
 const REGION = 'us-central1'
-const PLATFORM_FEE_RATE = 0.2
+const PLATFORM_FEE_RATE = 0.3
 const DEFAULT_ORIGIN = 'https://mainwrld.com'
 
 // ---- price-tier table (duplicated from src/config/constants.ts because the
@@ -451,7 +451,7 @@ export const reviewMonetization = onCall<
 })
 
 // ============================================================
-// 3. Reader cash checkout (web) — 80/20 destination charge
+// 3. Reader cash checkout (web) — 70/30 destination charge
 // ============================================================
 
 export const createBookCheckoutSession = onCall<
@@ -496,7 +496,7 @@ export const createBookCheckoutSession = onCall<
     const origin = safeOrigin(req.data?.origin)
     const unitAmount = Math.round((book.price || 9.99) * 100)
 
-    // Optional in-app coupon → a one-time Stripe discount. The 80/20 split is
+    // Optional in-app coupon → a one-time Stripe discount. The 70/30 split is
     // computed on the DISCOUNTED amount (only model that's always valid for a
     // destination charge); the discount is capped so the buyer still pays the
     // Stripe minimum. The in-app coupon is marked used by the webhook on
@@ -552,7 +552,7 @@ export const createBookCheckoutSession = onCall<
       ],
       discounts: stripeCouponId ? [{ coupon: stripeCouponId }] : undefined,
       payment_intent_data: {
-        // Seller's 80% is a FIXED transfer on the pre-tax, post-discount price.
+        // Seller's 70% is a FIXED transfer on the pre-tax, post-discount price.
         // Using transfer_data.amount (instead of application_fee_amount) keeps
         // the collected sales tax with the platform — the merchant of record
         // that has to remit it — instead of leaking it into the seller payout.

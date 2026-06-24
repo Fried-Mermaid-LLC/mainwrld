@@ -4,9 +4,9 @@
 
 export const PRICE_TIERS = [9.99, 14.99, 19.99, 24.99, 29.99] as const;
 
-// MainWRLD takes a 20% application fee on book sales (80% to the seller via a
+// MainWRLD takes a 30% application fee on book sales (70% to the seller via a
 // Stripe destination charge).
-export const PLATFORM_FEE_RATE = 0.2;
+export const PLATFORM_FEE_RATE = 0.3;
 
 // Price tiers unlocked by the (server-truth) published chapter count.
 export function allowedPriceTiers(chaptersCount: number): number[] {

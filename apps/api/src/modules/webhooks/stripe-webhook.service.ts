@@ -7,6 +7,7 @@ import {
   COLLECTIONS,
   FIRESTORE,
 } from '../../infra/firebase/firebase.constants';
+import { PLATFORM_FEE_RATE } from '@mainwrld/types';
 import { EmailService } from '../../shared/email/email.service';
 import {
   bookPurchaseEmail,
@@ -214,7 +215,7 @@ export class StripeWebhookService {
           : session.payment_intent?.id) || session.id;
       const amountTotal = session.amount_total ?? 0;
       // amount_total includes any sales tax Stripe Tax added; tax is a platform
-      // pass-through liability, so the 80/20 split is computed on the pre-tax
+      // pass-through liability, so the 70/30 split is computed on the pre-tax
       // base (which equals the seller's fixed transfer at checkout).
       const amountTax = session.total_details?.amount_tax ?? 0;
       const preTax = amountTotal - amountTax;
@@ -237,7 +238,7 @@ export class StripeWebhookService {
           }
           const userSnap = await t.get(userRef);
           const userData = (userSnap.data() as Record<string, unknown>) || {};
-          const sellerNet = Math.round(preTax * 0.8);
+          const sellerNet = Math.round(preTax * (1 - PLATFORM_FEE_RATE));
           const platformFee = preTax - sellerNet;
           const userUpdate: Record<string, unknown> = {
             ownedBookIds: FieldValue.arrayUnion(bookId),

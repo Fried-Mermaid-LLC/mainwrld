@@ -61,7 +61,7 @@ export function allowedPriceTiers(chaptersCount: number): number[] {
 // Platform fee on the cash (Stripe) rail. The seller's connected account
 // receives (1 - PLATFORM_FEE_RATE); MainWRLD keeps PLATFORM_FEE_RATE as the
 // Stripe application_fee. Mirrored in functions/src/stripeConnect.ts.
-export const PLATFORM_FEE_RATE = 0.2;
+export const PLATFORM_FEE_RATE = 0.3;
 
 // How many real points 1 USD of book price converts to on the in-app
 // points purchase rail (mirrors CartView's historic POINTS_PER_DOLLAR).

@@ -242,7 +242,7 @@ export class PaymentsService {
     };
   }
 
-  // ---- Reader cash checkout (80/20 destination charge) ----
+  // ---- Reader cash checkout (70/30 destination charge) ----
 
   async createBookCheckout(
     buyerUid: string,
@@ -277,7 +277,7 @@ export class PaymentsService {
     const safe = this.safeOrigin(dto.origin);
     const unitAmount = Math.round(((book.price as number) || 9.99) * 100);
 
-    // Optional in-app coupon -> one-time Stripe discount; 80/20 split computed
+    // Optional in-app coupon -> one-time Stripe discount; 70/30 split computed
     // on the DISCOUNTED amount; discount capped so the buyer still pays the
     // Stripe minimum. Marked used by the webhook on success.
     let discountCents = 0;
@@ -331,7 +331,7 @@ export class PaymentsService {
       ],
       discounts: stripeCouponId ? [{ coupon: stripeCouponId }] : undefined,
       payment_intent_data: {
-        // Seller's 80% is a FIXED transfer on the pre-tax, post-discount price.
+        // Seller's 70% is a FIXED transfer on the pre-tax, post-discount price.
         // Using transfer_data.amount (instead of application_fee_amount) keeps
         // the collected sales tax with the platform — the merchant of record
         // that has to remit it — instead of leaking it into the seller payout.

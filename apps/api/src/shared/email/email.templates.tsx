@@ -525,7 +525,7 @@ function MonetizationApproved({
       <Paragraph>Hi {displayName},</Paragraph>
       <Paragraph>
         Good news — your request to monetize <strong>"{bookTitle}"</strong> has
-        been accepted. Readers can now purchase it, and you'll earn 80% of every
+        been accepted. Readers can now purchase it, and you'll earn 70% of every
         sale.
       </Paragraph>
       <Paragraph>
