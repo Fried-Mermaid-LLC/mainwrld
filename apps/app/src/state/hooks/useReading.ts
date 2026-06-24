@@ -290,7 +290,20 @@ export function useReading({
       ...userBookDataRef.current,
       [user.username]: updatedUd
     }
-    setUserBookData(prev => ({ ...prev, [user.username]: updatedUd }))
+    // Merge ownedBookIds into the LATEST state rather than overwriting the
+    // user's record with the ref snapshot above. While reading, scroll fires a
+    // stream of setUserBookProgress updates; the ref only catches up to them on
+    // render, so a progress update committed (or still queued) when Save is
+    // tapped would be clobbered by the snapshot's stale bookProgress — losing
+    // the reading position of the very book being saved. Touch only
+    // ownedBookIds; bookProgress is carried forward from prev untouched.
+    setUserBookData(prev => {
+      const live = prev[user.username] || updatedUd
+      const owned = live.ownedBookIds.includes(bookId)
+        ? live.ownedBookIds
+        : [...live.ownedBookIds, bookId]
+      return { ...prev, [user.username]: { ...live, ownedBookIds: owned } }
+    })
     showToast('Book saved to your library!', 'bookmark')
     if (firebaseUid) {
       fbService.addBookToLibrary(firebaseUid, bookId).catch(console.error)
@@ -328,7 +341,20 @@ export function useReading({
       ...userBookDataRef.current,
       [user.username]: updatedUd
     }
-    setUserBookData(prev => ({ ...prev, [user.username]: updatedUd }))
+    // Merge into the LATEST state (not the ref snapshot) so an in-flight
+    // reading-progress update isn't clobbered. Touch only ownedBookIds;
+    // bookProgress is preserved from prev so a removed-then-resaved book keeps
+    // its position (and matches handleSaveToLibrary).
+    setUserBookData(prev => {
+      const live = prev[user.username] || updatedUd
+      return {
+        ...prev,
+        [user.username]: {
+          ...live,
+          ownedBookIds: live.ownedBookIds.filter((id: string) => id !== bookId)
+        }
+      }
+    })
     showToast('Book removed from your library.', 'bookmark_remove')
     if (firebaseUid) {
       fbService.removeBookFromLibrary(firebaseUid, bookId).catch(console.error)

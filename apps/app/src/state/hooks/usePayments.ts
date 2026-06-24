@@ -132,7 +132,22 @@ export function usePayments({
               ...userBookDataRef.current,
               [username]: updated,
             }
-            setUserBookData((prev) => ({ ...prev, [username]: updated }))
+            // Adopt the server's authoritative ownership arrays, but merge into
+            // the LATEST state instead of overwriting [username] with the ref
+            // snapshot above — bookProgress is carried forward from prev so a
+            // book the buyer was reading mid-purchase keeps its reading
+            // position (matches handleSaveToLibrary).
+            setUserBookData((prev) => {
+              const live = prev[username] || updated
+              return {
+                ...prev,
+                [username]: {
+                  ...live,
+                  ownedBookIds: owned,
+                  purchasedBookIds: purchased,
+                },
+              }
+            })
             showToast('Purchase complete — enjoy your book!', 'check_circle')
             return
           }
@@ -313,7 +328,22 @@ export function usePayments({
             ...userBookDataRef.current,
             [username]: updated,
           }
-          setUserBookData((prev) => ({ ...prev, [username]: updated }))
+          // Adopt the server's authoritative ownership arrays, but merge into
+          // the LATEST state instead of overwriting [username] with the ref
+          // snapshot above — bookProgress is carried forward from prev so a
+          // book the buyer was reading mid-purchase keeps its reading position
+          // (matches handleSaveToLibrary).
+          setUserBookData((prev) => {
+            const live = prev[username] || updated
+            return {
+              ...prev,
+              [username]: {
+                ...live,
+                ownedBookIds: fresh?.ownedBookIds || [],
+                purchasedBookIds: purchased,
+              },
+            }
+          })
           showToast('Purchase complete — enjoy your book!', 'check_circle')
           return
         }
