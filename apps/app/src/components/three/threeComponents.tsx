@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Html, useGLTF, useAnimations } from '@react-three/drei'
 import { BASE } from '@/config/config'
 import { ACCENT_COLOR, WORLD_RADIUS, SKIN_TONE_COLORS } from '@/config/constants'
@@ -10,6 +10,8 @@ import { SkeletonUtils } from 'three-stdlib'
 // -----------------------------
 // Helpers
 // -----------------------------
+
+const UP = new THREE.Vector3(0, 1, 0)
 
 // Avatar colour is supplied almost entirely by the embedded baseColorTexture
 // maps (every material ships baseColorFactor=white, metallicFactor=0). If a map
@@ -338,10 +340,14 @@ export const Player: React.FC<{
   const keys = useRef<Record<string, boolean>>({})
   const zoom = useRef(1)
   const pinchDist = useRef<number | null>(null)
+  const yaw = useRef(0)
+  const dragLast = useRef<number | null>(null)
+  const gl = useThree((s) => s.gl)
   const [isMoving, setIsMoving] = useState(false)
 
   const MIN_ZOOM = 0.5
   const MAX_ZOOM = 2.5
+  const ORBIT_SPEED = 0.005
 
   useEffect(() => {
     const handleDown = (e: KeyboardEvent) => {
@@ -400,6 +406,66 @@ export const Player: React.FC<{
     }
   }, [])
 
+  // Orbit the camera around the player by dragging a single finger / the
+  // mouse across the viewport. Listeners live on the canvas so touches that
+  // start on the on-screen movement buttons don't rotate the camera.
+  useEffect(() => {
+    const canvas = gl.domElement
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) dragLast.current = e.touches[0].clientX
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        dragLast.current = null
+        return
+      }
+      const x = e.touches[0].clientX
+      if (dragLast.current == null) {
+        dragLast.current = x
+        return
+      }
+      e.preventDefault()
+      yaw.current -= (x - dragLast.current) * ORBIT_SPEED
+      dragLast.current = x
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) dragLast.current = null
+    }
+
+    const handleMouseDown = (e: MouseEvent) => {
+      dragLast.current = e.clientX
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (dragLast.current == null) return
+      yaw.current -= (e.clientX - dragLast.current) * ORBIT_SPEED
+      dragLast.current = e.clientX
+    }
+
+    const handleMouseUp = () => {
+      dragLast.current = null
+    }
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false })
+    canvas.addEventListener('touchend', handleTouchEnd)
+    canvas.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      canvas.removeEventListener('touchstart', handleTouchStart)
+      canvas.removeEventListener('touchmove', handleTouchMove)
+      canvas.removeEventListener('touchend', handleTouchEnd)
+      canvas.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [gl])
+
   useFrame((state, delta) => {
     if (!meshRef.current) return
 
@@ -418,13 +484,22 @@ export const Player: React.FC<{
     setIsMoving(moving)
 
     if (moving) {
-      direction.normalize().multiplyScalar(speed)
+      // Analog joystick gives a 0..1 magnitude; keyboard gives 1 (or √2 on a
+      // diagonal). Clamp so the stick scales walk speed while keys stay full.
+      const mag = Math.min(direction.length(), 1)
+      // Make input camera-relative: rotate it by the orbit yaw so "forward" on
+      // the stick always moves away from the camera, whatever angle it sits at.
+      direction
+        .normalize()
+        .applyAxisAngle(UP, yaw.current)
+        .multiplyScalar(speed * mag)
       meshRef.current.position.add(direction)
       meshRef.current.rotation.y = Math.atan2(direction.x, direction.z)
     }
 
     const idealOffset = new THREE.Vector3(0, 3.2, 5)
       .multiplyScalar(zoom.current)
+      .applyAxisAngle(UP, yaw.current)
       .add(meshRef.current.position)
     camera.position.lerp(idealOffset, 0.1)
     camera.lookAt(

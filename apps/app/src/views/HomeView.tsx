@@ -6,6 +6,7 @@ import { Capacitor } from '@capacitor/core'
 import { WORLD_RADIUS } from '@/config/constants'
 import { BASE } from '@/config/config'
 import { MovingAvatar, Player } from '@/components/three/threeComponents'
+import { VirtualJoystick } from '@/components/VirtualJoystick'
 import { SafeImg } from '@/components/SafeImg'
 import { ModelErrorBoundary } from '@/components/three/ModelErrorBoundary'
 import type { User } from '@/types'
@@ -23,7 +24,6 @@ export const HomeView = () => {
     setSelectedProfileUser,
     setView,
     notifications,
-    setMoveDir,
     userDataLoaded
   } = useApp()
   return (
@@ -174,85 +174,16 @@ export const HomeView = () => {
           </button>
         </div>
       </div>
-      {/* D-Pad */}
-      <div className='absolute bottom-32 right-8 w-32 h-32 flex items-center justify-center pointer-events-none'>
-        <div
-          className='grid grid-cols-3 gap-1 pointer-events-auto select-none'
-          style={{
-            WebkitTapHighlightColor: 'transparent',
-            WebkitTouchCallout: 'none'
+      {/* Analog joystick. We mutate the shared moveDir vector in place rather
+          than calling setMoveDir: Player reads moveDir live every frame in
+          useFrame, so in-place writes drive movement without re-rendering
+          HomeView (and re-running the mutual-avatar layout) 60× a second. */}
+      <div className='absolute bottom-32 right-8 pointer-events-none'>
+        <VirtualJoystick
+          onChange={(x, z) => {
+            moveDir.set(x, 0, z)
           }}
-        >
-          <div />
-          <button
-            onPointerDown={(e) => {
-              e.preventDefault()
-              setMoveDir(new THREE.Vector3(0, 0, -1))
-            }}
-            onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
-            className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
-            style={{
-              WebkitTapHighlightColor: 'transparent',
-              WebkitTouchCallout: 'none'
-            }}
-          >
-            <span className='material-icons-round select-none'>
-              keyboard_arrow_up
-            </span>
-          </button>
-          <div />
-          <button
-            onPointerDown={(e) => {
-              e.preventDefault()
-              setMoveDir(new THREE.Vector3(-1, 0, 0))
-            }}
-            onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
-            className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
-            style={{
-              WebkitTapHighlightColor: 'transparent',
-              WebkitTouchCallout: 'none'
-            }}
-          >
-            <span className='material-icons-round select-none'>
-              keyboard_arrow_left
-            </span>
-          </button>
-          <div />
-          <button
-            onPointerDown={(e) => {
-              e.preventDefault()
-              setMoveDir(new THREE.Vector3(1, 0, 0))
-            }}
-            onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
-            className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
-            style={{
-              WebkitTapHighlightColor: 'transparent',
-              WebkitTouchCallout: 'none'
-            }}
-          >
-            <span className='material-icons-round select-none'>
-              keyboard_arrow_right
-            </span>
-          </button>
-          <div />
-          <button
-            onPointerDown={(e) => {
-              e.preventDefault()
-              setMoveDir(new THREE.Vector3(0, 0, 1))
-            }}
-            onPointerUp={() => setMoveDir(new THREE.Vector3(0, 0, 0))}
-            className='w-10 h-10 bg-black/5 rounded-xl flex items-center justify-center text-black/20 select-none touch-manipulation'
-            style={{
-              WebkitTapHighlightColor: 'transparent',
-              WebkitTouchCallout: 'none'
-            }}
-          >
-            <span className='material-icons-round select-none'>
-              keyboard_arrow_down
-            </span>
-          </button>
-          <div />
-        </div>
+        />
       </div>
     </div>
   )
