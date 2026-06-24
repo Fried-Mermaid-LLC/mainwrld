@@ -9,7 +9,7 @@ import {
   userContact,
 } from './email.js'
 
-const SITE_URL = 'https://mainwrld-f7acf.web.app'
+const SITE_URL = 'https://mainwrld.com'
 
 // MainWRLD monetization side-effects (F01 + F03).
 //

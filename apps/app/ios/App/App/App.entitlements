@@ -7,9 +7,7 @@
 	<!-- Universal Links (F09): lets a tapped https://mainwrld.com/book/<id>
 	     link open THIS app instead of Safari, matched against the hosted
 	     /.well-known/apple-app-site-association. mainwrld.com is the canonical
-	     share host (SHARE_BASE). Legacy mainwrld-f7acf.web.app links still open
-	     via the Safari web preview (UL never shipped to a build on that host),
-	     so it's intentionally NOT listed here. The MainWRLD provisioning profile
+	     and only share host (SHARE_BASE). The MainWRLD provisioning profile
 	     grants com.apple.developer.associated-domains, so this is compatible with
 	     the existing manual signing. -->
 	<key>com.apple.developer.associated-domains</key>

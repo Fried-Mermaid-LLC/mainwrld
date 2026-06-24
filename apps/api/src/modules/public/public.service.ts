@@ -6,7 +6,7 @@ import {
   FIRESTORE,
 } from '../../infra/firebase/firebase.constants';
 
-const SITE = 'https://mainwrld-f7acf.web.app';
+const SITE = 'https://mainwrld.com';
 const FALLBACK_IMAGE = `${SITE}/logo.png`;
 
 function esc(s: unknown): string {

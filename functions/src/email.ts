@@ -23,8 +23,8 @@ const INK = '#2b1d17'
 const MUTED = '#9b8579'
 const CANVAS = '#f7efe8'
 const CARD = '#ffffff'
-const WORDMARK_URL = 'https://mainwrld-f7acf.web.app/wordlogo.png'
-const SITE_URL = 'https://mainwrld-f7acf.web.app'
+const WORDMARK_URL = 'https://mainwrld.com/wordlogo.png'
+const SITE_URL = 'https://mainwrld.com'
 
 export interface EmailLayoutOptions {
   // Short summary shown in the inbox preview line (hidden in the body).

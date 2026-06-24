@@ -29,7 +29,7 @@ const STRIPE_TEST_SECRET_KEY = defineSecret('STRIPE_TEST_SECRET_KEY')
 
 const REGION = 'us-central1'
 const PLATFORM_FEE_RATE = 0.2
-const DEFAULT_ORIGIN = 'https://mainwrld-f7acf.web.app'
+const DEFAULT_ORIGIN = 'https://mainwrld.com'
 
 // ---- price-tier table (duplicated from src/config/constants.ts because the
 // functions package can't import from src/) ----

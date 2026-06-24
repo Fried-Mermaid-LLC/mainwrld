@@ -20,7 +20,7 @@ import {
 import { StripeService } from './stripe.service';
 import type { BookCheckoutDto } from './dto/payments.dto';
 
-const DEFAULT_ORIGIN = 'https://mainwrld-f7acf.web.app';
+const DEFAULT_ORIGIN = 'https://mainwrld.com';
 const usd = (cents: number) => Math.round(cents) / 100;
 
 // True when Stripe reports the stored connected account doesn't exist for the

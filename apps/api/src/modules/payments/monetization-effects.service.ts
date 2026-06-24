@@ -14,7 +14,7 @@ import {
   escapeHtml,
 } from '../../shared/email/email.templates';
 
-const SITE_URL = 'https://mainwrld-f7acf.web.app';
+const SITE_URL = 'https://mainwrld.com';
 
 // Monetization side-effects (ported from the onBookMonetized trigger). Now that
 // all book writes go through the API, these run INLINE from the monetization
