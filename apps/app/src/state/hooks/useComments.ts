@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
-import { COMMENT_LIKES_THRESHOLD } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import type { Comment, User, Book, NotificationCategory } from '@/types'
 
@@ -15,9 +13,6 @@ interface CommentsDeps {
     title: string, message: string, icon: string, recipient?: string,
     sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
   ) => void
-  awardPoints: (amount: number, reason: string) => void
-  rewardedItems: Set<string>
-  setRewardedItems: Dispatch<SetStateAction<Set<string>>>
 }
 
 // Comments domain (Phase B). Owns allComments + its Firestore subscription,
@@ -26,7 +21,7 @@ interface CommentsDeps {
 // it touches admin `reports` and will move with useAdmin.) Bodies verbatim.
 export function useComments({
   user, firebaseUid, selectedBook, registeredUsers, showToast,
-  addNotification, awardPoints, rewardedItems, setRewardedItems
+  addNotification
 }: CommentsDeps) {
   const [allComments, setAllComments] = useState<Comment[]>([])
 
@@ -164,30 +159,9 @@ export function useComments({
       comment.id,
       'comments'
     )
-
-    // Earned points: award comment author 1 pt when comment hits like threshold
-    const rewardKey = `comment:${commentId}:${Math.floor(
-      newLikes / COMMENT_LIKES_THRESHOLD
-    )}`
-    if (
-      newLikes % COMMENT_LIKES_THRESHOLD === 0 &&
-      !rewardedItems.has(rewardKey) &&
-      recipientUsername === user.username
-    ) {
-      setRewardedItems(prev => new Set(prev).add(rewardKey))
-      awardPoints(1, `Your comment hit ${newLikes} likes!`)
-      addNotification(
-        'Points Earned',
-        `Your comment hit ${newLikes} likes — you earned 1 point!`,
-        'stars',
-        user.username,
-        user.username,
-        comment.bookId,
-        comment.chapterIndex,
-        comment.id,
-        'comments'
-      )
-    }
+    // Points + the 50-like milestone notification are awarded server-side now
+    // (comments.update → RewardsService), so the author is credited for likes
+    // from any user — not just the dead self-like path this used to (never) hit.
   }
 
   return { allComments, setAllComments, postComment, handleLikeComment }

@@ -9,6 +9,7 @@ import {
   FakeFirestore,
   createFakeAuth,
   createFakeEmail,
+  createFakeRewards,
   makeAuthUser,
 } from '../../testing/test-utils';
 
@@ -26,13 +27,20 @@ describe('UsersService', () => {
   let fs: FakeFirestore;
   let auth: ReturnType<typeof createFakeAuth>;
   let email: ReturnType<typeof createFakeEmail>;
+  let rewards: ReturnType<typeof createFakeRewards>;
   let svc: UsersService;
 
   beforeEach(() => {
     fs = new FakeFirestore();
     auth = createFakeAuth();
     email = createFakeEmail();
-    svc = new UsersService(fs as any, auth as any, email as any);
+    rewards = createFakeRewards();
+    svc = new UsersService(
+      fs as any,
+      auth as any,
+      email as any,
+      rewards as any,
+    );
   });
 
   describe('createProfile', () => {

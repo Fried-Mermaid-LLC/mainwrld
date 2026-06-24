@@ -2,6 +2,7 @@ import { BooksService } from './books.service';
 import {
   FakeFirestore,
   createFakeModeration,
+  createFakeRewards,
   createFakeStorage,
   makeAuthUser,
 } from '../../testing/test-utils';
@@ -10,13 +11,20 @@ describe('BooksService', () => {
   let fs: FakeFirestore;
   let storage: ReturnType<typeof createFakeStorage>;
   let moderation: ReturnType<typeof createFakeModeration>;
+  let rewards: ReturnType<typeof createFakeRewards>;
   let svc: BooksService;
 
   const build = (flagged = false) => {
     fs = new FakeFirestore();
     storage = createFakeStorage();
     moderation = createFakeModeration(flagged);
-    svc = new BooksService(fs as any, storage as any, moderation as any);
+    rewards = createFakeRewards();
+    svc = new BooksService(
+      fs as any,
+      storage as any,
+      moderation as any,
+      rewards as any,
+    );
   };
 
   beforeEach(() => build());
@@ -45,7 +53,7 @@ describe('BooksService', () => {
       await expect(
         svc.create(makeAuthUser(), { title: 'bad', tagline: 'x' } as any),
       ).rejects.toThrow('Content violates community guidelines');
-      expect(moderation.screen).toHaveBeenCalledWith('bad');
+      expect(moderation.screen).toHaveBeenCalledWith('bad', true, false);
     });
 
     it('allocates an id when the supplied id is invalid', async () => {
@@ -137,8 +145,8 @@ describe('BooksService', () => {
       } as any);
       expect(out.title).toBe('new');
       expect(fs.dump('books/b1')!.title).toBe('new');
-      expect(moderation.screen).toHaveBeenCalledWith('new');
-      expect(moderation.screen).toHaveBeenCalledWith('fresh');
+      expect(moderation.screen).toHaveBeenCalledWith('new', true, false);
+      expect(moderation.screen).toHaveBeenCalledWith('fresh', true, false);
     });
 
     it('lets an admin update a book they do not own', async () => {

@@ -55,7 +55,10 @@ export class RewardsService {
     if (currentDaily >= MAX_DAILY_EARNED_POINTS) {
       return { finalAmount: 0, fields: {} };
     }
-    const finalAmount = Math.min(amount, MAX_DAILY_EARNED_POINTS - currentDaily);
+    const finalAmount = Math.min(
+      amount,
+      MAX_DAILY_EARNED_POINTS - currentDaily,
+    );
     if (finalAmount <= 0) return { finalAmount: 0, fields: {} };
     return {
       finalAmount,
@@ -126,9 +129,11 @@ export class RewardsService {
       );
       if (!book.authorUsername) return;
       const milestone =
-        Math.floor(newCount / CHAPTER_LIKES_THRESHOLD) * CHAPTER_LIKES_THRESHOLD;
+        Math.floor(newCount / CHAPTER_LIKES_THRESHOLD) *
+        CHAPTER_LIKES_THRESHOLD;
       const chapterTitle =
-        book.chapterMeta?.[chapterIndex]?.title || `Chapter ${chapterIndex + 1}`;
+        book.chapterMeta?.[chapterIndex]?.title ||
+        `Chapter ${chapterIndex + 1}`;
       await this.notifications.create('MainWRLD', {
         recipient: book.authorUsername,
         title: 'Points Earned',
@@ -173,7 +178,8 @@ export class RewardsService {
         COMMENT_LIKE_POINTS * crossed,
       );
       const milestone =
-        Math.floor(newLikes / COMMENT_LIKES_THRESHOLD) * COMMENT_LIKES_THRESHOLD;
+        Math.floor(newLikes / COMMENT_LIKES_THRESHOLD) *
+        COMMENT_LIKES_THRESHOLD;
       await this.notifications.create('MainWRLD', {
         recipient: authorUsername,
         title: 'Points Earned',
@@ -207,7 +213,8 @@ export class RewardsService {
     const now = Date.now();
     return this.db.runTransaction(async (t) => {
       const snap = await t.get(ref);
-      if (!snap.exists) return { claimed: false, awarded: 0, nextAvailableAt: null };
+      if (!snap.exists)
+        return { claimed: false, awarded: 0, nextAvailableAt: null };
       const u = snap.data() as UserData;
       const last = (u.lastClaimedPoints as number) || 0;
       if (last && now - last < DAY_MS) {
@@ -218,7 +225,11 @@ export class RewardsService {
         : DAILY_CLAIM_POINTS;
       const { finalAmount, fields } = this.capEarned(u, amount, now);
       t.update(ref, { ...fields, lastClaimedPoints: now });
-      return { claimed: true, awarded: finalAmount, nextAvailableAt: now + DAY_MS };
+      return {
+        claimed: true,
+        awarded: finalAmount,
+        nextAvailableAt: now + DAY_MS,
+      };
     });
   }
 

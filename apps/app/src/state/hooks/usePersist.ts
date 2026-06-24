@@ -24,7 +24,6 @@ interface PersistDeps {
   userDataLoaded: boolean
   view: View
   selectedBook: Book | null
-  lastClaimedPoints: number | null
   userBookData: UserBookDataMap
   allAvatarConfigs: Record<string, AvatarConfig>
   allUnlockedItems: Record<string, string[]>
@@ -49,7 +48,6 @@ export function usePersist({
   userDataLoaded,
   view,
   selectedBook,
-  lastClaimedPoints,
   userBookData,
   allAvatarConfigs,
   allUnlockedItems,
@@ -89,16 +87,14 @@ export function usePersist({
         // User state. NOTE: strikes + isPremium are SERVER-owned (moderation /
         // billing) — written only by Cloud Functions and loaded fresh on login,
         // so the client must not persist (and thus clobber or forge) them. See
-        // the C1 privilege lock in firestore.rules.
-        points: user.points,
+        // the C1 privilege lock in firestore.rules. The points economy
+        // (points, dailyEarnedPoints, lastPointsReset, lastClaimedPoints,
+        // membershipStartDate, lastMembershipRewardDate) is ALSO server-owned now
+        // — written only by the API's RewardsService and rejected by PROTECTED_
+        // FIELDS — so persisting them here would just clobber server awards.
         displayName: user.displayName,
         admirersCount: user.admirersCount,
         mutualsCount: user.mutualsCount,
-        dailyEarnedPoints: user.dailyEarnedPoints || 0,
-        lastPointsReset: user.lastPointsReset || null,
-        lastClaimedPoints: lastClaimedPoints || null,
-        membershipStartDate: user.membershipStartDate || null,
-        lastMembershipRewardDate: user.lastMembershipRewardDate || null,
         dailyChaptersPublished: user.dailyChaptersPublished || 0,
         lastChapterPublishReset: user.lastChapterPublishReset || 0,
         chatDailyCounts: user.chatDailyCounts || {},
@@ -131,21 +127,15 @@ export function usePersist({
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
     }
   }, [
-    user.points,
     user.username,
     user.displayName,
     user.isPremium,
     user.strikes,
     user.admirersCount,
     user.mutualsCount,
-    user.dailyEarnedPoints,
-    user.lastPointsReset,
-    user.membershipStartDate,
-    user.lastMembershipRewardDate,
     user.dailyChaptersPublished,
     user.lastChapterPublishReset,
     user.chatDailyCounts,
-    lastClaimedPoints,
     userBookData,
     allAvatarConfigs,
     allUnlockedItems,
@@ -177,8 +167,8 @@ export function usePersist({
         coverImage: b.coverImage
       }))
       const batchUpdate: Record<string, any> = {
-        // strikes + isPremium are server-owned (see the debounced persist above).
-        points: user.points,
+        // strikes + isPremium + the points economy are server-owned (see the
+        // debounced persist above); none are written from the client.
         displayName: user.displayName,
         admirersCount: user.admirersCount,
         mutualsCount: user.mutualsCount,
@@ -186,11 +176,6 @@ export function usePersist({
         // owned by the dedicated presence effect (and, per X06, by the RTDB
         // mirror). Writing isOnline:false on every tab-switch/visibility-hidden
         // would fight it. This flush only persists the data slices below.
-        dailyEarnedPoints: user.dailyEarnedPoints || 0,
-        lastPointsReset: user.lastPointsReset || null,
-        lastClaimedPoints: lastClaimedPoints || null,
-        membershipStartDate: user.membershipStartDate || null,
-        lastMembershipRewardDate: user.lastMembershipRewardDate || null,
         dailyChaptersPublished: user.dailyChaptersPublished || 0,
         lastChapterPublishReset: user.lastChapterPublishReset || 0,
         chatDailyCounts: user.chatDailyCounts || {},

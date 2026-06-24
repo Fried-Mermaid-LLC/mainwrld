@@ -124,19 +124,16 @@ export function useAppValue() {
     value => setReadingActivityRef.current(value),
     []
   )
-  // Points / coupons / membership rewards live in useRewards (Phase B). Placed
-  // early so awardPoints + rewardedItems are direct refs for handleLike /
-  // handleLikeComment, and lastClaimedPoints/coupons for the persist effect.
+  // Points / coupons / membership rewards live in useRewards (Phase B). Points
+  // are server-owned now (claim/spin/membership go through the API), so this only
+  // provides lastClaimedPoints/coupons for the persist + login cascade and the
+  // claim/spin handlers.
   const rewards = useRewards({ user, setUser, showToast, showConfirm })
   const {
     lastClaimedPoints,
     setLastClaimedPoints,
-    rewardedItems,
-    setRewardedItems,
     coupons,
     setCoupons,
-    awardPoints,
-    awardMembershipBonus,
     handleClaimPoints,
     handleSpinWheel
   } = rewards
@@ -152,10 +149,7 @@ export function useAppValue() {
     setView,
     showToast,
     showConfirm,
-    addNotification: addNotificationLB,
-    awardPoints,
-    rewardedItems,
-    setRewardedItems
+    addNotification: addNotificationLB
   })
   const {
     books,
@@ -310,18 +304,15 @@ export function useAppValue() {
   } = reading
   setReadingActivityRef.current = setReadingActivity
 
-  // Comments domain lives in useComments (Phase B), placed after useRewards
-  // so handleLikeComment can use awardPoints/rewardedItems.
+  // Comments domain lives in useComments (Phase B). Comment-like points are now
+  // awarded server-side (comments.update → RewardsService).
   const comments = useComments({
     user,
     firebaseUid,
     selectedBook,
     registeredUsers,
     showToast,
-    addNotification,
-    awardPoints,
-    rewardedItems,
-    setRewardedItems
+    addNotification
   })
   const { allComments, setAllComments, postComment, handleLikeComment } = comments
 
@@ -389,7 +380,6 @@ export function useAppValue() {
     userDataLoaded,
     view,
     selectedBook,
-    lastClaimedPoints,
     userBookData,
     allAvatarConfigs,
     allUnlockedItems,
@@ -498,8 +488,8 @@ export function useAppValue() {
     setReports, notifications, setNotifications, allAvatarConfigs, setAllAvatarConfigs, avatarConfig,
     setAvatarConfig, allUnlockedItems, setAllUnlockedItems, unlockedAvatarItems, setUnlockedAvatarItems, blockedUsers,
     setBlockedUsers, readingActivity, setReadingActivity, itemPriceOverrides, setItemPriceOverrides, getItemCost,
-    handleUpdateItemPrice, allComments, setAllComments, lastClaimedPoints, setLastClaimedPoints, rewardedItems,
-    setRewardedItems, coupons, setCoupons, cart, setCart, userBookData,
+    handleUpdateItemPrice, allComments, setAllComments, lastClaimedPoints, setLastClaimedPoints,
+    coupons, setCoupons, cart, setCart, userBookData,
     setUserBookData, userBookDataRef, getTotalLikes, getChapterLikes, getUserOwnedBookIds, isBookFavorited,
     getUserBookProgress, setUserOwnsBook, setUserBookProgress, persistTimerRef, pendingAdmireRef, currentPublishingContent,
     setCurrentPublishingContent, currentPublishingTitle, setCurrentPublishingTitle, currentPublishingChapterTitle, setCurrentPublishingChapterTitle, currentPublishingId,
@@ -508,8 +498,8 @@ export function useAppValue() {
     handleUnpublishChapter, handleDeleteChapter, handleLogout, handleNotificationClick, handleLogin, handleSignup,
     handleSendMessage, handleLike, handleAdmire, handleReport, handleRemoveBook, handleRemoveComment,
     handleAddStrike, handleRemoveStrike, handleBanUser, handleUnbanUser, handleDismissReport, handleApproveMonetization, handleDenyMonetization, handleBlockUser, handleUnblockUser,
-    handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, handleToggleFavorite, handleAddToCart, awardPoints,
-    awardMembershipBonus, handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
+    handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, handleToggleFavorite, handleAddToCart,
+    handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
     handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,
     handleShareBook, isWriting, setIsWriting, writeReturnView, setWriteReturnView,
   }

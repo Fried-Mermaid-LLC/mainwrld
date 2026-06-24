@@ -2,18 +2,21 @@ import { CommentsService } from './comments.service';
 import {
   FakeFirestore,
   createFakeModeration,
+  createFakeRewards,
   makeAuthUser,
 } from '../../testing/test-utils';
 
 describe('CommentsService', () => {
   let fs: FakeFirestore;
   let moderation: ReturnType<typeof createFakeModeration>;
+  let rewards: ReturnType<typeof createFakeRewards>;
   let svc: CommentsService;
 
   const build = (flagged = false) => {
     fs = new FakeFirestore();
     moderation = createFakeModeration(flagged);
-    svc = new CommentsService(fs as any, moderation as any);
+    rewards = createFakeRewards();
+    svc = new CommentsService(fs as any, moderation as any, rewards as any);
   };
 
   const validDto = (over: Record<string, unknown> = {}) => ({

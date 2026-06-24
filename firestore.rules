@@ -83,12 +83,19 @@ service cloud.firestore {
                           // exclusively by Cloud Functions (setAdmin, Stripe/
                           // Apple verifiers, banUser, strike system) and loaded
                           // fresh on login. A client may not self-grant admin or
-                          // premium, nor clear its own strikes / ban. (points,
-                          // admirersCount, mutualsCount stay client-persisted by
-                          // the current economy/social design.)
+                          // premium, nor clear its own strikes / ban.
+                          // (admirersCount, mutualsCount stay client-persisted by
+                          // the current social design.)
                           'isAdmin', 'isPremium', 'premiumSince',
                           'strikes', 'struckByReportIds', 'lastStrikeAt',
-                          'isBanned', 'bannedAt', 'banReason']));
+                          'isBanned', 'bannedAt', 'banReason',
+                          // Points economy — server-authoritative via the API's
+                          // RewardsService (atomic increments for like
+                          // milestones, daily claim, spin, membership reward).
+                          // A client write here would clobber server awards.
+                          'points', 'dailyEarnedPoints', 'lastPointsReset',
+                          'lastClaimedPoints', 'membershipStartDate',
+                          'lastMembershipRewardDate']));
       allow delete: if isAdmin();
     }
 

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type React from 'react'
-import { MAX_DAILY_EARNED_POINTS } from '@/config/constants'
+import * as fbService from '@/services/firebaseService'
 import type { User, Coupon } from '@/types'
 
 interface RewardsDeps {
@@ -19,76 +19,63 @@ interface RewardsDeps {
   }) => void
 }
 
-// Points / coupons / membership rewards (Phase B). Owns lastClaimedPoints,
-// rewardedItems (anti-double-reward set), and coupons. awardPoints +
-// rewardedItems are consumed by handleLike/handleLikeComment, and
-// lastClaimedPoints by the persist effect and login cascade — all of which run
-// after this hook in useAppValue, so no late-bound wiring is needed. Function
-// bodies and the membership effect's dependency array are verbatim.
+// Points / coupons / membership rewards (Phase B). Points are now SERVER-OWNED:
+// like milestones, the daily claim, the spin debit, and the membership bonus are
+// all applied server-side (apps/api RewardsService) via atomic increments, so the
+// client's profile autosave can never clobber an award credited while the author
+// is online. This hook just calls those endpoints and syncs the returned balance.
+// Coupons stay client-managed (the wheel generates/evicts them locally).
 export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDeps) {
   const [lastClaimedPoints, setLastClaimedPoints] = useState<number | null>(
     null
   )
-  const [rewardedItems, setRewardedItems] = useState<Set<string>>(new Set())
   const [coupons, setCoupons] = useState<Coupon[]>([])
 
-  const awardPoints = (amount: number, reason: string) => {
-    const now = Date.now()
-    const isNewDay =
-      !user.lastPointsReset ||
-      now - (user.lastPointsReset || 0) > 24 * 60 * 60 * 1000
-    const currentDaily = isNewDay ? 0 : user.dailyEarnedPoints || 0
-    if (currentDaily >= MAX_DAILY_EARNED_POINTS) return
-    const finalAmount = Math.min(amount, MAX_DAILY_EARNED_POINTS - currentDaily)
-    if (finalAmount <= 0) return
-    setUser(prev => {
-      const isStillNewDay =
-        !prev.lastPointsReset ||
-        now - (prev.lastPointsReset || 0) > 24 * 60 * 60 * 1000
-      const prevDaily = isStillNewDay ? 0 : prev.dailyEarnedPoints || 0
-      return {
-        ...prev,
-        points: prev.points + finalAmount,
-        dailyEarnedPoints: prevDaily + finalAmount,
-        lastPointsReset: isStillNewDay ? now : prev.lastPointsReset
-      }
-    })
-    showToast(`+${finalAmount} points — ${reason}`, 'emoji_events')
-  }
-
-  const awardMembershipBonus = (
-    amount: number,
-    reason: string,
-    rewardedAt: number
-  ) => {
-    if (amount <= 0) return
+  // Sync the server-owned balance fields from a refreshed profile payload.
+  const syncBalance = (u: any) => {
+    if (!u) return
     setUser(prev => ({
       ...prev,
-      points: prev.points + amount,
-      lastMembershipRewardDate: rewardedAt
+      points: u.points ?? prev.points,
+      dailyEarnedPoints: u.dailyEarnedPoints ?? prev.dailyEarnedPoints,
+      lastPointsReset: u.lastPointsReset ?? prev.lastPointsReset,
+      lastMembershipRewardDate:
+        u.lastMembershipRewardDate ?? prev.lastMembershipRewardDate
     }))
-    showToast(`+${amount} points — ${reason}`, 'emoji_events')
+    if (u.lastClaimedPoints) setLastClaimedPoints(u.lastClaimedPoints)
   }
 
-  const handleClaimPoints = () => {
-    const now = Date.now()
-    if (lastClaimedPoints && now - lastClaimedPoints < 24 * 60 * 60 * 1000) {
-      const nextAvailable = new Date(lastClaimedPoints + 24 * 60 * 60 * 1000)
-      showToast(
-        `You can claim points again at ${nextAvailable.toLocaleTimeString()}`,
-        'schedule'
-      )
-      return
+  const handleClaimPoints = async () => {
+    try {
+      const res = await fbService.claimDailyPoints()
+      if (!res.claimed) {
+        const nextAvailable = res.nextAvailableAt
+          ? new Date(res.nextAvailableAt)
+          : null
+        showToast(
+          nextAvailable
+            ? `You can claim points again at ${nextAvailable.toLocaleTimeString()}`
+            : 'You already claimed your points today.',
+          'schedule'
+        )
+        return
+      }
+      syncBalance(res.user)
+      if (res.awarded > 0) {
+        showToast(
+          `+${res.awarded} points — ${user.isPremium ? 'Daily claim (2x Premium bonus)' : 'Daily claim'}`,
+          'emoji_events'
+        )
+      } else {
+        showToast('Daily cap reached! Come back tomorrow.', 'schedule')
+      }
+    } catch (err) {
+      console.error(err)
+      showToast('Failed to claim points. Please try again.', 'error')
     }
-    const pts = user.isPremium ? 6 : 3
-    awardPoints(
-      pts,
-      user.isPremium ? 'Daily claim (2x Premium bonus)' : 'Daily claim'
-    )
-    setLastClaimedPoints(now)
   }
 
-  const handleSpinWheel = () => {
+  const handleSpinWheel = async () => {
     if (user.points < 150) {
       showToast('You need 150 points to win a coupon', 'info')
       return
@@ -102,14 +89,24 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
     const unusedCoupons = coupons.filter((c: Coupon) => !c.used)
     const oldestWon = unusedCoupons.find((c: Coupon) => !isPurchased(c))
 
-    const proceedWithSpin = () => {
-      // Deduct points
-      setUser(prev => ({
-        ...prev,
-        points: prev.points - 150
-      }))
+    const proceedWithSpin = async () => {
+      // Debit the 150 points SERVER-side (authoritative balance). Only on a
+      // confirmed debit do we generate the coupon locally.
+      let res: { ok: boolean; points: number }
+      try {
+        res = await fbService.spinCouponWheel()
+      } catch (err) {
+        console.error(err)
+        showToast('Spin failed. Please try again.', 'error')
+        return
+      }
+      if (!res.ok) {
+        showToast('You need 150 points to win a coupon', 'info')
+        return
+      }
+      setUser(prev => ({ ...prev, points: res.points }))
 
-      // Random Chancing
+      // Random Chancing (coupon generation stays client-side).
       const rand = Math.random() * 100
       let winValue = 1
       if (rand < 84) {
@@ -156,7 +153,9 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
         confirmLabel: 'Yes',
         cancelLabel: 'No',
         icon: 'check_circle',
-        onConfirm: proceedWithSpin,
+        onConfirm: () => {
+          void proceedWithSpin()
+        },
         onCancel: () => {}
       })
 
@@ -164,42 +163,14 @@ export function useRewards({ user, setUser, showToast, showConfirm }: RewardsDep
     }
 
     // Not at the cap (or nothing winnable to cycle) → proceed immediately
-    proceedWithSpin()
+    await proceedWithSpin()
   }
-
-  // Membership reward: 200 pts after 25hrs of premium, then annually
-  useEffect(() => {
-    if (!user.isPremium || !user.membershipStartDate) return
-    // Capture after the guard so the narrowing survives into the closure below.
-    const membershipStartDate = user.membershipStartDate
-    const checkMembershipReward = () => {
-      const now = Date.now()
-      const msInYear = 365 * 24 * 60 * 60 * 1000
-      const msIn25Hours = 25 * 60 * 60 * 1000
-      if (!user.lastMembershipRewardDate) {
-        if (now - membershipStartDate >= msIn25Hours) {
-          awardMembershipBonus(200, 'Membership Reward', now)
-        }
-      } else {
-        if (now - user.lastMembershipRewardDate >= msInYear) {
-          awardMembershipBonus(200, 'Annual Membership Reward', now)
-        }
-      }
-    }
-    const interval = setInterval(checkMembershipReward, 60000)
-    checkMembershipReward()
-    return () => clearInterval(interval)
-  }, [user.isPremium, user.membershipStartDate, user.lastMembershipRewardDate])
 
   return {
     lastClaimedPoints,
     setLastClaimedPoints,
-    rewardedItems,
-    setRewardedItems,
     coupons,
     setCoupons,
-    awardPoints,
-    awardMembershipBonus,
     handleClaimPoints,
     handleSpinWheel
   }

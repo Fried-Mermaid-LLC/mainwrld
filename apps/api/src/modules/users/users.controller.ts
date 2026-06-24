@@ -33,10 +33,7 @@ export class UsersController {
   // Signup profile creation. The Auth account already exists (client created
   // it); this stamps the profile + username claim and enforces COPPA.
   @Post()
-  createProfile(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateProfileDto,
-  ) {
+  createProfile(@CurrentUser() user: AuthUser, @Body() dto: CreateProfileDto) {
     return this.users.createProfile(user, dto);
   }
 
@@ -91,10 +88,7 @@ export class UsersController {
 
   @Post('me/fcm-tokens')
   @HttpCode(204)
-  async addFcmToken(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: FcmTokenDto,
-  ) {
+  async addFcmToken(@CurrentUser() user: AuthUser, @Body() dto: FcmTokenDto) {
     await this.users.addFcmToken(user.uid, dto.token);
   }
 

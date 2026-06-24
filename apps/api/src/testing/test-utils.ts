@@ -122,3 +122,20 @@ export function createFakeModeration(flagged = false) {
     logFlag: jest.fn(async () => {}),
   };
 }
+
+// Server-authoritative points service (RewardsService). All methods are no-op
+// fakes — the points logic itself is covered by rewards.service.spec.
+export function createFakeRewards() {
+  return {
+    awardEarnedPoints: jest.fn(async () => 0),
+    onChapterLikeChanged: jest.fn(async () => {}),
+    onCommentLikesChanged: jest.fn(async () => {}),
+    claimDaily: jest.fn(async () => ({
+      claimed: true,
+      awarded: 0,
+      nextAvailableAt: null,
+    })),
+    spendForSpin: jest.fn(async () => ({ ok: true, points: 0 })),
+    applyMembershipReward: jest.fn(async () => {}),
+  };
+}
