@@ -72,7 +72,7 @@ export const SelfProfileView = () => {
           </button>
         </div>
       </header>
-      <div className='p-6 flex flex-col items-center'>
+      <div className='p-6 flex flex-col items-center max-w-2xl mx-auto w-full'>
         {avatarConfig ? (
           <div className='w-36 h-36 rounded-[3rem] overflow-hidden border-4 border-white shadow-2xl mb-6 relative bg-gray-50'>
             <AvatarLayers

@@ -267,6 +267,7 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                 </button>
             </header>
 
+            <div className="flex-1 flex flex-col lg:flex-row min-h-0">
             <div className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center p-4 min-h-0 relative overflow-hidden">
                 {localConfig && (
                     <div className="relative w-52 md:w-64 aspect-[140/194] transition-transform duration-300 ease-out" style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}>
@@ -356,8 +357,8 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                 )}
             </div>
 
-            <div className="bg-white rounded-t-[2rem] shadow-2xl p-5 border-t" style={{ height: '42%' }}>
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-3">
+            <div className="bg-white rounded-t-[2rem] lg:rounded-none shadow-2xl p-5 border-t lg:border-t-0 lg:border-l h-[42%] lg:h-auto lg:w-[420px] lg:flex-shrink-0 flex flex-col min-h-0">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-3 lg:flex-wrap lg:overflow-visible">
                     {categories.map(cat => (
                         <button
                             key={cat.key}
@@ -372,7 +373,7 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                     ))}
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 overflow-y-auto no-scrollbar" style={{ maxHeight: 'calc(100% - 50px)' }}>
+                <div className="grid grid-cols-4 gap-3 content-start overflow-y-auto no-scrollbar flex-1 min-h-0">
                     {filteredItems.map(item => {
                         const cost = getItemCost(item.id);
                         const isUnlocked = cost === 0 || unlockedAvatarItems.has(item.id);
@@ -415,6 +416,7 @@ export const CustomizationView = ({ onboarding = false }: { onboarding?: boolean
                         );
                     })}
                 </div>
+            </div>
             </div>
 
             {pendingUnlock && (
