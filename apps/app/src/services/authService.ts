@@ -5,6 +5,8 @@ import {
   signOut,
   onAuthStateChanged,
   updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   verifyPasswordResetCode,
   confirmPasswordReset,
   type User as FirebaseUser,
@@ -31,9 +33,19 @@ export const onAuthChange = (
 export const getCurrentFirebaseUser = (): FirebaseUser | null =>
   auth.currentUser;
 
-export const changePassword = async (newPassword: string): Promise<void> => {
+// Re-authenticate with the current password before updating it. Firebase
+// requires a fresh credential for security-sensitive mutations, and proving
+// knowledge of the old password closes the "walk-up to an unlocked session and
+// silently change the password" hole.
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<void> => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
+  if (!user.email) throw new Error('No email on account');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
   await updatePassword(user, newPassword);
 };
 

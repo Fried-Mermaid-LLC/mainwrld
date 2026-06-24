@@ -33,15 +33,30 @@ export const SettingsView = () => {
         .catch(console.error)
     }
   }
-  const onUpdatePassword = async (newPassword: string) => {
+  const onUpdatePassword = async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<boolean> => {
     try {
-      await fbService.changePassword(newPassword)
+      await fbService.changePassword(currentPassword, newPassword)
       showToast('Password updated!', 'check_circle')
+      return true
     } catch (err: any) {
-      showToast(
-        'Failed to update password. You may need to log in again.',
-        'error'
-      )
+      const code = err?.code as string | undefined
+      if (
+        code === 'auth/wrong-password' ||
+        code === 'auth/invalid-credential'
+      ) {
+        showToast('Current password is incorrect', 'error')
+      } else if (code === 'auth/too-many-requests') {
+        showToast('Too many attempts. Please try again later.', 'error')
+      } else {
+        showToast(
+          'Failed to update password. You may need to log in again.',
+          'error'
+        )
+      }
+      return false
     }
   }
   // Mature-content opt-in. The displayed state is the effective `canSeeMature`
@@ -65,6 +80,7 @@ export const SettingsView = () => {
   }
   const [activeModal, setActiveModal] = useState<string | null>(null)
   const [formValue, setFormValue] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -111,7 +127,14 @@ export const SettingsView = () => {
     }
   }
 
-  const handleSave = () => {
+  const resetModal = () => {
+    setActiveModal(null)
+    setFormValue('')
+    setCurrentPassword('')
+    setConfirmPassword('')
+  }
+
+  const handleSave = async () => {
     if (activeModal === 'email') {
       if (!formValue.includes('@')) {
         showToast('Please enter a valid email', 'error')
@@ -127,6 +150,10 @@ export const SettingsView = () => {
       onUpdateUser({ ...user, displayName: formValue })
       showToast('Display name updated!', 'check_circle')
     } else if (activeModal === 'password') {
+      if (!currentPassword) {
+        showToast('Please enter your current password', 'error')
+        return
+      }
       if (formValue.length < 12) {
         showToast('Password must be at least 12 characters', 'error')
         return
@@ -135,12 +162,12 @@ export const SettingsView = () => {
         showToast('Passwords do not match', 'error')
         return
       }
-      onUpdatePassword(formValue)
-      showToast('Password updated!', 'check_circle')
+      // Keep the modal open on failure (e.g. wrong current password) so the
+      // user can correct it; onUpdatePassword owns the success/error toast.
+      const ok = await onUpdatePassword(currentPassword, formValue)
+      if (!ok) return
     }
-    setActiveModal(null)
-    setFormValue('')
-    setConfirmPassword('')
+    resetModal()
   }
 
   const accountOptions = [
@@ -217,6 +244,16 @@ export const SettingsView = () => {
                 : 'Change Password'}
             </h2>
             <div className='space-y-4'>
+              {activeModal === 'password' && (
+                <input
+                  type='password'
+                  autoComplete='current-password'
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  placeholder='Enter current password'
+                  className='w-full p-4 rounded-2xl bg-gray-50 border border-gray-100 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-accent'
+                />
+              )}
               <input
                 type={
                   activeModal === 'password'
@@ -224,6 +261,9 @@ export const SettingsView = () => {
                     : activeModal === 'email'
                     ? 'email'
                     : 'text'
+                }
+                autoComplete={
+                  activeModal === 'password' ? 'new-password' : undefined
                 }
                 value={formValue}
                 onChange={e => setFormValue(e.target.value)}
@@ -242,17 +282,14 @@ export const SettingsView = () => {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   placeholder='Confirm new password'
+                  autoComplete='new-password'
                   className='w-full p-4 rounded-2xl bg-gray-50 border border-gray-100 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-accent'
                 />
               )}
             </div>
             <div className='flex gap-3'>
               <button
-                onClick={() => {
-                  setActiveModal(null)
-                  setFormValue('')
-                  setConfirmPassword('')
-                }}
+                onClick={resetModal}
                 className='flex-1 py-4 rounded-2xl bg-gray-100 text-sm font-bold transition-all active:scale-95'
               >
                 Cancel
