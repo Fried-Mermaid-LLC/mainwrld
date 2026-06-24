@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Button, Input } from '@/components/sharedComponents'
+import { AuthLayout } from '@/components/AuthLayout'
 import { useApp } from '@/state/AppContext'
 import { sendPasswordReset } from '@/services/authService'
 
@@ -31,23 +32,17 @@ export const ForgotPasswordView = () => {
   }
 
   return (
-    <div className='fixed inset-0 bg-white p-8 flex flex-col items-center justify-center animate-in fade-in duration-500'>
-      <header className='absolute top-8 left-8'>
-        <button
-          onClick={onBack}
-          className='w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400'
-        >
-          <span className='material-icons-round'>arrow_back</span>
-        </button>
-      </header>
-
+    <AuthLayout
+      center
+      title={sent ? 'Check Your Email' : 'Reset Password'}
+      onBack={onBack}
+    >
       {!sent ? (
         <>
-          <h1 className='text-3xl font-display mb-4'>Reset Password</h1>
-          <p className='text-center text-xs text-gray-400 font-bold uppercase tracking-widest mb-12 px-8'>
+          <p className='text-xs text-gray-400 font-bold uppercase tracking-widest mb-8'>
             Enter your email and we'll send you a reset link.
           </p>
-          <div className='w-full max-w-sm space-y-8 mb-8'>
+          <div className='space-y-8'>
             <Input
               label='Email Address'
               placeholder='you@example.com'
@@ -64,15 +59,14 @@ export const ForgotPasswordView = () => {
           <span className='material-icons-round text-5xl text-green-500 mb-4'>
             check_circle
           </span>
-          <h1 className='text-3xl font-display mb-4'>Check Your Email</h1>
-          <p className='text-center text-xs text-gray-400 font-bold uppercase tracking-widest mb-12 px-8'>
+          <p className='text-xs text-gray-400 font-bold uppercase tracking-widest mb-8'>
             We sent a password reset link to {email}
           </p>
-          <Button className='w-full max-w-sm' onClick={onBack}>
+          <Button className='w-full' onClick={onBack}>
             Back to Login
           </Button>
         </>
       )}
-    </div>
+    </AuthLayout>
   )
 }

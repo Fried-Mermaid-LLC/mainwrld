@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Button, Input } from '@/components/sharedComponents'
+import { AuthLayout } from '@/components/AuthLayout'
 import { useApp } from '@/state/AppContext'
 import { verifyResetCode, completePasswordReset } from '@/services/firebaseService'
 
@@ -87,19 +88,17 @@ export const ResetPasswordView = () => {
     }
   }
 
-  return (
-    <div className='fixed inset-0 bg-white p-8 flex flex-col items-center justify-center animate-in fade-in duration-500'>
-      <header className='absolute top-8 left-8'>
-        <button
-          onClick={goToLogin}
-          className='w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400'
-        >
-          <span className='material-icons-round'>arrow_back</span>
-        </button>
-      </header>
+  const titles: Record<Status, string> = {
+    verifying: 'Reset Password',
+    invalid: 'Link Expired',
+    ready: 'New Password',
+    done: 'Password Updated'
+  }
 
+  return (
+    <AuthLayout center title={titles[status]} onBack={goToLogin}>
       {status === 'verifying' && (
-        <p className='text-center text-xs text-gray-400 font-bold uppercase tracking-widest px-8'>
+        <p className='text-xs text-gray-400 font-bold uppercase tracking-widest'>
           Verifying reset link…
         </p>
       )}
@@ -109,12 +108,11 @@ export const ResetPasswordView = () => {
           <span className='material-icons-round text-5xl text-red-500 mb-4'>
             error_outline
           </span>
-          <h1 className='text-3xl font-display mb-4'>Link Expired</h1>
-          <p className='text-center text-xs text-gray-400 font-bold uppercase tracking-widest mb-12 px-8'>
+          <p className='text-xs text-gray-400 font-bold uppercase tracking-widest mb-8'>
             This reset link is invalid or has expired. Request a new one from the
             login screen.
           </p>
-          <Button className='w-full max-w-sm' onClick={goToLogin}>
+          <Button className='w-full' onClick={goToLogin}>
             Back to Login
           </Button>
         </>
@@ -122,13 +120,12 @@ export const ResetPasswordView = () => {
 
       {status === 'ready' && (
         <>
-          <h1 className='text-3xl font-display mb-4'>New Password</h1>
-          <p className='text-center text-xs text-gray-400 font-bold uppercase tracking-widest mb-12 px-8'>
+          <p className='text-xs text-gray-400 font-bold uppercase tracking-widest mb-8'>
             {email
               ? `Set a new password for ${email}`
               : 'Enter your new password below.'}
           </p>
-          <div className='w-full max-w-sm space-y-6 mb-8'>
+          <div className='space-y-6'>
             <Input
               label='New Password'
               type='password'
@@ -159,15 +156,14 @@ export const ResetPasswordView = () => {
           <span className='material-icons-round text-5xl text-green-500 mb-4'>
             check_circle
           </span>
-          <h1 className='text-3xl font-display mb-4'>Password Updated</h1>
-          <p className='text-center text-xs text-gray-400 font-bold uppercase tracking-widest mb-12 px-8'>
+          <p className='text-xs text-gray-400 font-bold uppercase tracking-widest mb-8'>
             You can now log in with your new password.
           </p>
-          <Button className='w-full max-w-sm' onClick={goToLogin}>
+          <Button className='w-full' onClick={goToLogin}>
             Back to Login
           </Button>
         </>
       )}
-    </div>
+    </AuthLayout>
   )
 }

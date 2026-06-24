@@ -1,22 +1,19 @@
 import { Button, Input } from '@/components/sharedComponents'
+import { AuthLayout } from '@/components/AuthLayout'
 import { useApp } from '@/state/AppContext'
 
 export const SignupView = () => {
   const { setView, setAuthError, signUpForm, setSignUpForm, authError, authBusy, handleSignup } = useApp()
   return (
-    <div className='fixed inset-0 bg-white p-8 overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500'>
-      <header className='flex items-center gap-4 mb-10'>
-        <button
-          onClick={() => {
-            setAuthError(null)
-            setView('login')
-          }}
-          className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
-        >
-          <span className='material-icons-round'>arrow_back</span>
-        </button>
-        <h1 className='text-2xl font-bold'>Sign Up</h1>
-      </header>
+    <AuthLayout
+      center
+      title='Sign Up'
+      animation='animate-in slide-in-from-right duration-500'
+      onBack={() => {
+        setAuthError(null)
+        setView('login')
+      }}
+    >
       <div className='space-y-6'>
         <Input
           label='Email Address'
@@ -80,6 +77,6 @@ export const SignupView = () => {
           {authBusy ? 'Creating account…' : 'Join MainWRLD'}
         </Button>
       </div>
-    </div>
+    </AuthLayout>
   )
 }
