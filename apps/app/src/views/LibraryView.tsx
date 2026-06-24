@@ -40,6 +40,23 @@ export const LibraryView = () => {
             const chapterLabel =
               b.chapterMeta?.[chapterIndex]?.title ||
               `Chapter ${chapterIndex + 1}`
+            // Overall book progress: chapters already finished (chapterIndex)
+            // plus the fraction read of the current one, over the published
+            // chapter count. The reader's scrollProgress is per-chapter and
+            // resets to 0 on every chapter change, so showing it raw left this
+            // bar empty whenever the reader had just advanced a chapter — even
+            // deep into the book.
+            const totalChapters = Math.max(
+              b.chaptersCount || b.chapterMeta?.length || 1,
+              1
+            )
+            const clampedChapter = Math.min(chapterIndex, totalChapters - 1)
+            const bookProgress = Math.min(
+              Math.round(
+                ((clampedChapter + scrollProgress / 100) / totalChapters) * 100
+              ),
+              100
+            )
 
             return (
               <div
@@ -61,7 +78,7 @@ export const LibraryView = () => {
                   <div className='relative z-20 h-[6px] w-full bg-[#fcefef] rounded-full'>
                     <div
                       className='absolute left-0 top-px h-[4px] bg-[#ef4f49] rounded-full'
-                      style={{ width: `${scrollProgress}%` }}
+                      style={{ width: `${bookProgress}%` }}
                     />
                   </div>
                 </div>
