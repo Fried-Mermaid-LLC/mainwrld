@@ -2,15 +2,23 @@ import React from 'react'
 import { BASE } from '@/config/config'
 import { useApp } from '@/state/AppContext'
 
-export const LEGAL_DOCS: Record<'terms' | 'privacy', { title: string; file: string }> = {
-  terms: { title: 'Terms', file: 'terms.html' },
-  privacy: { title: 'Privacy', file: 'privacy.html' }
+export const LEGAL_DOCS: Record<
+  'terms' | 'privacy' | 'guidelines',
+  { title: string; file: string }
+> = {
+  terms: { title: 'Terms & EULA', file: 'terms.html' },
+  privacy: { title: 'Privacy', file: 'privacy.html' },
+  guidelines: { title: 'Community Guidelines', file: 'guidelines.html' }
 }
 
 export const LegalView = () => {
-  const { view, setView } = useApp()
-  const doc = LEGAL_DOCS[view as 'terms' | 'privacy']
-  const onBack = () => setView('landing')
+  const { view, setView, firebaseUid } = useApp()
+  const doc = LEGAL_DOCS[view as keyof typeof LEGAL_DOCS]
+  // Terms/Privacy are reachable pre-login (landing footer); Guidelines is
+  // reached from Settings. Return to Settings for a signed-in user, else to the
+  // landing page — otherwise opening a policy from Settings would eject the
+  // user to the landing screen.
+  const onBack = () => setView(firebaseUid ? 'settings' : 'landing')
   return (
     <div className='fixed inset-0 bg-white flex flex-col animate-in slide-in-from-right duration-300'>
       <header

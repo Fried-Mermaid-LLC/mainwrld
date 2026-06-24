@@ -124,6 +124,7 @@ export function useUserDataLoader({
           profile.dailyChaptersPublished !== undefined ||
           profile.chatDailyCounts !== undefined ||
           profile.notificationPrefs !== undefined ||
+          profile.showMatureContent !== undefined ||
           profile.onboardingTutorialDismissed !== undefined
         ) {
           setUser(prev => ({
@@ -138,6 +139,9 @@ export function useUserDataLoader({
             chatDailyCounts: profile.chatDailyCounts || {},
             // F06 notification prefs (B2) + F10 onboarding dismissal (A4)
             notificationPrefs: profile.notificationPrefs || undefined,
+            // Mature-content opt-in. Keep the raw tri-state (true/false/
+            // undefined) — coercing to false would defeat the 17+ age default.
+            showMatureContent: profile.showMatureContent,
             onboardingTutorialDismissed:
               profile.onboardingTutorialDismissed || false
           }))

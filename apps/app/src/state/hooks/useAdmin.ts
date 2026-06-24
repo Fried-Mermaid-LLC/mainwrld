@@ -3,7 +3,14 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { AVATAR_ITEMS } from '@/components/avatar'
-import type { Report, User, Book, Comment, NotificationCategory } from '@/types'
+import type {
+  Report,
+  ReportReason,
+  User,
+  Book,
+  Comment,
+  NotificationCategory
+} from '@/types'
 
 interface AdminDeps {
   user: User
@@ -75,7 +82,8 @@ export function useAdmin({
           targetId: r.targetId,
           reportedBy: r.reportedBy,
           timestamp: r.timestamp,
-          status: r.status
+          status: r.status,
+          reason: r.reason
         }))
       )
     })
@@ -95,7 +103,8 @@ export function useAdmin({
 
   const handleReport = (
     type: 'Book' | 'Comment' | 'User',
-    targetId: string
+    targetId: string,
+    reason?: ReportReason
   ) => {
     const newReport = {
       id: Math.random().toString(36).substr(2, 9),
@@ -103,7 +112,8 @@ export function useAdmin({
       targetId,
       reportedBy: user.username,
       timestamp: new Date().toISOString(),
-      status: 'pending'
+      status: 'pending',
+      ...(reason ? { reason } : {})
     }
     fbService.addReportDoc(newReport).catch(console.error)
     addNotification(

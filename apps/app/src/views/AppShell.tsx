@@ -96,6 +96,7 @@ export const AppShell: React.FC = () => {
 
       case 'terms':
       case 'privacy':
+      case 'guidelines':
         return <LegalView />
 
       case 'signup':

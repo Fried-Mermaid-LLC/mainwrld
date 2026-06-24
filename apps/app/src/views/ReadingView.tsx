@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { renderFormattedContent } from '@/utils/renderFormattedContent'
 import type { BookProgress } from '@/types'
 import { useApp } from '@/state/AppContext'
+import { useReportFlow } from '@/components/reportFlow'
 import * as fbService from '@/services/firebaseService'
 
 export const ReadingView = () => {
@@ -22,8 +23,9 @@ export const ReadingView = () => {
     handleBookProgressUpdate,
     handleShareBook,
     getUserBookProgress,
-    userIsUnder16
+    canSeeMature
   } = useApp()
+  const { sheet: reportSheet, startReport } = useReportFlow()
   const currentUser = user
   const book = selectedBook
   const savedProgress: BookProgress = selectedBook
@@ -465,20 +467,31 @@ export const ReadingView = () => {
     setLocalScrollProgress(0)
   }, [currentChapterIdx])
 
-  // Defense in depth (X09): an under-16 reader must never open an explicit book,
-  // even if it reached here via a stale selectedBook / shared link / spotlight.
-  if (userIsUnder16 && book?.isExplicit) {
+  // Mature gate (defense in depth): a reader who can't see mature content must
+  // not open a mature book, even if it reached here via a stale selectedBook /
+  // shared link / spotlight / search reveal. Enabling the toggle in Settings
+  // lifts this.
+  if (!canSeeMature && book?.isMature) {
     return (
       <div className='fixed inset-0 bg-white flex flex-col items-center justify-center px-10 text-center'>
         <span className='material-icons-round text-gray-300 text-5xl mb-4'>
           lock
         </span>
         <p className='text-sm font-bold text-gray-500 mb-2'>
-          This book isn’t available for your account
+          This book contains mature content
+        </p>
+        <p className='text-[11px] text-gray-400 mb-4 max-w-xs'>
+          Turn on “Show mature content” in Settings to read it.
         </p>
         <button
+          onClick={() => setView('settings')}
+          className='text-xs font-bold uppercase tracking-widest text-accent'
+        >
+          Enable mature content in Settings
+        </button>
+        <button
           onClick={() => setView('explore')}
-          className='mt-6 text-xs font-bold uppercase tracking-widest text-accent'
+          className='mt-4 text-[11px] font-bold uppercase tracking-widest text-gray-300'
         >
           Back to Explore
         </button>
@@ -548,6 +561,15 @@ export const ReadingView = () => {
           <button onClick={onShare} className='w-10 h-10 opacity-40'>
             <span className='material-icons-round'>share</span>
           </button>
+          {book && (
+            <button
+              onClick={() => startReport('Book', book.id)}
+              className='w-10 h-10 opacity-40'
+              aria-label='Report this book'
+            >
+              <span className='material-icons-round'>report</span>
+            </button>
+          )}
           <button
             onClick={() => setShowOptions(!showOptions)}
             className='w-10 h-10 opacity-40'
@@ -556,6 +578,7 @@ export const ReadingView = () => {
           </button>
         </div>
       </header>
+      {reportSheet}
 
       {showOptions && (
         <div

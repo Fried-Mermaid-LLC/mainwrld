@@ -98,7 +98,7 @@ export class CreateBookDto {
 
   @IsOptional()
   @IsBoolean()
-  isExplicit?: boolean;
+  isMature?: boolean;
 
   @IsOptional()
   @IsInt()

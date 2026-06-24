@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import { Button, CoverImg } from '@/components/sharedComponents'
+import { MatureCover } from '@/components/MatureCover'
 import { AvatarLayers } from '@/components/avatar'
 import type { Relationship, User, Book } from '@/types'
 import { useApp } from '@/state/AppContext'
+import { useReportFlow } from '@/components/reportFlow'
 
 export const OtherProfileView = () => {
   const {
@@ -12,7 +14,6 @@ export const OtherProfileView = () => {
     setSelectedBook,
     handleAdmire,
     handleBlockUser,
-    handleReport,
     setSelectedChatUser,
     relationships,
     user: currentUser,
@@ -32,9 +33,10 @@ export const OtherProfileView = () => {
     setSelectedBook(b)
     setView('book-detail')
   }
+  const { sheet: reportSheet, startReport } = useReportFlow()
   const onAdmire = () => handleAdmire(user)
   const onBlock = () => handleBlockUser(user.username)
-  const onReport = () => handleReport('User', user.username)
+  const onReport = () => startReport('User', user.username)
   const onMessage = () => {
     setSelectedChatUser(user.username)
     setView('chat-conversation')
@@ -76,6 +78,7 @@ export const OtherProfileView = () => {
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in slide-in-from-right duration-500'>
+      {reportSheet}
       <header className='p-6 flex items-center gap-4 sticky top-0 bg-white/80 backdrop-blur-xl z-50'>
         <button
           onClick={onBack}
@@ -388,7 +391,7 @@ export const OtherProfileView = () => {
                     className='aspect-[2/3] shadow-md border-1 border-white overflow-hidden relative'
                     style={{ backgroundColor: b.coverColor }}
                   >
-                    <CoverImg book={b} />
+                    <MatureCover book={b} />
                   </div>
                   <div className='px-1'>
                     <p className='text-[10px] font-bold truncate'>{b.title}</p>
@@ -423,7 +426,7 @@ export const OtherProfileView = () => {
                     className='aspect-[2/3] shadow-md border-1 border-white overflow-hidden relative'
                     style={{ backgroundColor: b.coverColor }}
                   >
-                    <CoverImg book={b} />
+                    <MatureCover book={b} />
                   </div>
                   <div className='px-1'>
                     <p className='text-[10px] font-bold truncate'>{b.title}</p>

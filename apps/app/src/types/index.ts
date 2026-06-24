@@ -5,7 +5,7 @@
 export * from '@mainwrld/types';
 
 export type View =
-  | 'splash' | 'landing' | 'login' | 'signup' | 'forgot-password' | 'reset-password' | 'terms' | 'privacy'
+  | 'splash' | 'landing' | 'login' | 'signup' | 'forgot-password' | 'reset-password' | 'terms' | 'privacy' | 'guidelines'
   | 'home' | 'explore' | 'library' | 'write' | 'publishing'
   | 'monetization-request' | 'self-profile' | 'customization'
   | 'profile' | 'book-detail' | 'reading' | 'notifications'

@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
-import { Button, CoverImg } from '@/components/sharedComponents'
+import { Button } from '@/components/sharedComponents'
+import { MatureCover } from '@/components/MatureCover'
+import { useReportFlow } from '@/components/reportFlow'
 import type { User } from '@/types'
 import { useApp } from '@/state/AppContext'
 import * as stripeConnect from '@/services/stripeConnect'
@@ -17,7 +19,6 @@ export const PublicBookDetailPage = () => {
     handleSaveToLibrary,
     handleRemoveFromLibrary,
     isBookInLibrary,
-    handleReport,
     handleShareBook,
     handleToggleFavorite,
     handleDeleteBook,
@@ -25,8 +26,9 @@ export const PublicBookDetailPage = () => {
     handleMarkCompleted,
     showToast,
     coupons,
-    userIsUnder16
+    canSeeMature
   } = useApp()
+  const { sheet: reportSheet, startReport } = useReportFlow()
   const [buying, setBuying] = useState(false)
   const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null)
   const currentUser = user
@@ -37,9 +39,11 @@ export const PublicBookDetailPage = () => {
   const isOwned = getUserOwnedBookIds().has(book.id)
   const bookProgress: any = getUserBookProgress(book.id)
   const onBack = () => setView('explore')
-  // Defense in depth (X09): an under-16 viewer must never open an explicit
-  // book's detail, even via a shared link / spotlight leak / stale selectedBook.
-  const blockedForAge = userIsUnder16 && !!book.isExplicit
+  // Mature gate: a viewer who can't see mature content (toggle off / age
+  // default off) must not open a mature book's detail — even via a shared link,
+  // a search reveal, or a stale selectedBook. Enabling the toggle in Settings
+  // lifts this.
+  const matureGated = !canSeeMature && !!book.isMature
   const onRead = () => {
     setReadingActivity(prev => {
       const ua = [...(prev[user.username] || [])]
@@ -62,7 +66,7 @@ export const PublicBookDetailPage = () => {
   const onSave = (_id?: string) => handleSaveToLibrary(book.id)
   const onRemove = (_id?: string) => handleRemoveFromLibrary(book.id)
   const isSaved = isBookInLibrary(book.id)
-  const onReport = () => handleReport('Book', book.id)
+  const onReport = () => startReport('Book', book.id)
   const onShare = () => handleShareBook(book)
   const onToggleFavorite = () => handleToggleFavorite(book.id)
   const onDelete = handleDeleteBook
@@ -103,18 +107,27 @@ export const PublicBookDetailPage = () => {
     }
   }
 
-  if (blockedForAge) {
+  if (matureGated) {
     return (
       <div className='fixed inset-0 bg-white flex flex-col items-center justify-center px-10 text-center animate-in fade-in duration-300'>
         <span className='material-icons-round text-gray-300 text-5xl mb-4'>
           lock
         </span>
         <p className='text-sm font-bold text-gray-500 mb-2'>
-          This book isn’t available for your account
+          This book contains mature content
+        </p>
+        <p className='text-[11px] text-gray-400 mb-4 max-w-xs'>
+          Turn on “Show mature content” in Settings to read it.
         </p>
         <button
+          onClick={() => setView('settings')}
+          className='text-xs font-bold uppercase tracking-widest text-accent'
+        >
+          Enable mature content in Settings
+        </button>
+        <button
           onClick={onBack}
-          className='mt-6 text-xs font-bold uppercase tracking-widest text-accent'
+          className='mt-4 text-[11px] font-bold uppercase tracking-widest text-gray-300'
         >
           Back to Explore
         </button>
@@ -138,9 +151,9 @@ export const PublicBookDetailPage = () => {
           >
             <span className='material-icons-round'>share</span>
           </button>
-          {book.isExplicit && (
+          {book.isMature && (
             <div className='px-3 py-1 bg-red-500 text-white rounded-full text-[8px] font-bold uppercase tracking-widest flex items-center'>
-              Explicit
+              Mature
             </div>
           )}
           <button
@@ -162,7 +175,7 @@ export const PublicBookDetailPage = () => {
           className='w-56 h-80 shadow-2xl border-1 border-white mb-10 transform -rotate-1 relative overflow-hidden'
           style={{ backgroundColor: book.coverColor }}
         >
-          <CoverImg book={book} />
+          <MatureCover book={book} />
           <div className='absolute inset-0 bg-gradient-to-t from-black/20 to-transparent' />
         </div>
         <h1 className='text-3xl font-bold mb-2'>{book.title}</h1>
@@ -370,6 +383,7 @@ export const PublicBookDetailPage = () => {
           >
             <span className='material-icons-round text-sm'>report</span> Report
           </Button>
+          {reportSheet}
         </div>
       </div>
     </div>

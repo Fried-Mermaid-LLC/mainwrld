@@ -11,7 +11,7 @@ export const PublishingView = () => {
   const onBack = () => setView('write')
   const isNewBook = !currentPublishingId
   const [tagline, setTagline] = useState(initialData?.tagline || '')
-  const [isExplicit, setIsExplicit] = useState(initialData?.isExplicit || false)
+  const [isMature, setIsMature] = useState(initialData?.isMature || false)
   const [commentsEnabled, setCommentsEnabled] = useState(
     initialData?.commentsEnabled !== false
   )
@@ -231,21 +231,21 @@ export const PublishingView = () => {
 
           <div className='flex justify-between items-center'>
             <span className='text-[10px] font-bold uppercase'>
-              Explicit Content
+              Mature Content
             </span>
             <div className='flex gap-2'>
               <button
-                onClick={() => setIsExplicit(true)}
+                onClick={() => setIsMature(true)}
                 className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase ${
-                  isExplicit ? 'bg-accent text-white' : 'bg-gray-50'
+                  isMature ? 'bg-accent text-white' : 'bg-gray-50'
                 }`}
               >
                 Yes
               </button>
               <button
-                onClick={() => setIsExplicit(false)}
+                onClick={() => setIsMature(false)}
                 className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase ${
-                  !isExplicit ? 'bg-accent text-white' : 'bg-gray-50'
+                  !isMature ? 'bg-accent text-white' : 'bg-gray-50'
                 }`}
               >
                 No
@@ -263,7 +263,7 @@ export const PublishingView = () => {
             onClick={() => {
               onPost({
                 tagline,
-                isExplicit,
+                isMature,
                 commentsEnabled,
                 coverImage,
                 genres: selectedGenres,

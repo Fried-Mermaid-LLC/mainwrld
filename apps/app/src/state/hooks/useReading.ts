@@ -435,7 +435,7 @@ export function useReading({
             },
             {
               tagline: data.tagline || existingBook.tagline || '',
-              isExplicit: data.isExplicit ?? existingBook.isExplicit ?? false,
+              isMature: data.isMature ?? existingBook.isMature ?? false,
               genres:
                 data.genres && data.genres.length > 0
                   ? data.genres
@@ -467,7 +467,7 @@ export function useReading({
           // instead of the stale draft values until the ~30s books poll lands.
           const publishPatch: Partial<Book> = {
             tagline: data.tagline || existingBook.tagline || '',
-            isExplicit: data.isExplicit ?? existingBook.isExplicit ?? false,
+            isMature: data.isMature ?? existingBook.isMature ?? false,
             genres:
               data.genres && data.genres.length > 0
                 ? data.genres
@@ -546,7 +546,7 @@ export function useReading({
           monetizationAttempts: 0,
           publishedDate: new Date().toISOString().split('T')[0],
           isCompleted: false,
-          isExplicit: data.isExplicit ?? false,
+          isMature: data.isMature ?? false,
           chaptersCount: 1,
           tagline: data.tagline || '',
           genres: data.genres || [],
@@ -837,7 +837,7 @@ export function useReading({
         publishedDate: new Date().toISOString().split('T')[0],
         isCompleted: false,
         isDraft: true,
-        isExplicit: false,
+        isMature: false,
         chaptersCount: hasContent ? 1 : 0,
         tagline: '',
         genres: [],

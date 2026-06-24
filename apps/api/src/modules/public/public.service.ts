@@ -60,7 +60,8 @@ export class PublicService {
       hashtags: Array.isArray(b.hashtags) ? (b.hashtags as string[]) : [],
       chaptersCount: Number(b.chaptersCount) || 0,
       totalLikes: likes,
-      isExplicit: !!b.isExplicit,
+      // Backward-compat: legacy docs store `isExplicit`, new docs `isMature`.
+      isMature: !!(b.isMature ?? b.isExplicit),
       isCompleted: !!b.isCompleted,
       publishedDate: (b.publishedDate as string) || '',
     };

@@ -33,9 +33,12 @@ export const MAX_WORD_COUNT = 11000;
 export const MAX_MESSAGE_LENGTH = 500;
 export const MAX_MESSAGES_PER_CONVERSATION_PER_DAY = 25;
 // Age gates (X09). MIN_SIGNUP_AGE: COPPA hard floor for account creation.
-// EXPLICIT_MIN_AGE: below this, explicit books are hidden everywhere.
+// MATURE_AUTO_ON_AGE: at/above this age the "Show mature content" toggle
+// DEFAULTS to ON (>=17, matching the App Store 17+ rating); below it the
+// toggle defaults OFF. The toggle itself is available to all signed-in users
+// and a user's explicit choice always overrides this default.
 export const MIN_SIGNUP_AGE = 13;
-export const EXPLICIT_MIN_AGE = 16;
+export const MATURE_AUTO_ON_AGE = 17;
 export const GENRE_LIST = ['Mystery', 'Sci-Fi', 'Romance', 'Horror', 'Dystopian', 'Fantasy', 'Action', 'Drama', 'Western', 'Fiction', 'Non-Fiction', 'Thriller', 'FanFic', 'Poetry', 'Religious', 'Erotica', 'LGBTQ+', 'Self-Help', 'Sports'];
 
 // ---- Monetization pricing (F01) ----
@@ -118,7 +121,7 @@ export default {
   MAX_MESSAGE_LENGTH,
   MAX_MESSAGES_PER_CONVERSATION_PER_DAY,
   MIN_SIGNUP_AGE,
-  EXPLICIT_MIN_AGE,
+  MATURE_AUTO_ON_AGE,
   GENRE_LIST,
   PRICE_TIERS,
   allowedPriceTiers,

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { Button, CoverImg } from '@/components/sharedComponents'
+import { Button } from '@/components/sharedComponents'
+import { MatureCover } from '@/components/MatureCover'
 import { useApp } from '@/state/AppContext'
 import * as fbService from '@/services/firebaseService'
 import { fetchPublicBookPreview } from '@/services/publicBookService'
@@ -134,12 +135,16 @@ export const PublicBookLandingPage: React.FC = () => {
     )
   }
 
-  // A bare-enough Book stand-in for CoverImg (only reads coverImage/coverColor/
-  // title). The full Book is fetched on "Read" for authenticated visitors.
+  // A bare-enough Book stand-in for MatureCover (reads coverImage/coverColor/
+  // title + id/isMature for the mature gate). The full Book is fetched on
+  // "Read" for authenticated visitors. Anonymous visitors have canSeeMature
+  // false, so a mature cover is blurred until they tap to reveal.
   const coverBook = {
+    id: preview.id,
     coverImage: preview.coverImage,
     coverColor: preview.coverColor,
-    title: preview.title
+    title: preview.title,
+    isMature: preview.isMature
   } as Book
 
   return (
@@ -153,9 +158,9 @@ export const PublicBookLandingPage: React.FC = () => {
           >
             <span className='material-icons-round'>share</span>
           </button>
-          {preview.isExplicit && (
+          {preview.isMature && (
             <div className='px-3 py-1 bg-red-500 text-white rounded-full text-[8px] font-bold uppercase tracking-widest flex items-center'>
-              Explicit
+              Mature
             </div>
           )}
         </div>
@@ -166,7 +171,7 @@ export const PublicBookLandingPage: React.FC = () => {
           className='w-56 h-80 shadow-2xl border-1 border-white mb-10 transform -rotate-1 relative overflow-hidden'
           style={{ backgroundColor: preview.coverColor }}
         >
-          <CoverImg book={coverBook} />
+          <MatureCover book={coverBook} />
           <div className='absolute inset-0 bg-gradient-to-t from-black/20 to-transparent' />
         </div>
         <h1 className='text-3xl font-bold mb-2'>{preview.title}</h1>

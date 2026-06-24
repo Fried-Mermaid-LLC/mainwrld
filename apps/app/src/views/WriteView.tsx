@@ -90,7 +90,7 @@ export const WriteView = () => {
               tagline: existingBook.tagline,
               genres: existingBook.genres,
               hashtags: existingBook.hashtags,
-              isExplicit: existingBook.isExplicit,
+              isMature: existingBook.isMature,
               commentsEnabled: existingBook.commentsEnabled
             }
           : null

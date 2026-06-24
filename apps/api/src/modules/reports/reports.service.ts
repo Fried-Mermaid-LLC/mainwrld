@@ -30,6 +30,8 @@ export class ReportsService {
       reportedBy,
       timestamp: new Date().toISOString(),
       status: 'pending',
+      // Only persist `reason` when supplied so legacy/auto-mod reports stay clean.
+      ...(dto.reason ? { reason: dto.reason } : {}),
     });
     return { id };
   }

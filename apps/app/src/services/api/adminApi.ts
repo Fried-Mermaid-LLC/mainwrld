@@ -1,10 +1,14 @@
 import { api } from '@/lib/apiClient';
+import type { ReportReason } from '@/types';
 
 export const adminApi = {
   // reports
   listReports: () => api.get<any[]>('/reports'),
-  fileReport: (data: { type: 'Book' | 'Comment' | 'User'; targetId: string }) =>
-    api.post<{ id: string }>('/reports', data),
+  fileReport: (data: {
+    type: 'Book' | 'Comment' | 'User';
+    targetId: string;
+    reason?: ReportReason;
+  }) => api.post<{ id: string }>('/reports', data),
   updateReportStatus: (
     id: string,
     status: 'pending' | 'resolved' | 'dismissed'

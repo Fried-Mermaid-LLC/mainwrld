@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import type { Comment } from '@/types'
 import { useApp } from '@/state/AppContext'
+import { useReportFlow } from '@/components/reportFlow'
 
 export const CommentsView = () => {
   const {
@@ -12,7 +13,6 @@ export const CommentsView = () => {
     postComment,
     setScrollToCommentId,
     setView,
-    handleReport,
     handleLikeComment,
     user,
     readingChapterIndex,
@@ -28,12 +28,13 @@ export const CommentsView = () => {
       return false
     return true
   })
+  const { sheet: reportSheet, startReport } = useReportFlow()
   const onPost = postComment
   const onBack = () => {
     setScrollToCommentId(null)
     setView('reading')
   }
-  const onReport = (id: string) => handleReport('Comment', id)
+  const onReport = (id: string) => startReport('Comment', id)
   const onLikeComment = handleLikeComment
   const currentUsername = user.username
   // chapterMeta carries the light per-chapter list (id + title); only
@@ -80,6 +81,7 @@ export const CommentsView = () => {
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto p-6 animate-in slide-in-from-bottom duration-500 z-[400]'>
+      {reportSheet}
       <header className='flex justify-between items-center mb-1 sticky top-0 bg-white py-2 z-10'>
         <div>
           <h1 className='text-xl font-bold'>Comments</h1>

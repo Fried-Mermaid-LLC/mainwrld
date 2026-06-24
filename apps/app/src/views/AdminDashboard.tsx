@@ -193,6 +193,11 @@ export const AdminDashboard = () => {
                         <p className='text-[10px] text-gray-400 mt-1'>
                           Reported by @{report.reportedBy}
                         </p>
+                        {report.reason && (
+                          <p className='text-[10px] font-bold uppercase tracking-widest text-red-500 mt-1'>
+                            Reason: {report.reason}
+                          </p>
+                        )}
                       </div>
                       <div className='flex gap-2 flex-wrap'>
                         {report.type === 'Book' && (

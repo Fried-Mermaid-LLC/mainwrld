@@ -8,8 +8,16 @@ import { PayoutsSection } from '@/views/PayoutsSection'
 import type { User, View } from '@/types'
 
 export const SettingsView = () => {
-  const { handleLogout, isAdmin, user, showToast, setView, setUser, firebaseUid } =
-    useApp()
+  const {
+    handleLogout,
+    isAdmin,
+    user,
+    showToast,
+    setView,
+    setUser,
+    firebaseUid,
+    canSeeMature
+  } = useApp()
   const onBack = () => setView('self-profile')
   const onNavigate = (v: View) => setView(v)
   const onUpdateUser = (updatedUser: User) => {
@@ -34,6 +42,25 @@ export const SettingsView = () => {
         'Failed to update password. You may need to log in again.',
         'error'
       )
+    }
+  }
+  // Mature-content opt-in. The displayed state is the effective `canSeeMature`
+  // (which already resolves the age default), so flipping it writes the
+  // opposite explicit boolean. Optimistic with rollback, mirroring the
+  // notification toggle. `showMatureContent` is client-editable and not in
+  // PROTECTED_FIELDS, so updateUserProfile persists it.
+  const toggleMatureContent = () => {
+    const prev = user.showMatureContent
+    const next = !canSeeMature
+    setUser({ ...user, showMatureContent: next })
+    if (firebaseUid) {
+      fbService
+        .updateUserProfile(firebaseUid, { showMatureContent: next })
+        .catch(err => {
+          console.error('[MainWRLD] showMatureContent save failed', err)
+          setUser({ ...user, showMatureContent: prev })
+          showToast('Could not save. Please try again.', 'error')
+        })
     }
   }
   const [activeModal, setActiveModal] = useState<string | null>(null)
@@ -356,13 +383,28 @@ export const SettingsView = () => {
           <div className='bg-gray-50 rounded-[2.5rem] overflow-hidden border border-gray-100'>
             <button
               onClick={() => onNavigate('notification-settings')}
-              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all'
+              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all border-b border-gray-100'
             >
               <span className='font-bold text-sm'>Notification Settings</span>
               <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
                 chevron_right
               </span>
             </button>
+            <div className='w-full p-6 flex justify-between items-center gap-4'>
+              <div className='min-w-0'>
+                <span className='font-bold text-sm'>Show Mature Content</span>
+                <p className='text-[10px] text-gray-400 mt-0.5 leading-tight'>
+                  Show books and content marked as mature.
+                </p>
+              </div>
+              <input
+                type='checkbox'
+                checked={canSeeMature}
+                onChange={toggleMatureContent}
+                className='accent-accent w-5 h-5 shrink-0'
+                aria-label='Show mature content'
+              />
+            </div>
           </div>
         </section>
 
@@ -412,6 +454,50 @@ export const SettingsView = () => {
             </div>
           </section>
         )}
+
+        <section className='space-y-4'>
+          <h3 className='text-[10px] font-bold text-gray-300 uppercase tracking-widest ml-4'>
+            About & Legal
+          </h3>
+          <div className='bg-gray-50 rounded-[2.5rem] overflow-hidden border border-gray-100'>
+            <button
+              onClick={() => onNavigate('guidelines')}
+              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all border-b border-gray-100'
+            >
+              <span className='font-bold text-sm'>Community Guidelines</span>
+              <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
+                chevron_right
+              </span>
+            </button>
+            <button
+              onClick={() => onNavigate('terms')}
+              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all border-b border-gray-100'
+            >
+              <span className='font-bold text-sm'>Terms &amp; EULA</span>
+              <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
+                chevron_right
+              </span>
+            </button>
+            <button
+              onClick={() => onNavigate('privacy')}
+              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all border-b border-gray-100'
+            >
+              <span className='font-bold text-sm'>Privacy Policy</span>
+              <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
+                chevron_right
+              </span>
+            </button>
+            <a
+              href='mailto:hello@mainwrld.com'
+              className='w-full p-6 text-left flex justify-between items-center group active:bg-white transition-all'
+            >
+              <span className='font-bold text-sm'>Contact / Report a Problem</span>
+              <span className='material-icons-round text-gray-200 group-hover:text-accent transition-colors'>
+                mail_outline
+              </span>
+            </a>
+          </div>
+        </section>
 
         <Button variant='destructive' className='w-full' onClick={handleLogout}>
           <span className='material-icons-round'>logout</span> Log Out

@@ -375,7 +375,11 @@ export const subscribeToComments = (cb: Cb<any[]>): Unsub =>
 // ==================== REPORTS ====================
 
 export const addReportDoc = (report: any) =>
-  adminApi.fileReport({ type: report.type, targetId: report.targetId });
+  adminApi.fileReport({
+    type: report.type,
+    targetId: report.targetId,
+    ...(report.reason ? { reason: report.reason } : {})
+  });
 export const updateReportStatus = (reportId: string, status: string) =>
   adminApi.updateReportStatus(
     reportId,

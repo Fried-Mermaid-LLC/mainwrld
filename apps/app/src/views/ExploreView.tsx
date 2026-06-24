@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { CoverImg } from '@/components/sharedComponents'
+import { MatureCover } from '@/components/MatureCover'
 import { AvatarLayers } from '@/components/avatar'
 import { GENRE_LIST } from '@/config/constants'
 import type { Book, User } from '@/types'
@@ -18,14 +19,22 @@ export const ExploreView = () => {
     allAvatarConfigs,
     blockedUsers,
     readingActivity,
-    userIsUnder16,
+    canSeeMature,
     isBookFavorited
   } = useApp()
+  // Feed base: drop blocked authors, drafts, and — for viewers who can't see
+  // mature content — mature books entirely (the Explore feed stays clean).
+  // Mature books remain findable via search (see `searchBooks`).
   const books = rawBooks.filter(
     (b: Book) =>
       !blockedUsers.has(b.author.username) &&
       !b.isDraft &&
-      !(userIsUnder16 && b.isExplicit)
+      !(!canSeeMature && b.isMature)
+  )
+  // Search base: keep mature books (drafts are dropped inside `filteredBooks`).
+  // Mature covers are blurred via <MatureCover> until tapped/opted in.
+  const searchBooks = rawBooks.filter(
+    (b: Book) => !blockedUsers.has(b.author.username)
   )
   const spotlightBookId = globalSpotlightBookId
   const onSelect = (b: Book) => {
@@ -81,7 +90,7 @@ export const ExploreView = () => {
   const cleanQuery = isHashtagSearch ? query.slice(1) : query
 
   const filteredBooks = useMemo(() => {
-    let result = books.filter((b: Book) => {
+    let result = searchBooks.filter((b: Book) => {
       if (b.isDraft) return false
       if (!cleanQuery) return true
       if (isHashtagSearch) {
@@ -118,7 +127,7 @@ export const ExploreView = () => {
     })
 
     return result
-  }, [books, cleanQuery, isHashtagSearch, selectedGenres, sortOrder])
+  }, [searchBooks, cleanQuery, isHashtagSearch, selectedGenres, sortOrder])
 
   // User search results — only show when searching and not a hashtag search
   const filteredUsers = useMemo(() => {
@@ -340,7 +349,7 @@ export const ExploreView = () => {
                       className='aspect-[2/3] rounded-lg shadow-xl border-4 border-white overflow-hidden relative transition-transform group-hover:-translate-y-2'
                       style={{ backgroundColor: b.coverColor }}
                     >
-                      <CoverImg book={b} />
+                      <MatureCover book={b} />
                     </div>
                     <div className='px-2 space-y-1'>
                       <p className='text-sm font-bold line-clamp-1'>
@@ -583,9 +592,9 @@ export const ExploreView = () => {
                         >
                           <CoverImg book={b} />
                           <div className='absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10' />
-                          {b.isExplicit && (
+                          {b.isMature && (
                             <div className='absolute top-4 right-4 bg-red-500/90 backdrop-blur-md px-2 py-0.5 rounded-lg text-[7px] font-bold text-white uppercase tracking-wider'>
-                              Explicit
+                              Mature
                             </div>
                           )}
                           <div className='absolute bottom-4 left-4 right-4 flex justify-between opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 z-20'>

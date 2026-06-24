@@ -25,7 +25,7 @@ export interface PublicBookPreview {
   hashtags: string[];
   chaptersCount: number;
   totalLikes: number;         // server-summed from the likes number[]
-  isExplicit: boolean;
+  isMature: boolean;          // renamed from isExplicit; legacy docs read via isMature ?? isExplicit
   isCompleted: boolean;
   publishedDate: string;
 }
@@ -39,6 +39,10 @@ export interface User {
   lastOnline?: string;                // ISO timestamp, mirrored from presence (X06)
   currentBookId?: string | null;      // book actively being read; null/absent when not reading (X06)
   notificationPrefs?: NotificationPrefs;  // per-category in-app/push prefs (X01); default all-on
+  // Reader opt-in for mature content. Tri-state: true/false set explicitly by
+  // the Settings toggle; `undefined` falls back to an age-based default
+  // (>= MATURE_AUTO_ON_AGE → on, else off). Client-editable; not server-owned.
+  showMatureContent?: boolean;
   fcmTokens?: string[];               // registered device push tokens (X01)
   position: [number, number, number];
   isMutual: boolean;
@@ -182,6 +186,17 @@ export interface Coupon {
   used: boolean;
 }
 
+// Optional category a reporter can attach so admins can triage faster. A
+// "sexual" report on a book routes a mature-content complaint into the same
+// strike/take-down pipeline. Legacy reports have no reason (kept optional).
+export type ReportReason =
+  | 'sexual'
+  | 'harassment'
+  | 'spam'
+  | 'hate'
+  | 'violence'
+  | 'other';
+
 export interface Report {
   id: string;
   type: 'Book' | 'Comment' | 'User';
@@ -189,6 +204,7 @@ export interface Report {
   reportedBy: string;
   timestamp: string;
   status: 'pending' | 'resolved' | 'dismissed';
+  reason?: ReportReason;
 }
 
 export type AvatarGender = 'female' | 'male';
@@ -249,7 +265,9 @@ export interface Book {
   publishedDate: string;
   isCompleted: boolean;
   wasCompleted?: boolean;
-  isExplicit: boolean;
+  // Mature-content flag (renamed from `isExplicit`). On read, legacy docs are
+  // normalized via `isMature ?? isExplicit ?? false`; new writes set `isMature`.
+  isMature: boolean;
   chaptersCount: number;
   category?: 'Trending' | 'Recently Read' | 'Recommended' | 'Library';
   progress?: number;

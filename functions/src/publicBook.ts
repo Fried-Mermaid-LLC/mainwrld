@@ -38,7 +38,7 @@ interface PublicBookPreview {
   hashtags: string[]
   chaptersCount: number
   totalLikes: number
-  isExplicit: boolean
+  isMature: boolean
   isCompleted: boolean
   publishedDate: string
 }
@@ -101,7 +101,8 @@ function toPreview(id: string, b: Record<string, any>): PublicBookPreview {
     hashtags: Array.isArray(b.hashtags) ? b.hashtags : [],
     chaptersCount: Number(b.chaptersCount) || 0,
     totalLikes: likes,
-    isExplicit: !!b.isExplicit,
+    // Backward-compat: legacy docs store `isExplicit`, new docs `isMature`.
+    isMature: !!(b.isMature ?? b.isExplicit),
     isCompleted: !!b.isCompleted,
     publishedDate: b.publishedDate || '',
   }

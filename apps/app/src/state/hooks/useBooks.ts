@@ -112,7 +112,10 @@ export function useBooks({
           // Ensure likes is always an array
           likes: Array.isArray(fb.likes) ? fb.likes : [fb.likes || 0],
           isFavorite: favoriteBookIds.has(fb.id),
-          price: fb.price ?? 0
+          price: fb.price ?? 0,
+          // Backward-compat: legacy docs store `isExplicit`, new docs `isMature`.
+          // Normalize here so the rest of the app only reads `isMature`.
+          isMature: fb.isMature ?? fb.isExplicit ?? false
         }))
         setBooks(converted)
         setBooksLoading(false)

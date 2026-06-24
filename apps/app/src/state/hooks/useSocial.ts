@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import { ageFromBirthDate } from '@/utils/age'
-import { EXPLICIT_MIN_AGE } from '@/config/constants'
+import { MATURE_AUTO_ON_AGE } from '@/config/constants'
 import type { User, Relationship, AvatarConfig, View, NotificationCategory } from '@/types'
 
 type ReadingActivityMap = Record<
@@ -35,7 +35,7 @@ interface SocialDeps {
 }
 
 // Social graph domain (Phase B). Owns registeredUsers + relationships and their
-// Firestore subscriptions, the derived MUTUALS and userIsUnder16 memos, the
+// Firestore subscriptions, the derived MUTUALS and canSeeMature memos, the
 // blocked-users set, the admire-debounce ref, and the admire/block handlers.
 // Placed before useNotifications (which reads MUTUALS/registeredUsers) and after
 // useAvatar (subscribeToUsers writes setAllAvatarConfigs/setAllUnlockedItems as
@@ -83,19 +83,26 @@ export function useSocial({
         strikes: u.strikes || 0
       }))
   }, [user.username, relationships, registeredUsers])
-  // Check if current user is under 16 (for explicit content filtering)
-  const userIsUnder16 = useMemo(() => {
-    if (!user.username) return false
+  // Current user's age, derived from the registered-users snapshot that carries
+  // birthDate. null when unknown/missing.
+  const userAge = useMemo(() => {
+    if (!user.username) return null
     const userRecord = registeredUsers.find(
       u => u.username === user.username
     ) as any
-    const age = ageFromBirthDate(userRecord?.birthDate)
-    // FAIL-CLOSED for explicit reads (X09 §5.1.a recommendation): an unknown/
-    // missing birth date is treated as under-16, so explicit content is hidden
-    // until a valid date is on file. Safer for the Apple-review / legal angle;
-    // flip to `age !== null && age < EXPLICIT_MIN_AGE` for fail-open.
-    return age === null || age < EXPLICIT_MIN_AGE
+    return ageFromBirthDate(userRecord?.birthDate)
   }, [registeredUsers, user.username])
+
+  // Single gate for mature content. The hard age block was intentionally
+  // removed (product decision): the "Show mature content" toggle is available
+  // to every signed-in user and an explicit choice always wins. When the
+  // preference is unset, it defaults ON at MATURE_AUTO_ON_AGE (17+, matching
+  // the App Store 17+ rating) and OFF below that / when the age is unknown.
+  const canSeeMature = useMemo(() => {
+    if (user.showMatureContent === true) return true
+    if (user.showMatureContent === false) return false
+    return userAge !== null && userAge >= MATURE_AUTO_ON_AGE
+  }, [userAge, user.showMatureContent])
   // Blocked users state (loaded from Firestore user doc)
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set())
   const pendingAdmireRef = useRef<Set<string>>(new Set())
@@ -342,7 +349,7 @@ export function useSocial({
     relationships,
     setRelationships,
     MUTUALS,
-    userIsUnder16,
+    canSeeMature,
     blockedUsers,
     setBlockedUsers,
     pendingAdmireRef,
