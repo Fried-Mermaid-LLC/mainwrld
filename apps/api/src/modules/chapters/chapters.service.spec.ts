@@ -256,5 +256,108 @@ describe('ChaptersService', () => {
       );
       expect(fs.dump('books/b1/chapters/c1')!.content).toBe('new body');
     });
+
+    it('ignores a client-supplied likes array and pads server-side', async () => {
+      // Author tries to forge 100 likes/chapter through the publish path; the
+      // server strips it and keeps the real (zero-padded) counts.
+      seedBook({ likes: [5, 0, 0] });
+      await svc.commitWrite('b1', 'c1', makeAuthUser({ uid: 'u1' }), {
+        content: 'b',
+        order: 3,
+        title: 'New',
+        bookUpdates: {
+          chapterMeta: [{ id: 'c0' }, { id: 'c1' }, { id: 'c2' }, { id: 'c3' }],
+          chaptersCount: 4,
+          likes: [100, 100, 100, 100],
+        },
+      });
+      const book = fs.dump('books/b1')!;
+      // existing reader counts preserved, new slot padded with 0 — NOT 100
+      expect(book.likes).toEqual([5, 0, 0, 0]);
+    });
+
+    it('also strips a client-supplied chapterLikedBy write', async () => {
+      seedBook({ chapterLikedBy: { '0': ['real'] } });
+      await svc.commitWrite('b1', 'c1', makeAuthUser({ uid: 'u1' }), {
+        content: 'b',
+        order: 1,
+        title: 'New',
+        bookUpdates: { chapterLikedBy: { '0': ['x', 'y', 'z'] } },
+      });
+      expect(fs.dump('books/b1')!.chapterLikedBy).toEqual({ '0': ['real'] });
+    });
+
+    it('does not rewrite likes when the chapter set has not grown', async () => {
+      seedBook({ likes: [5, 6, 7] });
+      await svc.commitWrite('b1', 'c1', makeAuthUser({ uid: 'u1' }), {
+        content: 'edit',
+        order: 1,
+        title: 'Edited',
+        bookUpdates: { chaptersCount: 3 },
+      });
+      expect(fs.dump('books/b1')!.likes).toEqual([5, 6, 7]);
+    });
+  });
+
+  describe('commitDelete', () => {
+    it('splices the deleted slot out of likes + re-keys chapterLikedBy', async () => {
+      // Delete the middle chapter (c1, index 1): c2's likes must shift down to
+      // index 1, not stay pinned to index 2 where a future chapter would inherit
+      // them.
+      seedBook({
+        likes: [10, 20, 30],
+        chapterLikedBy: { '0': ['a'], '1': ['b', 'c'], '2': ['d'] },
+      });
+      await svc.commitDelete('b1', 'c1', makeAuthUser({ uid: 'u1' }), {
+        chapterMeta: [{ id: 'c0' }, { id: 'c2' }],
+        chaptersCount: 2,
+      });
+      const book = fs.dump('books/b1')!;
+      expect(book.likes).toEqual([10, 30]);
+      expect(book.chapterLikedBy).toEqual({ '0': ['a'], '1': ['d'] });
+      expect(book.chaptersCount).toBe(2);
+    });
+
+    it('drops the tail slot when the last chapter is deleted', async () => {
+      seedBook({
+        likes: [10, 20, 30],
+        chapterLikedBy: { '0': ['a'], '1': ['b'], '2': ['c'] },
+      });
+      await svc.commitDelete('b1', 'c2', makeAuthUser({ uid: 'u1' }), {
+        chapterMeta: [{ id: 'c0' }, { id: 'c1' }],
+        chaptersCount: 2,
+      });
+      const book = fs.dump('books/b1')!;
+      expect(book.likes).toEqual([10, 20]);
+      expect(book.chapterLikedBy).toEqual({ '0': ['a'], '1': ['b'] });
+    });
+
+    it('ignores client-supplied likes — splice is server-authoritative', async () => {
+      // An author can't forge the reader signal through the delete path: even if
+      // they send an inflated likes array, the server overwrites it with the
+      // spliced stored value.
+      seedBook({ likes: [10, 20, 30] });
+      await svc.commitDelete('b1', 'c1', makeAuthUser({ uid: 'u1' }), {
+        chapterMeta: [{ id: 'c0' }, { id: 'c2' }],
+        chaptersCount: 2,
+        likes: [999, 999],
+      });
+      expect(fs.dump('books/b1')!.likes).toEqual([10, 30]);
+    });
+
+    it('leaves likes untouched when the chapter is not in chapterMeta', async () => {
+      seedBook({ likes: [10, 20, 30] });
+      await svc.commitDelete('b1', 'ghost', makeAuthUser({ uid: 'u1' }), {
+        chaptersCount: 3,
+      });
+      expect(fs.dump('books/b1')!.likes).toEqual([10, 20, 30]);
+    });
+
+    it('forbids a non-author non-admin', async () => {
+      seedBook({ authorUid: 'someone-else' });
+      await expect(
+        svc.commitDelete('b1', 'c1', makeAuthUser({ uid: 'intruder' }), {}),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 });

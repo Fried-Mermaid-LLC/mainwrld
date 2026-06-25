@@ -202,6 +202,49 @@ describe('BooksService', () => {
       expect(fs.dump('books/b1')!.likes).toEqual([5]);
     });
 
+    it('trims stale likes + chapterLikedBy when a chapter is unpublished', async () => {
+      // Author had 3 published chapters, all with 100 likes. Unpublishing one
+      // (chaptersCount 3 -> 2) must drop the freed tail slot so a chapter later
+      // published there starts from zero — not inherit the old 100 likes.
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'old',
+        chaptersCount: 3,
+        likes: [100, 100, 100],
+        chapterLikedBy: {
+          '0': ['a', 'b'],
+          '1': ['c'],
+          '2': ['d', 'e'],
+        },
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        chaptersCount: 2,
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.likes).toEqual([100, 100]);
+      expect(stored.chapterLikedBy).toEqual({ '0': ['a', 'b'], '1': ['c'] });
+    });
+
+    it('leaves likes untouched when chaptersCount is unchanged or grows', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'old',
+        chaptersCount: 2,
+        likes: [100, 100],
+        chapterLikedBy: { '0': ['a'], '1': ['b'] },
+      });
+      // Publishing a new chapter raises the count; the existing likes survive
+      // and the new slot is simply absent (read as 0 downstream).
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        chaptersCount: 3,
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.likes).toEqual([100, 100]);
+      expect(stored.chapterLikedBy).toEqual({ '0': ['a'], '1': ['b'] });
+    });
+
     it('rejects a flagged update (422) before writing', async () => {
       fs.seed('books/b1', { id: 'b1', authorUid: 'u1', title: 'old' });
       build(true);

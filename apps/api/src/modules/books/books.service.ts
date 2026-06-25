@@ -136,10 +136,19 @@ export class BooksService {
     const ex = existing as { isMature?: boolean; isExplicit?: boolean };
     const mature = (dto.isMature ?? ex.isMature ?? ex.isExplicit) === true;
     await this.screenMetadata(dto.title, dto.tagline, mature);
+    // Unpublishing a chapter shrinks the published prefix (chaptersCount--).
+    // `likes`/`chapterLikedBy` are indexed by chapter position, so the tail
+    // entries [newCount, oldCount) belong to chapters that just left the
+    // published set. We MUST drop them: otherwise the next chapter published
+    // into that slot inherits the old reader likes, which previously let an
+    // author unpublish a popular book, publish brand-new chapters, and have the
+    // stale 100+ counts satisfy the monetization "100 likes/chapter" gate.
+    const prune = this.pruneLikesForShrink(existing, dto);
     // See create(): nested @Type() fields arrive as class instances; Firestore
     // only serializes plain objects.
     await ref.update({
       ...instanceToPlain(dto),
+      ...prune,
       updatedAt: FieldValue.serverTimestamp(),
     });
     const after = await ref.get();
@@ -169,6 +178,37 @@ export class BooksService {
     dto: { likes?: number[] },
   ): void {
     if (!user.admin) delete dto.likes;
+  }
+
+  // When an update lowers chaptersCount (an unpublish), return the trimmed
+  // server-managed like state so the freed tail slots can't carry stale reader
+  // likes into a future chapter published there. Returns {} when the published
+  // prefix isn't shrinking, so normal edits are untouched. Both `likes` (a
+  // position-indexed number[]) and `chapterLikedBy` (a position-keyed
+  // username-set map, the source of truth likeChapter rebuilds counts from) are
+  // cut to the new length — trimming only one would leave the other able to
+  // resurrect the count.
+  private pruneLikesForShrink(
+    existing: BookDoc,
+    dto: { chaptersCount?: number },
+  ): { likes?: number[]; chapterLikedBy?: Record<string, string[]> } {
+    const oldCount = (existing.chaptersCount as number) || 0;
+    const newCount = dto.chaptersCount;
+    if (typeof newCount !== 'number' || newCount >= oldCount) return {};
+    const likes = Array.isArray(existing.likes)
+      ? (existing.likes as number[]).slice(0, Math.max(0, newCount))
+      : [];
+    const likedBy =
+      (existing as { chapterLikedBy?: Record<string, string[]> })
+        .chapterLikedBy ?? {};
+    const trimmedLikedBy: Record<string, string[]> = {};
+    for (const key of Object.keys(likedBy)) {
+      const idx = Number(key);
+      if (Number.isInteger(idx) && idx >= 0 && idx < newCount) {
+        trimmedLikedBy[key] = likedBy[key];
+      }
+    }
+    return { likes, chapterLikedBy: trimmedLikedBy };
   }
 
   // Server-authoritative per-chapter like toggle (the only path that mutates a

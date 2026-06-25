@@ -17,8 +17,14 @@ import type { CommitChapterDto } from './dto/commit-chapter.dto';
 export type ChapterDoc = Record<string, unknown> & { id: string };
 
 // Book metadata the client must not write through the chapter-commit path.
+// `likes`/`chapterLikedBy` are server-managed reader aggregates (only likeChapter
+// mutates them, and only via reader action): an author could otherwise pass an
+// inflated likes array here and forge the monetization signal. commitWrite pads
+// likes server-side instead; commitDelete splices it.
 const BOOK_PROTECTED = new Set<string>([
   'authorUid',
+  'likes',
+  'chapterLikedBy',
   'favoritesTotal',
   'isMonetized',
   'wasMonetizedBefore',
@@ -148,6 +154,10 @@ export class ChaptersService {
     if (dto.title) await this.assertClean(dto.title, true, mature);
 
     const bookUpdates = this.sanitizeBookUpdates(dto.bookUpdates);
+    // Client-sent `likes` is stripped by BOOK_PROTECTED; publishing a chapter
+    // can only grow the position-indexed array, so we pad it with zeros to cover
+    // the new chapter set server-side, preserving the real reader counts.
+    const likesPatch = this.padLikesForWrite(book, dto.bookUpdates);
     const batch = this.db.batch();
     batch.set(
       this.chaptersCol(bookId).doc(chapterId),
@@ -163,6 +173,7 @@ export class ChaptersService {
     );
     batch.update(this.booksCol().doc(bookId), {
       ...bookUpdates,
+      ...likesPatch,
       chapters: FieldValue.delete(),
       content: FieldValue.delete(),
       schemaVersion: 2,
@@ -177,14 +188,80 @@ export class ChaptersService {
     user: AuthUser,
     bookUpdates?: Record<string, unknown>,
   ): Promise<void> {
-    await this.assertAuthor(bookId, user);
+    const book = await this.assertAuthor(bookId, user);
+    // The client sends the new chapterMeta/chaptersCount, but `likes` and
+    // `chapterLikedBy` are server-managed reader aggregates the author can't
+    // write. They're indexed by chapter position, so removing a chapter must
+    // splice its slot out and shift every later slot down — computed here from
+    // the stored doc and applied after the client updates so they win.
+    const splice = this.spliceLikesForDelete(book, chapterId);
     const batch = this.db.batch();
     batch.delete(this.chaptersCol(bookId).doc(chapterId));
     batch.update(this.booksCol().doc(bookId), {
       ...this.sanitizeBookUpdates(bookUpdates),
+      ...splice,
       updatedAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+  }
+
+  // Remove the deleted chapter's slot from the position-indexed reader-like
+  // state. `likes[i]` is dropped and later counts shift down one; `chapterLikedBy`
+  // (the username-set map likeChapter rebuilds counts from) is re-keyed the same
+  // way. Without this, counts stay pinned to old positions and bleed onto the
+  // chapters that shift up — the same staleness that let unpublish+republish
+  // forge the "100 likes/chapter" monetization gate. Returns {} when the chapter
+  // isn't in the stored chapterMeta (no position to splice).
+  private spliceLikesForDelete(
+    book: Record<string, unknown>,
+    chapterId: string,
+  ): { likes?: number[]; chapterLikedBy?: Record<string, string[]> } {
+    const meta = (book.chapterMeta as Array<{ id: string }>) || [];
+    const idx = meta.findIndex((m) => m.id === chapterId);
+    if (idx < 0) return {};
+    const out: {
+      likes?: number[];
+      chapterLikedBy?: Record<string, string[]>;
+    } = {};
+    if (Array.isArray(book.likes)) {
+      const likes = (book.likes as number[]).slice();
+      likes.splice(idx, 1);
+      out.likes = likes;
+    }
+    const likedBy = (book as { chapterLikedBy?: Record<string, string[]> })
+      .chapterLikedBy;
+    if (likedBy && typeof likedBy === 'object') {
+      const shifted: Record<string, string[]> = {};
+      for (const key of Object.keys(likedBy)) {
+        const k = Number(key);
+        if (!Number.isInteger(k) || k < 0 || k === idx) continue;
+        shifted[k < idx ? key : String(k - 1)] = likedBy[key];
+      }
+      out.chapterLikedBy = shifted;
+    }
+    return out;
+  }
+
+  // Grow the position-indexed `likes` array to cover every chapter after a
+  // write, padding new slots with 0 and keeping existing reader counts. Target
+  // length is the larger of the incoming chapterMeta length / chaptersCount —
+  // never shrinks (unpublish/delete own that). Returns {} when no padding is
+  // needed so unrelated edits don't rewrite the array.
+  private padLikesForWrite(
+    book: Record<string, unknown>,
+    bookUpdates?: Record<string, unknown>,
+  ): { likes?: number[] } {
+    const existing = Array.isArray(book.likes)
+      ? (book.likes as number[]).slice()
+      : [];
+    let target = existing.length;
+    const meta = bookUpdates?.chapterMeta;
+    if (Array.isArray(meta)) target = Math.max(target, meta.length);
+    const newCount = bookUpdates?.chaptersCount;
+    if (typeof newCount === 'number') target = Math.max(target, newCount);
+    if (target <= existing.length) return {};
+    while (existing.length < target) existing.push(0);
+    return { likes: existing };
   }
 
   private async assertAuthor(
