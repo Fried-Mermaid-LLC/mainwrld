@@ -39,6 +39,19 @@ interface Handle {
 
 const handles = new Map<string, Handle>();
 
+// Last activity the view layer asked for, per uid — recorded even before a handle
+// exists. The activity effect (usePersist) can fire before joinWorld when entering
+// a world view from a non-world one (e.g. book-detail → reading), in which case the
+// setWorldActivity write below would otherwise no-op and the node would seed at
+// 'Exploring'. joinWorld seeds the handle from this so Reading/Writing isn't lost.
+const desiredActivity = new Map<string, string>();
+
+// Last avatar position per uid, retained across a leave/rejoin so entering a world
+// view through a non-world one (book-detail → reading) keeps the avatar where it
+// was instead of snapping it back to the world origin.
+const lastPosition = new Map<string, { x: number; y: number; z: number }>();
+const lastRotY = new Map<string, number>();
+
 const worldRef = (uid: string): DatabaseReference => ref(rtdb!, `world/${uid}`);
 
 const doWrite = (handle: Handle, now: number): void => {
@@ -82,9 +95,9 @@ export const joinWorld = (uid: string, username: string): void => {
     username,
     ref: r,
     connectedUnsub: null,
-    activity: 'Exploring',
-    rotY: 0,
-    position: { x: 0, y: 0, z: 0 },
+    activity: desiredActivity.get(uid) ?? 'Exploring',
+    rotY: lastRotY.get(uid) ?? 0,
+    position: lastPosition.get(uid) ?? { x: 0, y: 0, z: 0 },
     emoteId: 0,
     lastWriteAt: 0,
     flushTimer: null,
@@ -123,10 +136,28 @@ export const writeTransform = (
   if (!rtdb || !handle) return;
   handle.position = { x, y, z };
   handle.rotY = rotY;
+  // Retain across a leave/rejoin so a non-world detour (book-detail) doesn't snap
+  // the avatar back to the origin on return.
+  lastPosition.set(uid, handle.position);
+  lastRotY.set(uid, rotY);
   flushOrSchedule(handle);
 };
 
+// Last known transform for a uid, retained across leave/rejoin. The local Player
+// reads this on (re)mount so returning to the world (e.g. from reading) restores
+// the avatar where it left off instead of snapping the camera back to the origin.
+export const getLastTransform = (
+  uid: string
+): { position: { x: number; y: number; z: number }; rotY: number } | null => {
+  const p = lastPosition.get(uid);
+  if (!p) return null;
+  return { position: p, rotY: lastRotY.get(uid) ?? 0 };
+};
+
 export const setWorldActivity = (uid: string, activity: string): void => {
+  // Record intent first so a join that hasn't happened yet (effect-ordering race)
+  // still picks up the right label instead of defaulting to 'Exploring'.
+  desiredActivity.set(uid, activity);
   const handle = handles.get(uid);
   if (!rtdb || !handle || handle.activity === activity) return;
   handle.activity = activity;

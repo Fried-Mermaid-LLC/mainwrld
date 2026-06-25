@@ -557,6 +557,17 @@ export const Player: React.FC<{
 
   const MIN_ZOOM = 0.5;
   const MAX_ZOOM = 2.5;
+
+  // Restore our last world position on (re)mount so returning to the world from a
+  // non-world view (reading/writing) keeps the avatar where it was rather than
+  // snapping back to the origin. worldService retains it across the leave/rejoin.
+  useEffect(() => {
+    if (!firebaseUid || !meshRef.current) return;
+    const t = worldService.getLastTransform(firebaseUid);
+    if (!t) return;
+    meshRef.current.position.set(t.position.x, t.position.y, t.position.z);
+    meshRef.current.rotation.y = t.rotY;
+  }, [firebaseUid]);
   const ORBIT_SPEED = 0.005;
 
   useEffect(() => {
