@@ -672,7 +672,7 @@ export const ReadingView = () => {
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
           <div
-            className={`max-w-2xl mx-auto space-y-10 mb-20 reader-content select-none transition-all duration-300 ${
+            className={`max-w-2xl mx-auto min-h-full flex flex-col space-y-10 mb-20 reader-content select-none transition-all duration-300 ${
               isBlurred ? 'blur-xl' : ''
             }`}
             style={{
@@ -694,7 +694,13 @@ export const ReadingView = () => {
             <h1 className='text-3xl font-bold text-center mb-12'>
               {currentChapterTitle}
             </h1>
-            <div className='leading-relaxed whitespace-pre-line text-justify'>
+            <div
+              className={`leading-relaxed whitespace-pre-line text-justify flex-1 ${
+                chapterLoading || chapterError
+                  ? 'flex items-center justify-center'
+                  : ''
+              }`}
+            >
               {chapterLoading ? (
                 <p className='text-center text-xs opacity-40 py-10 uppercase tracking-widest'>
                   Loading…
@@ -767,7 +773,7 @@ export const ReadingView = () => {
           )}
           <div
             ref={pageFlipRef}
-            className='page-flip-container no-scrollbar h-full w-full overflow-x-auto snap-x snap-mandatory'
+            className='page-flip-container no-scrollbar h-full w-full max-w-2xl mx-auto overflow-x-auto snap-x snap-mandatory'
             onScroll={handlePageFlipScroll}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
@@ -778,7 +784,7 @@ export const ReadingView = () => {
               }`}
               style={{
                 fontSize: `${settings.fontSize}px`,
-                columnWidth: 'calc(100vw - 112px)',
+                columnWidth: 'calc(min(100vw, 42rem) - 112px)',
                 columnGap: '112px'
               }}
             >
