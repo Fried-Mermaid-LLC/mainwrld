@@ -71,7 +71,6 @@ export class MonetizationService {
         'Publish the book before monetizing.',
       );
     }
-    const isAdmin = user.admin;
     if (!this.canMonetize(book)) {
       throw new PreconditionFailedException(
         'This book can’t be monetized again.',
@@ -96,32 +95,29 @@ export class MonetizationService {
       realChapters,
     );
 
-    if (!isAdmin) {
-      // The "completed" gate was removed; the published requirement is already
-      // enforced by the isDraft check above (applies to everyone).
-      if (effectiveChapters < 5) {
-        throw new PreconditionFailedException('Need at least 5 chapters.');
-      }
-      if (this.minLikesPerPublishedChapter(book) < 100) {
-        throw new PreconditionFailedException('Need 100+ likes per chapter.');
-      }
-      const published = new Date(book.publishedDate as string);
-      const days = Math.ceil(
-        Math.abs(Date.now() - published.getTime()) / (1000 * 60 * 60 * 24),
+    // Eligibility prerequisites — enforced for everyone (no admin bypass). The
+    // "completed" gate was removed; the published requirement is already
+    // enforced by the isDraft check above.
+    if (effectiveChapters < 5) {
+      throw new PreconditionFailedException('Need at least 5 chapters.');
+    }
+    if (this.minLikesPerPublishedChapter(book) < 100) {
+      throw new PreconditionFailedException('Need 100+ likes per chapter.');
+    }
+    const published = new Date(book.publishedDate as string);
+    const days = Math.ceil(
+      Math.abs(Date.now() - published.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (days < 21) {
+      throw new PreconditionFailedException('Must be published 21+ days.');
+    }
+    if (((book.monetizationAttempts as number) || 0) >= 2) {
+      throw new PreconditionFailedException('Maximum 2 attempts reached.');
+    }
+    if (!allowedPriceTiers(effectiveChapters).includes(priceUsd)) {
+      throw new PreconditionFailedException(
+        'Price not allowed for this chapter count.',
       );
-      if (days < 21) {
-        throw new PreconditionFailedException('Must be published 21+ days.');
-      }
-      if (((book.monetizationAttempts as number) || 0) >= 2) {
-        throw new PreconditionFailedException('Maximum 2 attempts reached.');
-      }
-      if (!allowedPriceTiers(effectiveChapters).includes(priceUsd)) {
-        throw new PreconditionFailedException(
-          'Price not allowed for this chapter count.',
-        );
-      }
-    } else if (!PRICE_TIERS.includes(priceUsd as (typeof PRICE_TIERS)[number])) {
-      throw new BadRequestException('Invalid price tier.');
     }
     if (book.monetizationStatus === 'pending') {
       throw new PreconditionFailedException('A request is already pending.');
@@ -146,7 +142,6 @@ export class MonetizationService {
       monetizationAttempts: ((book.monetizationAttempts as number) || 0) + 1,
       sellerUid: user.uid,
       sellerStripeAccountId: userData.stripeAccountId,
-      monetizationAdminBypass: isAdmin,
       monetizationDenialReason: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -195,19 +190,17 @@ export class MonetizationService {
       if (!PRICE_TIERS.includes(price as (typeof PRICE_TIERS)[number])) {
         throw new PreconditionFailedException('Invalid requested price tier.');
       }
-      if (book.monetizationAdminBypass !== true) {
-        const realChapters = (
-          await found.ref.collection('chapters').count().get()
-        ).data().count;
-        const effectiveChapters = Math.min(
-          (book.chaptersCount as number) || 0,
-          realChapters,
+      const realChapters = (
+        await found.ref.collection('chapters').count().get()
+      ).data().count;
+      const effectiveChapters = Math.min(
+        (book.chaptersCount as number) || 0,
+        realChapters,
+      );
+      if (!allowedPriceTiers(effectiveChapters).includes(price)) {
+        throw new PreconditionFailedException(
+          'Requested price is no longer valid for this book’s chapter count.',
         );
-        if (!allowedPriceTiers(effectiveChapters).includes(price)) {
-          throw new PreconditionFailedException(
-            'Requested price is no longer valid for this book’s chapter count.',
-          );
-        }
       }
       if (!book.sellerStripeAccountId) {
         throw new PreconditionFailedException(

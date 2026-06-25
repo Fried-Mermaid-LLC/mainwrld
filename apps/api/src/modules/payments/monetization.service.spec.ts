@@ -118,10 +118,11 @@ describe('MonetizationService', () => {
       ).rejects.toThrow('can’t be monetized again');
     });
 
-    it('lets an admin bypass eligibility gates (still a real tier)', async () => {
+    it('gates admins too — no eligibility bypass', async () => {
       seedBook({ chaptersCount: 1 });
-      const res = await svc.submit(makeAuthUser({ admin: true }), 'b1', 14.99);
-      expect(res.ok).toBe(true);
+      await expect(
+        svc.submit(makeAuthUser({ admin: true }), 'b1', 14.99),
+      ).rejects.toThrow();
     });
 
     it('rejects when a request is already pending', async () => {
@@ -138,7 +139,6 @@ describe('MonetizationService', () => {
         monetizationStatus: 'pending',
         requestedPrice: 9.99,
         sellerStripeAccountId: 'acct_1',
-        monetizationAdminBypass: true,
       });
       const res = await svc.review('admin', 'reviewer-uid', 'b1', 'approve');
       expect(res.ok).toBe(true);
@@ -157,7 +157,6 @@ describe('MonetizationService', () => {
         monetizationStatus: 'pending',
         requestedPrice: 7,
         sellerStripeAccountId: 'acct_1',
-        monetizationAdminBypass: true,
       });
       await expect(
         svc.review('admin', 'reviewer-uid', 'b1', 'approve'),
@@ -180,7 +179,6 @@ describe('MonetizationService', () => {
         monetizationStatus: 'pending',
         requestedPrice: 9.99,
         sellerStripeAccountId: 'acct_1',
-        monetizationAdminBypass: true,
       });
       // reviewer is the book's author -> conflict of interest, rejected
       await expect(
@@ -197,7 +195,6 @@ describe('MonetizationService', () => {
         monetizationStatus: 'pending',
         requestedPrice: 9.99,
         sellerStripeAccountId: 'acct_1',
-        monetizationAdminBypass: true,
       });
       await expect(
         svc.review('admin', 'u1', 'b1', 'approve'),
