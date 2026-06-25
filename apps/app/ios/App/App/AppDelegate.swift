@@ -7,14 +7,32 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
+    /// Full-screen blur added over the app while it's inactive, so the snapshot
+    /// iOS takes for the app switcher (and any other backgrounded preview) does
+    /// not leak on-screen content. Removed once the app is active again.
+    private var privacyBlurView: UIVisualEffectView?
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         FirebaseApp.configure()
+
+        // iOS gives no API to *block* screenshots, but it does post this
+        // notification right after the user takes one. We forward it to the web
+        // layer so the app can react (warn the user, log, etc.).
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUserDidTakeScreenshot),
+            name: UIApplication.userDidTakeScreenshotNotification,
+            object: nil
+        )
+
         return true
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
+        // The app is leaving the active state (app switcher, incoming call,
+        // Control Center, going to background). Cover the screen with a blur
+        // before iOS snapshots it for the switcher.
+        addPrivacyBlur()
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
@@ -27,7 +45,37 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // App is interactive again — reveal the content.
+        removePrivacyBlur()
+    }
+
+    // MARK: - Privacy blur (app switcher)
+
+    private func addPrivacyBlur() {
+        guard privacyBlurView == nil, let window = window else { return }
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        blur.frame = window.bounds
+        blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        window.addSubview(blur)
+        privacyBlurView = blur
+    }
+
+    private func removePrivacyBlur() {
+        privacyBlurView?.removeFromSuperview()
+        privacyBlurView = nil
+    }
+
+    // MARK: - Screenshot detection
+
+    @objc private func handleUserDidTakeScreenshot() {
+        // Bridge to JS via a plain DOM event; the web app listens for
+        // `ios-screenshot` on `window` (see src/lib/privacyScreen.ts).
+        guard let vc = window?.rootViewController as? CAPBridgeViewController,
+              let webView = vc.bridge?.webView else { return }
+        webView.evaluateJavaScript(
+            "window.dispatchEvent(new Event('ios-screenshot'))",
+            completionHandler: nil
+        )
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

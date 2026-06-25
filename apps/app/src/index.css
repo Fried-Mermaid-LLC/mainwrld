@@ -80,6 +80,31 @@ textarea,
   user-select: none;
 }
 
+/* Deter "Save image as" / dragging cover art and any in-content image out of
+   the app. A determined user can still screenshot — this is a soft barrier. */
+img {
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Printing (Cmd/Ctrl+P, or the browser's print menu) would render readable
+   content — especially the reader — straight to PDF, bypassing the in-reader
+   key block (which is unreliable on its own). Blank the page for print and show
+   a short notice instead. A deterrent, not true prevention. */
+@media print {
+  #root {
+    display: none !important;
+  }
+
+  body::after {
+    content: 'Printing is disabled.';
+    display: block;
+    padding: 2rem;
+    font-family: sans-serif;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
