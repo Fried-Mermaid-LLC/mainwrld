@@ -267,7 +267,10 @@ export const ReadingView = () => {
           pageFlipRef.current.scrollLeft = 0
         }
       } else {
-        pageFlipRef.current.scrollLeft += pageFlipRef.current.clientWidth
+        pageFlipRef.current.scrollBy({
+          left: pageFlipRef.current.clientWidth,
+          behavior: 'smooth'
+        })
       }
     } else if (containerRef.current) {
       containerRef.current.scrollTop += 300
@@ -281,7 +284,10 @@ export const ReadingView = () => {
           setCurrentChapterIdx(prev => prev - 1)
         }
       } else {
-        pageFlipRef.current.scrollLeft -= pageFlipRef.current.clientWidth
+        pageFlipRef.current.scrollBy({
+          left: -pageFlipRef.current.clientWidth,
+          behavior: 'smooth'
+        })
       }
     } else if (containerRef.current) {
       containerRef.current.scrollTop -= 300
