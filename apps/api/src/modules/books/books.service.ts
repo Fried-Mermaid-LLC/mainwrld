@@ -144,11 +144,18 @@ export class BooksService {
     // author unpublish a popular book, publish brand-new chapters, and have the
     // stale 100+ counts satisfy the monetization "100 likes/chapter" gate.
     const prune = this.pruneLikesForShrink(existing, dto);
+    // Un-monetize permanence (terminal lock). The monetization flags are
+    // server-managed (NOT on UpdateBookDto), so the client's isMonetized:false /
+    // wasMonetizedBefore:true sent on an unpublish/reopen are silently dropped by
+    // the whitelist. Re-derive the demonetization here from author-writable
+    // signals and stamp it authoritatively.
+    const demonetize = this.demonetizePatch(existing, dto);
     // See create(): nested @Type() fields arrive as class instances; Firestore
     // only serializes plain objects.
     await ref.update({
       ...instanceToPlain(dto),
       ...prune,
+      ...demonetize,
       updatedAt: FieldValue.serverTimestamp(),
     });
     const after = await ref.get();
@@ -178,6 +185,36 @@ export class BooksService {
     dto: { likes?: number[] },
   ): void {
     if (!user.admin) delete dto.likes;
+  }
+
+  // Terminal un-monetize lock. A monetized book that the author unpublishes
+  // (isDraft -> true) or reopens (isCompleted -> false) is being un-monetized;
+  // the doc says an un-monetized book can never be monetized again (mirrors the
+  // admin-takedown lock). Because isMonetized/wasMonetizedBefore/
+  // permanentlyDemonetized are server-managed (off the DTO, dropped by the
+  // whitelist), this is the authoritative server stamp — the client cannot write
+  // these flags itself. Returns {} for any update that doesn't un-monetize, so
+  // normal edits to a monetized book are untouched. canMonetize() in
+  // MonetizationService blocks every future request once the permanence flags
+  // are set, exactly as the takedown path does via takenDown.
+  private demonetizePatch(
+    existing: BookDoc,
+    dto: { isDraft?: boolean; isCompleted?: boolean },
+  ): Record<string, unknown> {
+    if (existing.isMonetized !== true) return {};
+    const becomesDraft = (dto.isDraft ?? existing.isDraft) === true;
+    const becomesIncomplete =
+      (dto.isCompleted ??
+        (existing as { isCompleted?: boolean }).isCompleted) === false;
+    if (!becomesDraft && !becomesIncomplete) return {};
+    return {
+      isMonetized: false,
+      isFree: true,
+      price: 0,
+      monetizationStatus: 'demonetized',
+      permanentlyDemonetized: true,
+      wasMonetizedBefore: true,
+    };
   }
 
   // When an update lowers chaptersCount (an unpublish), return the trimmed

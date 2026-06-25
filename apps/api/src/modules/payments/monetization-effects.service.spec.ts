@@ -183,26 +183,4 @@ describe('MonetizationEffectsService', () => {
       expect(email.send).not.toHaveBeenCalled();
     });
   });
-
-  describe('onDemonetized', () => {
-    it('stamps the permanence flags on the ref', async () => {
-      fs.seed('books/b1', { isMonetized: true });
-
-      await svc.onDemonetized(fs.doc('books/b1') as any);
-
-      const book = fs.dump('books/b1')!;
-      expect(book.permanentlyDemonetized).toBe(true);
-      expect(book.wasMonetizedBefore).toBe(true);
-      // Existing fields are preserved (merge update).
-      expect(book.isMonetized).toBe(true);
-    });
-
-    it('swallows errors when the ref has no document', async () => {
-      // update() on a missing doc throws inside, but onDemonetized catches it.
-      await expect(
-        svc.onDemonetized(fs.doc('books/missing') as any),
-      ).resolves.toBeUndefined();
-      expect(fs.dump('books/missing')).toBeUndefined();
-    });
-  });
 });

@@ -245,6 +245,86 @@ describe('BooksService', () => {
       expect(stored.chapterLikedBy).toEqual({ '0': ['a'], '1': ['b'] });
     });
 
+    it('permanently demonetizes a monetized book on unpublish (isDraft -> true)', async () => {
+      // The client's isMonetized:false / wasMonetizedBefore:true are dropped by
+      // the DTO whitelist; the server must re-derive the demonetization from the
+      // author-writable isDraft signal and stamp the terminal permanence flags.
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'paid',
+        isMonetized: true,
+        isFree: false,
+        price: 14.99,
+        isDraft: false,
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        isDraft: true,
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.isMonetized).toBe(false);
+      expect(stored.isFree).toBe(true);
+      expect(stored.price).toBe(0);
+      expect(stored.monetizationStatus).toBe('demonetized');
+      expect(stored.permanentlyDemonetized).toBe(true);
+      expect(stored.wasMonetizedBefore).toBe(true);
+    });
+
+    it('permanently demonetizes a monetized book when reopened (isCompleted -> false)', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'paid',
+        isMonetized: true,
+        isCompleted: true,
+        isDraft: false,
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        isCompleted: false,
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.isMonetized).toBe(false);
+      expect(stored.permanentlyDemonetized).toBe(true);
+      expect(stored.wasMonetizedBefore).toBe(true);
+    });
+
+    it('does NOT demonetize a monetized book on an unrelated edit', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'old',
+        isMonetized: true,
+        isFree: false,
+        price: 9.99,
+        isDraft: false,
+        isCompleted: true,
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        title: 'new',
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.isMonetized).toBe(true);
+      expect(stored.price).toBe(9.99);
+      expect(stored.permanentlyDemonetized).toBeUndefined();
+      expect(stored.wasMonetizedBefore).toBeUndefined();
+    });
+
+    it('does not stamp permanence flags when a non-monetized book is unpublished', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'free',
+        isMonetized: false,
+        isDraft: false,
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        isDraft: true,
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.permanentlyDemonetized).toBeUndefined();
+      expect(stored.wasMonetizedBefore).toBeUndefined();
+    });
+
     it('rejects a flagged update (422) before writing', async () => {
       fs.seed('books/b1', { id: 'b1', authorUid: 'u1', title: 'old' });
       build(true);

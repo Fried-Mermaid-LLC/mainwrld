@@ -1,9 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  FieldValue,
-  type DocumentReference,
-  type Firestore,
-} from 'firebase-admin/firestore';
+import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   FIRESTORE,
@@ -16,8 +12,10 @@ import {
 
 // Monetization side-effects (ported from the onBookMonetized trigger). Now that
 // all book writes go through the API, these run INLINE from the monetization
-// review endpoint (approve/deny) and the un-monetize path. Emails + fan-out are
-// best-effort and never block the status change.
+// review endpoint (approve/deny). Emails + fan-out are best-effort and never
+// block the status change. The terminal un-monetize permanence stamp lives on
+// the un-monetize path itself (BooksService.update.demonetizePatch), atomic with
+// the demonetization write.
 @Injectable()
 export class MonetizationEffectsService {
   private readonly logger = new Logger(MonetizationEffectsService.name);
@@ -130,19 +128,6 @@ export class MonetizationEffectsService {
         reasonText,
       );
       await this.email.send(author.email, mail.subject, mail.html);
-    }
-  }
-
-  // isMonetized true->false: stamp the terminal permanence flags so the block is
-  // authoritative regardless of which path demonetized.
-  async onDemonetized(ref: DocumentReference): Promise<void> {
-    try {
-      await ref.update({
-        permanentlyDemonetized: true,
-        wasMonetizedBefore: true,
-      });
-    } catch (err) {
-      this.logger.error('onDemonetized permanence stamp failed', err as Error);
     }
   }
 }
