@@ -282,10 +282,13 @@ export const PublicBookDetailPage = () => {
                   </span>
                 )}
               </Button>
-              <Button variant='secondary' className='w-full' onClick={onRead}>
+              <button
+                onClick={onRead}
+                className='w-full h-14 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400'
+              >
                 <span className='material-icons-round text-sm'>auto_stories</span>{' '}
                 Preview
-              </Button>
+              </button>
             </>
           )}
 

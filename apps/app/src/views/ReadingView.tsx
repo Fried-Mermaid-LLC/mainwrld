@@ -11,6 +11,7 @@ import { isChapterPublished, firstPublishedOrder } from "@/config/constants";
 import { useApp } from "@/state/AppContext";
 import { useReportFlow } from "@/components/reportFlow";
 import * as fbService from "@/services/firebaseService";
+import * as stripeConnect from "@/services/stripeConnect";
 
 export const ReadingView = () => {
   const {
@@ -31,6 +32,7 @@ export const ReadingView = () => {
     handleShareBook,
     getUserBookProgress,
     canSeeMature,
+    showToast,
   } = useApp();
   const { sheet: reportSheet, startReport } = useReportFlow();
   const currentUser = user;
@@ -83,6 +85,22 @@ export const ReadingView = () => {
       );
   };
   const onShare = () => selectedBook && handleShareBook(selectedBook);
+  // Buy the full work straight from the preview banner (cash-only Stripe
+  // checkout, no coupon — coupons live on the Book Details screen). The
+  // ?book_purchase_success return is handled by usePayments.
+  const [buying, setBuying] = useState(false);
+  const onBuy = async () => {
+    if (!selectedBook || buying) return;
+    setBuying(true);
+    try {
+      const { url } = await stripeConnect.createBookCheckout(selectedBook.id);
+      await stripeConnect.openStripeUrl(url);
+    } catch (err: any) {
+      showToast(err?.message || "Could not start checkout.", "error");
+    } finally {
+      setBuying(false);
+    }
+  };
   const [showOptions, setShowOptions] = useState(false);
   const [currentChapterIdx, setCurrentChapterIdx] = useState(
     initialChapterIndex || 0,
@@ -955,6 +973,18 @@ export const ReadingView = () => {
                 <p className="text-[8px] font-medium text-accent/60 uppercase mt-1">
                   Purchase the full work to unlock all chapters.
                 </p>
+                <button
+                  onClick={onBuy}
+                  disabled={buying}
+                  className="mt-3 w-full h-11 rounded-xl bg-accent text-white font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 transition-all"
+                >
+                  <span className="material-icons-round text-sm">
+                    shopping_bag
+                  </span>
+                  {buying
+                    ? "Opening checkout…"
+                    : `Buy — $${(book?.price || 9.99).toFixed(2)}`}
+                </button>
               </div>
             )}
             {/* Continuous chapter feed: the windowed chapters render stacked, so
@@ -1001,6 +1031,18 @@ export const ReadingView = () => {
               <p className="text-[8px] font-medium text-accent/60 uppercase mt-1">
                 Purchase the full work to unlock all chapters.
               </p>
+              <button
+                onClick={onBuy}
+                disabled={buying}
+                className="mt-3 w-full h-11 rounded-xl bg-accent text-white font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 transition-all"
+              >
+                <span className="material-icons-round text-sm">
+                  shopping_bag
+                </span>
+                {buying
+                  ? "Opening checkout…"
+                  : `Buy — $${(book?.price || 9.99).toFixed(2)}`}
+              </button>
             </div>
           )}
           <div
