@@ -116,13 +116,13 @@ export const HomeView = () => {
                   | User
                   | undefined
                 if (!found) return null
+                // Presence in the 3D world is authoritative on the live /world
+                // node alone (RTDB onDisconnect clears it reliably). We do NOT
+                // trust Firestore `isOnline`: it goes stale (stays true when an
+                // app is killed without a clean offline), which made every
+                // wanderer read as online/Exploring instead of Offline.
                 const live = worldUsernames.has(username)
-                const isOnline = live || !!found.isOnline
-                const fallbackActivity = isOnline
-                  ? found.activity && found.activity !== 'Idle'
-                    ? found.activity
-                    : 'Exploring'
-                  : 'Offline'
+                const fallbackActivity = live ? 'Exploring' : 'Offline'
                 return (
                   <MovingAvatar
                     key={username}

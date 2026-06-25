@@ -491,7 +491,7 @@ export const MovingAvatar: React.FC<{
       <AvatarModel
         name={user.displayName}
         activity={activity}
-        online={isLive || user.isOnline}
+        online={isLive}
         onClick={onClick}
         avatarConfig={user.avatarConfig}
         isMoving={isMoving}
