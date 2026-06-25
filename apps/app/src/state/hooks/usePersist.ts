@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
+import * as worldService from '@/services/worldService'
 import type { User, Book, BookProgress, AvatarConfig, Coupon, View } from '@/types'
 
 type UserBookDataMap = Record<
@@ -239,6 +240,14 @@ export function usePersist({
     const currentBookId =
       view === 'reading' ? selectedBook?.id ?? null : null
     presenceService.setActivity(firebaseUid, newActivity, currentBookId)
+
+    // Mirror the activity into the RTDB world node so peers' 3D avatars show the
+    // right label live. The world's idle state is 'Exploring' (walking around),
+    // not 'Idle' — only Reading/Writing override it.
+    worldService.setWorldActivity(
+      firebaseUid,
+      newActivity === 'Idle' ? 'Exploring' : newActivity
+    )
 
     if (user.activity !== newActivity) {
       setUser(prev => ({ ...prev, activity: newActivity }))

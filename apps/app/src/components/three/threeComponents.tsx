@@ -306,8 +306,12 @@ export const MovingAvatar: React.FC<{
   // follows the real remote position/rotation/activity/emote; the random wander
   // below is only a fallback for when no live transform exists (e.g. RTDB off).
   getWorldEntry?: (username: string) => WorldEntry | undefined;
+  // Status badge shown while there is NO live /world entry: "Offline" for an
+  // offline mutual, or their persisted activity when online-but-not-in-world.
+  // A live entry overrides this per-frame with the RTDB activity.
+  fallbackActivity?: string;
   onClick?: () => void;
-}> = ({ user, getWorldEntry, onClick }) => {
+}> = ({ user, getWorldEntry, fallbackActivity, onClick }) => {
   const groupRef = useRef<THREE.Group>(null);
   const initialEntry = getWorldEntry?.(user.username);
   const initialPos = (initialEntry?.position ?? user.position ?? [0, 0, 0]) as [
@@ -330,10 +334,15 @@ export const MovingAvatar: React.FC<{
 
   const [isMoving, setIsMoving] = useState(false);
   const lastMoving = useRef(false);
+  const fallback = fallbackActivity ?? user.activity;
   const [activity, setActivity] = useState<string>(
-    initialEntry?.activity ?? user.activity,
+    initialEntry?.activity ?? fallback,
   );
   const lastActivity = useRef(activity);
+  // Live = currently has a /world entry (online and in a world view). Drives the
+  // green/grey presence dot and which status source wins (live RTDB vs fallback).
+  const [isLive, setIsLive] = useState<boolean>(!!initialEntry);
+  const lastLive = useRef(isLive);
   const [emote, setEmote] = useState<{ type: string; id: number } | null>(null);
   const lastEmoteId = useRef(0);
   const emoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -364,6 +373,14 @@ export const MovingAvatar: React.FC<{
     clock.current += delta;
     const entry = getWorldEntry?.(user.username);
     const currentPos = groupRef.current.position;
+
+    // Track live-ness so the presence dot and status flip when a peer joins or
+    // drops out of /world (e.g. closes the app while we watch them).
+    const live = !!entry;
+    if (live !== lastLive.current) {
+      lastLive.current = live;
+      setIsLive(live);
+    }
 
     // Emote: fire a one-shot burst when the id changes (auto-clears after ~2s).
     if (entry?.emote && entry.emote.id !== lastEmoteId.current) {
@@ -440,7 +457,12 @@ export const MovingAvatar: React.FC<{
       return;
     }
 
-    // FALLBACK (no live transform): legacy random wander.
+    // FALLBACK (no live transform): legacy random wander. Show the fallback
+    // status (Offline / persisted activity) instead of a stale live label.
+    if (fallback !== lastActivity.current) {
+      lastActivity.current = fallback;
+      setActivity(fallback);
+    }
     if (waitTimer.current > 0) {
       waitTimer.current -= delta;
       setMoving(false);
@@ -469,7 +491,7 @@ export const MovingAvatar: React.FC<{
       <AvatarModel
         name={user.displayName}
         activity={activity}
-        online={getWorldEntry ? true : user.isOnline}
+        online={isLive || user.isOnline}
         onClick={onClick}
         avatarConfig={user.avatarConfig}
         isMoving={isMoving}

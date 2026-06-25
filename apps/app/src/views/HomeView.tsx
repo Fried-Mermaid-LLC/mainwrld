@@ -99,26 +99,38 @@ export const HomeView = () => {
                 r => r.admirer === t && r.target === user.username
               )
             )
-            // Render only the intersection of (mutual) ∩ (present in /world) ∩
-            // (not blocked). Position/rotation/emote come live from RTDB via
-            // getWorldEntry — no more client-side random fabrication.
+            // Render EVERY (non-blocked) mutual, always — online or not. Users
+            // present in /world (worldUsernames) get live position/rotation/
+            // activity from RTDB via getWorldEntry. Everyone else (offline, or
+            // online but in a non-world view) falls back to the legacy random
+            // wander inside MovingAvatar, with a status derived here:
+            //   - offline            → "Offline"
+            //   - online, no /world  → their persisted activity, or "Exploring"
+            // Live avatars override that fallback per-frame with the RTDB label.
             return actualMutualUsernames
-              .filter(
-                username =>
-                  worldUsernames.has(username) && !blockedUsers.has(username)
-              )
+              .filter(username => !blockedUsers.has(username))
               .map(username => {
-                const found =
-                  registeredUsers.find(u => u.username === username) ||
-                  MUTUALS.find(u => u.username === username)
+                const found = (registeredUsers.find(
+                  u => u.username === username
+                ) || MUTUALS.find(u => u.username === username)) as
+                  | User
+                  | undefined
                 if (!found) return null
+                const live = worldUsernames.has(username)
+                const isOnline = live || !!found.isOnline
+                const fallbackActivity = isOnline
+                  ? found.activity && found.activity !== 'Idle'
+                    ? found.activity
+                    : 'Exploring'
+                  : 'Offline'
                 return (
                   <MovingAvatar
                     key={username}
-                    user={found as User}
+                    user={found}
+                    fallbackActivity={fallbackActivity}
                     getWorldEntry={getWorldEntry}
                     onClick={() => {
-                      setSelectedProfileUser(found as User)
+                      setSelectedProfileUser(found)
                       setView('profile')
                     }}
                   />
