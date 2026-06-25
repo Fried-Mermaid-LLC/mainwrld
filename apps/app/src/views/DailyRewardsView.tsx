@@ -34,67 +34,78 @@ export const DailyRewardsView = () => {
   } = useApp();
   return (
     <div className="fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-500 z-[400]">
-      <header className="p-6 flex items-center gap-4 sticky top-0 bg-white/80 backdrop-blur-xl z-50">
+      {/* Unified header: full-bleed bar, back on the left, centered title. */}
+      <header className="relative px-6 py-4 border-b border-[#eaeaea] flex items-center justify-center bg-white">
         <button
           onClick={() => setView("home")}
-          className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400"
+          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors"
         >
           <span className="material-icons-round">arrow_back</span>
         </button>
-        <h1 className="text-xl font-bold">Daily Rewards</h1>
+        <h1 className="text-[22px] font-bold leading-[1.24] text-[#1a1a1a]">
+          Daily Rewards
+        </h1>
       </header>
-      <div className="p-8 flex flex-col items-center gap-10">
-        <div className="text-center space-y-2">
-          <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
-            Your Points
-          </p>
-          <h2 className="text-5xl font-display text-accent">{user.points}</h2>
-        </div>
-
-        {/* Daily Earned Points Progress */}
-        {(() => {
-          const now = Date.now();
-          const isNewDay =
-            !user.lastPointsReset ||
-            now - (user.lastPointsReset || 0) > 24 * 60 * 60 * 1000;
-          const earned = isNewDay ? 0 : user.dailyEarnedPoints || 0;
-          const pct = Math.min(100, (earned / MAX_DAILY_EARNED_POINTS) * 100);
-          return (
-            <div className="w-full px-2">
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                  Today's Earned Points
-                </p>
-                <p className="text-sm font-bold text-accent">
-                  {earned}/{MAX_DAILY_EARNED_POINTS}
-                </p>
-              </div>
-              <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-accent rounded-full transition-all duration-500"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              {earned >= MAX_DAILY_EARNED_POINTS && (
-                <p className="text-[10px] text-accent font-bold mt-1 text-center">
-                  Daily cap reached! Come back tomorrow.
-                </p>
-              )}
-            </div>
-          );
-        })()}
-
-        <div className="w-full space-y-8">
-          <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex flex-col items-center gap-6 shadow-sm">
-            <div className="text-center">
-              <h3 className="text-lg font-bold">Daily 3 Points</h3>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                Claim every 24 hours
+      <div className="max-w-5xl mx-auto w-full p-6 md:p-8 flex flex-col gap-10">
+        <div className="grid md:grid-cols-2 gap-6 items-start">
+          {/* Left column: Your Points above the Daily Points card. */}
+          <div className="space-y-6">
+            <div className="text-center space-y-2 py-2">
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                Your Points
               </p>
+              <h2 className="text-5xl font-display text-accent">
+                {user.points}
+              </h2>
             </div>
-            <Button className="w-full h-16" onClick={handleClaimPoints}>
-              Claim Points
-            </Button>
+
+            {/* Today's Earned Points progress */}
+            {(() => {
+              const now = Date.now();
+              const isNewDay =
+                !user.lastPointsReset ||
+                now - (user.lastPointsReset || 0) > 24 * 60 * 60 * 1000;
+              const earned = isNewDay ? 0 : user.dailyEarnedPoints || 0;
+              const pct = Math.min(
+                100,
+                (earned / MAX_DAILY_EARNED_POINTS) * 100,
+              );
+              return (
+                <div className="w-full px-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                      Today's Earned Points
+                    </p>
+                    <p className="text-sm font-bold text-accent">
+                      {earned}/{MAX_DAILY_EARNED_POINTS}
+                    </p>
+                  </div>
+                  <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-accent rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {earned >= MAX_DAILY_EARNED_POINTS && (
+                    <p className="text-[10px] text-accent font-bold mt-1 text-center">
+                      Daily cap reached! Come back tomorrow.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex flex-col items-center gap-6 shadow-sm">
+              <div className="text-center">
+                <h3 className="text-lg font-bold">Daily 3 Points</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                  Claim every 24 hours
+                </p>
+              </div>
+              <Button className="w-full h-16" onClick={handleClaimPoints}>
+                Claim Points
+              </Button>
+            </div>
           </div>
 
           <div className="p-8 bg-black rounded-[2.5rem] border border-gray-800 flex flex-col items-center gap-6 shadow-xl relative overflow-hidden">
@@ -189,10 +200,7 @@ export const DailyRewardsView = () => {
               ))}
             </div>
           </div>
-        </div>
-
-        {/* Premium Membership */}
-        <div className="w-full">
+          {/* Premium Membership */}
           <div className="p-8 bg-gradient-to-br from-amber-50 to-orange-50 rounded-[2.5rem] border border-amber-200 flex flex-col items-center gap-6 shadow-sm relative overflow-hidden">
             <div className="absolute top-4 right-4">
               <span className="material-icons-round text-pink-300 text-4xl">

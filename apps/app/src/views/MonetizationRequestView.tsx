@@ -23,7 +23,9 @@ export const MonetizationRequestView = () => {
   const works = books.filter(
     b => b.author.username?.toLowerCase() === user.username?.toLowerCase()
   )
-  const onBack = () => setView('write')
+  // Monetize is reached from the Book Details screen, so Back returns there
+  // (the book's metadata, still held in publishingInitialData).
+  const onBack = () => setView('publishing')
   const [selectedBook, setSelectedBook] = useState<Book | null>(works[0] || null)
   const [price, setPrice] = useState<number>(9.99)
   const [submitting, setSubmitting] = useState(false)
@@ -137,14 +139,20 @@ export const MonetizationRequestView = () => {
   }
 
   return (
-    <div className='fixed inset-0 bg-white overflow-y-auto p-6 animate-in slide-in-from-bottom duration-500 z-[300]'>
-      <header className='flex justify-between items-center mb-8 max-w-2xl mx-auto w-full'>
-        <h1 className='text-2xl font-bold'>Monetize</h1>
-        <button onClick={onBack} className='w-10 h-10 text-gray-300'>
-          <span className='material-icons-round'>close</span>
+    <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in slide-in-from-bottom duration-500 z-[300]'>
+      {/* Unified header: full-bleed bar, back on the left, centered title. */}
+      <header className='relative px-6 py-4 border-b border-[#eaeaea] flex items-center justify-center'>
+        <button
+          onClick={onBack}
+          className='absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors'
+        >
+          <span className='material-icons-round'>arrow_back</span>
         </button>
+        <h1 className='text-[22px] font-bold leading-[1.24] text-[#1a1a1a]'>
+          Monetize
+        </h1>
       </header>
-      <div className='space-y-8 pb-32 max-w-2xl mx-auto w-full'>
+      <div className='p-6 pb-32 space-y-8 max-w-3xl mx-auto w-full'>
         <div className='p-5 bg-gray-50 rounded-3xl border border-gray-100'>
           <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed'>
             Note: You have a maximum of 2 monetization attempts per book. If a

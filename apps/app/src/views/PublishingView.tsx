@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { Button, Input } from '@/components/sharedComponents'
 import { GENRE_LIST } from '@/config/constants'
 import { useApp } from '@/state/AppContext'
@@ -8,6 +8,7 @@ export const PublishingView = () => {
     publishingInitialData,
     handleCreateBook,
     handleUpdateBookMeta,
+    handlePublishBook,
     setEditorTarget,
     setView
   } = useApp()
@@ -16,9 +17,16 @@ export const PublishingView = () => {
   // creating a brand-new book.
   const editingBookId: string | undefined = initialData?.bookId
   const isEditing = !!editingBookId
-  const onBack = () => setView('write')
+  // A still-unpublished (draft) book shows the Publish Book action.
+  const bookIsDraft = initialData?.isDraft !== false
   const [bookTitle, setBookTitle] = useState(initialData?.title || '')
   const [isCreating, setIsCreating] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
+  // Edit mode autosaves metadata; its status surfaces on the Publish button.
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const saveTimerRef = useRef<number | null>(null)
+  const savedResetRef = useRef<number | null>(null)
+  const skipFirstAutosaveRef = useRef(true)
   const [tagline, setTagline] = useState(initialData?.tagline || '')
   const [isMature, setIsMature] = useState(initialData?.isMature || false)
   const [commentsEnabled, setCommentsEnabled] = useState(
@@ -36,6 +44,70 @@ export const PublishingView = () => {
   const [coverUploadError, setCoverUploadError] = useState<string>('')
   const [isProcessingCover, setIsProcessingCover] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const buildPayload = () => ({
+    title: bookTitle,
+    tagline,
+    isMature,
+    commentsEnabled,
+    coverImage,
+    genres: selectedGenres,
+    hashtags: hashtags
+      .split(',')
+      .map(h => h.trim().replace(/^#/, ''))
+      .filter(h => h.length > 0)
+  })
+
+  // Persist metadata edits (edit mode only); status surfaces on the Publish
+  // button. A freshly-uploaded cover's hosted URL replaces the local data-URL
+  // so subsequent autosaves don't re-upload it.
+  const flushSave = async () => {
+    if (!isEditing || !editingBookId) return
+    setSaveState('saving')
+    const res = await handleUpdateBookMeta(editingBookId, buildPayload())
+    if (res.coverUrl) setCoverImage(res.coverUrl)
+    setSaveState(res.ok ? 'saved' : 'idle')
+    if (res.ok) {
+      if (savedResetRef.current) window.clearTimeout(savedResetRef.current)
+      savedResetRef.current = window.setTimeout(() => setSaveState('idle'), 2000)
+    }
+  }
+
+  const onBack = () => {
+    // Flush a pending autosave so leaving never drops a recent edit.
+    if (isEditing && editingBookId && saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+      void handleUpdateBookMeta(editingBookId, buildPayload())
+    }
+    setView('write')
+  }
+
+  // Debounced autosave on any metadata change (edit mode only).
+  useEffect(() => {
+    if (!isEditing || !editingBookId) return
+    if (skipFirstAutosaveRef.current) {
+      skipFirstAutosaveRef.current = false
+      return
+    }
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null
+      void flushSave()
+    }, 800)
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    bookTitle,
+    tagline,
+    selectedGenres,
+    hashtags,
+    isMature,
+    commentsEnabled,
+    coverImage
+  ])
 
   const fileToDataUrl = useCallback((file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -125,13 +197,13 @@ export const PublishingView = () => {
   }
 
   return (
-    <div className='fixed inset-0 bg-white overflow-y-auto p-6 animate-in slide-in-from-right duration-500 z-[300]'>
-      {/* Back arrow on the left, centered title (+ book subtitle when editing),
-          matching the Write Studio editor header. */}
-      <header className='relative flex items-center justify-center mb-10'>
+    <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500 z-[300]'>
+      {/* Unified header: full-bleed bar, back on the left, Monetize on the
+          right, centered title (+ book subtitle when editing). */}
+      <header className='relative px-6 py-4 border-b border-[#eaeaea] flex items-center justify-center'>
         <button
           onClick={onBack}
-          className='absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors'
+          className='absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors'
         >
           <span className='material-icons-round'>arrow_back</span>
         </button>
@@ -145,8 +217,17 @@ export const PublishingView = () => {
             </p>
           )}
         </div>
+        {isEditing && (
+          <button
+            onClick={() => setView('monetization-request')}
+            title='Monetize'
+            className='absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors'
+          >
+            <span className='material-icons-round'>paid</span>
+          </button>
+        )}
       </header>
-      <div className='space-y-8 pb-32'>
+      <div className='p-6 pb-32 space-y-8 max-w-3xl mx-auto w-full'>
         <div className='flex flex-col gap-8 md:flex-row-reverse md:items-start'>
           {/* Wide screens: cover on the left, title/tagline on the right
               (flex-row-reverse puts this first DOM child on the right). Mobile:
@@ -289,69 +370,67 @@ export const PublishingView = () => {
           </div>
         </div>
 
-        {isEditing && (
-          <Button
-            variant='secondary'
-            className='w-full'
-            disabled={isCreating}
-            onClick={() => setView('monetization-request')}
-          >
-            <span className='material-icons-round text-sm'>paid</span> Monetize
-          </Button>
-        )}
-
-        <div className='grid grid-cols-2 gap-4'>
-          <Button variant='outline' onClick={onBack} disabled={isCreating}>
-            Cancel
-          </Button>
-          <Button
-            disabled={
-              isProcessingCover ||
-              !!coverUploadError ||
-              !bookTitle.trim() ||
-              isCreating
-            }
-            onClick={async () => {
-              setIsCreating(true)
-              const payload = {
-                title: bookTitle,
-                tagline,
-                isMature,
-                commentsEnabled,
-                coverImage,
-                genres: selectedGenres,
-                hashtags: hashtags
-                  .split(',')
-                  .map(h => h.trim().replace(/^#/, ''))
-                  .filter(h => h.length > 0)
-              }
-              if (isEditing && editingBookId) {
-                // Edit mode: persist metadata and return to the Studio.
-                const ok = await handleUpdateBookMeta(editingBookId, payload)
+        {isEditing ? (
+          // Edit mode: metadata autosaves. The Publish Book button doubles as
+          // the Saving/Saved indicator; an already-published book just shows
+          // the save status.
+          bookIsDraft && editingBookId ? (
+            <Button
+              className='w-full'
+              disabled={isPublishing}
+              onClick={async () => {
+                setIsPublishing(true)
+                const ok = await handlePublishBook(editingBookId)
                 if (ok) setView('write')
-                else setIsCreating(false)
-                return
-              }
-              const id = await handleCreateBook(payload)
-              if (id) {
-                // Hand the freshly-created draft to the chapter editor and land
-                // on its default empty Chapter 1.
-                setEditorTarget({ bookId: id, chapterIndex: '0' })
-                setView('write')
-              } else {
-                setIsCreating(false)
-              }
-            }}
-          >
-            {isEditing
-              ? isCreating
+                else setIsPublishing(false)
+              }}
+            >
+              {isPublishing
+                ? 'Publishing…'
+                : saveState === 'saving'
                 ? 'Saving…'
-                : 'Save'
-              : isCreating
-              ? 'Creating…'
-              : 'Create Book'}
-          </Button>
-        </div>
+                : saveState === 'saved'
+                ? '✓ Saved'
+                : 'Publish Book'}
+            </Button>
+          ) : (
+            <p className='text-center text-[10px] font-bold uppercase tracking-widest text-gray-400 py-3'>
+              {saveState === 'saving'
+                ? 'Saving…'
+                : saveState === 'saved'
+                ? '✓ Saved'
+                : 'All changes saved'}
+            </p>
+          )
+        ) : (
+          <div className='grid grid-cols-2 gap-4'>
+            <Button variant='outline' onClick={onBack} disabled={isCreating}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                isProcessingCover ||
+                !!coverUploadError ||
+                !bookTitle.trim() ||
+                isCreating
+              }
+              onClick={async () => {
+                setIsCreating(true)
+                const id = await handleCreateBook(buildPayload())
+                if (id) {
+                  // Hand the freshly-created draft to the chapter editor and
+                  // land on its default empty Chapter 1.
+                  setEditorTarget({ bookId: id, chapterIndex: '0' })
+                  setView('write')
+                } else {
+                  setIsCreating(false)
+                }
+              }}
+            >
+              {isCreating ? 'Creating…' : 'Create Book'}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

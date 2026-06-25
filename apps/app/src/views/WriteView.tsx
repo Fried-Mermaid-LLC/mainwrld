@@ -831,6 +831,7 @@ export const WriteView = () => {
       isMature: b.isMature,
       commentsEnabled: b.commentsEnabled,
       coverImage: b.coverImage,
+      isDraft: b.isDraft,
     });
     setView("publishing");
   };
@@ -855,7 +856,7 @@ export const WriteView = () => {
       // bar. Apply the top inset here so both writing and editing chrome clear it.
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <div className="w-full max-w-3xl flex-1 flex flex-col min-h-0">
+      <div className="w-full flex-1 flex flex-col min-h-0">
         {isWriting ? (
           <header className="px-4 py-3 border-b border-gray-50 flex justify-between items-center gap-3 bg-white z-50 animate-in slide-in-from-top-2 duration-200">
             <div className="flex flex-col min-w-0">
@@ -907,6 +908,15 @@ export const WriteView = () => {
                 {newTitle || selectedBook?.title || "Untitled"}
               </p>
             </div>
+            {selectedBook && (
+              <button
+                onClick={() => openBookSettings(selectedBook)}
+                title="Book details"
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors"
+              >
+                <span className="material-icons-round">settings</span>
+              </button>
+            )}
           </header>
         ) : (
           // Tab landing (works grid): centered title + book count, matching the
@@ -924,7 +934,7 @@ export const WriteView = () => {
         )}
 
         {writeMode === "list" ? (
-          <div className="flex-1 p-4 pb-28 overflow-y-auto no-scrollbar">
+          <div className="flex-1 p-6 pb-28 overflow-y-auto no-scrollbar">
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {/* New Work tile — opens the editor on a fresh Chapter 1. */}
               <button
@@ -954,18 +964,6 @@ export const WriteView = () => {
                           Draft
                         </span>
                       )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openBookSettings(b);
-                        }}
-                        title="Edit book details"
-                        className="absolute bottom-2 right-2 z-20 w-8 h-8 rounded-full bg-black/55 text-white flex items-center justify-center active:scale-90 transition-all hover:bg-accent"
-                      >
-                        <span className="material-icons-round text-xs">
-                          edit
-                        </span>
-                      </button>
                     </div>
                     <div className="flex flex-col gap-1">
                       <p className="text-[13px] font-semibold text-[#1a1a1a] tracking-[0.13px] leading-[1.2] line-clamp-2">
@@ -984,7 +982,7 @@ export const WriteView = () => {
         ) : (
           <>
             <div
-              className="flex-1 p-6 space-y-6 overflow-y-auto no-scrollbar"
+              className="flex-1 w-full max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto no-scrollbar"
               style={{
                 WebkitOverflowScrolling: "touch",
                 scrollBehavior: "smooth",
@@ -1223,7 +1221,8 @@ export const WriteView = () => {
             </div>
 
             {!isWriting && hasActiveChapter && (
-              <div className="p-6 bg-white border-t border-gray-50">
+              <div className="bg-white border-t border-gray-50">
+                <div className="w-full max-w-3xl mx-auto p-6">
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex flex-col">
                     <span
@@ -1266,6 +1265,7 @@ export const WriteView = () => {
                       ? "✓ Saved"
                       : publishLabel}
                 </Button>
+                </div>
               </div>
             )}
           </>

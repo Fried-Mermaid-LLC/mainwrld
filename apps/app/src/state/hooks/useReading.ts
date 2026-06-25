@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
-import { MAX_DAILY_CHAPTERS, libraryLimitFor, LIBRARY_FULL_TOAST, isChapterPublished } from '@/config/constants'
+import { MAX_DAILY_CHAPTERS, libraryLimitFor, LIBRARY_FULL_TOAST, isChapterPublished, MIN_WORD_COUNT } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import type { User, Book, BookProgress, View, Relationship, NotificationCategory } from '@/types'
 
@@ -1128,7 +1128,9 @@ export function useReading({
 
   // Update an existing book's metadata (title, tagline, genres, hashtags, mature,
   // comments, and optionally a freshly-picked cover) from the Book Details
-  // screen. Returns true on success. Does not touch chapters.
+  // screen. Returns { ok, coverUrl }: coverUrl is the hosted URL when a new
+  // cover was uploaded, so the caller can swap its local data-URL and avoid
+  // re-uploading on the next autosave. Does not touch chapters.
   const handleUpdateBookMeta = async (
     bookId: string,
     data: {
@@ -1140,10 +1142,10 @@ export function useReading({
       commentsEnabled?: boolean
       coverImage?: string | null
     }
-  ): Promise<boolean> => {
+  ): Promise<{ ok: boolean; coverUrl: string | null }> => {
     try {
       const existingBook = books.find(b => b.id === bookId)
-      if (!existingBook) return false
+      if (!existingBook) return { ok: false, coverUrl: null }
       if (
         containsProfanity(data.title || '') ||
         containsProfanity(data.tagline || '')
@@ -1152,7 +1154,7 @@ export function useReading({
           'Your book title or tagline contains inappropriate language. Please revise.',
           'warning'
         )
-        return false
+        return { ok: false, coverUrl: null }
       }
       // Only a freshly-picked base64 cover is re-uploaded; an unchanged existing
       // cover URL is left as-is (resolveCover returns null for non-data URLs).
@@ -1182,10 +1184,73 @@ export function useReading({
       if (selectedBook?.id === bookId) {
         setSelectedBook(prev => (prev ? { ...prev, ...patch } : prev))
       }
-      return true
+      return { ok: true, coverUrl: cover ? cover.coverImage : null }
     } catch (err) {
       console.error('Failed to update book:', err)
       showToast('Failed to save changes. Please try again.', 'error')
+      return { ok: false, coverUrl: null }
+    }
+  }
+
+  // Publish the whole book from the Book Details screen: fetch every chapter
+  // body, publish the ones that meet the minimum word count, and take the book
+  // out of draft. Returns true on success, false if nothing is publishable yet.
+  const handlePublishBook = async (bookId: string): Promise<boolean> => {
+    try {
+      const existingBook = books.find(b => b.id === bookId)
+      if (!existingBook) return false
+      const meta = existingBook.chapterMeta || []
+      if (meta.length === 0) {
+        showToast('Add a chapter with content before publishing.', 'warning')
+        return false
+      }
+      // Word count per chapter (HTML stripped), fetched in parallel.
+      const wordCounts = await Promise.all(
+        meta.map(async m => {
+          try {
+            const doc = await fbService.getChapter(bookId, m.id)
+            const text = (doc?.content || '')
+              .replace(/<\/?[^>]+(>|$)/g, '')
+              .trim()
+            return text === '' ? 0 : text.split(/\s+/).length
+          } catch {
+            return 0
+          }
+        })
+      )
+      const eligibleCount = wordCounts.filter(c => c >= MIN_WORD_COUNT).length
+      if (eligibleCount === 0) {
+        showToast(
+          `Write at least ${MIN_WORD_COUNT} words in a chapter before publishing.`,
+          'warning'
+        )
+        return false
+      }
+      // Publish every chapter that has enough content; keep already-published
+      // flags for the rest (a short chapter stays a draft).
+      const nextMeta = meta.map((m, i) => ({
+        id: m.id,
+        title: m.title,
+        published:
+          wordCounts[i] >= MIN_WORD_COUNT ||
+          isChapterPublished(meta, i, existingBook.chaptersCount)
+      }))
+      const chaptersCount = nextMeta.filter(m => m.published).length
+      const patch: Partial<Book> = {
+        chapterMeta: nextMeta,
+        chaptersCount,
+        isDraft: false
+      }
+      await fbService.updateBook(bookId, patch)
+      setBooks(prev => prev.map(b => (b.id === bookId ? { ...b, ...patch } : b)))
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(prev => (prev ? { ...prev, ...patch } : prev))
+      }
+      showToast('Book published!', 'check_circle')
+      return true
+    } catch (err) {
+      console.error('Failed to publish book:', err)
+      showToast('Failed to publish. Please try again.', 'error')
       return false
     }
   }
@@ -1268,6 +1333,7 @@ export function useReading({
     handleSaveDraft,
     handleCreateBook,
     handleUpdateBookMeta,
+    handlePublishBook,
     handleBookProgressUpdate
   }
 }

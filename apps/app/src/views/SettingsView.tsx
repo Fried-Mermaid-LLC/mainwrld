@@ -483,7 +483,7 @@ export const SettingsView = () => {
         </div>
       )}
 
-      <div className='p-6 space-y-10 pb-32 max-w-2xl mx-auto'>
+      <div className='p-6 space-y-10 pb-32 max-w-3xl mx-auto w-full'>
         <section className='space-y-4'>
           <h3 className='text-[10px] font-bold text-gray-300 uppercase tracking-widest ml-4'>
             Account & Privacy
