@@ -107,6 +107,14 @@ export function useUI() {
   // Shared (not WriteView-local) so it survives round-trips to the Publishing /
   // Monetization sub-screens and back. Tab navigation resets it to 'list'.
   const [writeMode, setWriteMode] = useState<'list' | 'editor'>('list')
+  // One-shot request to open the chapter editor on a specific book/chapter from
+  // OUTSIDE WriteView (e.g. after the new-book setup screen creates the draft).
+  // WriteView consumes it, adopts the target into its local selection, then
+  // clears it. `chapterIndex: ''` lands on the empty "start a chapter" state.
+  const [editorTarget, setEditorTarget] = useState<{
+    bookId: string
+    chapterIndex: string
+  } | null>(null)
 
   useEffect(() => {
     if (view !== 'home') return
@@ -164,6 +172,8 @@ export function useUI() {
     writeReturnView,
     setWriteReturnView,
     writeMode,
-    setWriteMode
+    setWriteMode,
+    editorTarget,
+    setEditorTarget
   }
 }

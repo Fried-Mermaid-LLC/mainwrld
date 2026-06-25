@@ -41,7 +41,7 @@ import { useApp } from '@/state/AppContext'
 export const AppShell: React.FC = () => {
   const {
     view, setView, toast, confirmModal, setConfirmModal, userDataLoaded,
-    selectedBook, selectedProfileUser, isWriting, setWriteReturnView, setWriteMode
+    selectedBook, selectedProfileUser, isWriting, writeMode, setWriteReturnView, setWriteMode
   } = useApp()
 
   // Keep the native Capacitor splash up through the initial `splash` view and
@@ -188,6 +188,10 @@ export const AppShell: React.FC = () => {
 
   const showNav =
     !isWriting &&
+    // Hide the tab bar on the chapter editor page (Write Studio in editor
+    // mode) so the editing surface is full-height; the Studio works grid
+    // (writeMode === 'list') still shows it.
+    !(view === 'write' && writeMode === 'editor') &&
     ['home', 'explore', 'library', 'write', 'self-profile'].includes(view)
 
   return (

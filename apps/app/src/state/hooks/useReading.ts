@@ -413,7 +413,24 @@ export function useReading({
     [userBookData, user.username]
   )
 
-  const handlePublish = async (data: any) => {
+  const handlePublish = async (
+    data: any,
+    ctx?: {
+      id: string | null
+      title: string
+      content: string
+      chapterIndex: number | null
+      chapterTitle: string
+    }
+  ) => {
+    // Direct chapter publish (from the editor, skipping the PublishingView
+    // metadata screen) passes the target via `ctx`. Without it, fall back to the
+    // currentPublishing* state set before navigating to PublishingView.
+    const pubId = ctx ? ctx.id : currentPublishingId
+    const pubTitle = ctx ? ctx.title : currentPublishingTitle
+    const pubContent = ctx ? ctx.content : currentPublishingContent
+    const pubChapterTitle = ctx ? ctx.chapterTitle : currentPublishingChapterTitle
+    const pubChapterIndex = ctx ? ctx.chapterIndex : currentPublishingChapterIndex
     try {
       // Daily chapter publish limit
       const now = Date.now()
@@ -430,9 +447,9 @@ export function useReading({
       // (moderateBookOnWrite / moderateChapterOnWrite) re-checks profanity +
       // OpenAI authoritatively after the write.
       if (
-        containsProfanity(currentPublishingTitle) ||
+        containsProfanity(pubTitle) ||
         containsProfanity(data.tagline) ||
-        containsProfanity(currentPublishingChapterTitle)
+        containsProfanity(pubChapterTitle)
       ) {
         showToast(
           'Your book title, chapter title, or tagline contains inappropriate language. Please revise before publishing.',
@@ -457,9 +474,9 @@ export function useReading({
         )
       ]
 
-      if (currentPublishingId) {
+      if (pubId) {
         // Update existing book - preserve existing metadata when just adding/updating chapters
-        const existingBook = books.find(b => b.id === currentPublishingId)
+        const existingBook = books.find(b => b.id === pubId)
         if (existingBook) {
           // Chapter bodies live in the subcollection: edit only the target
           // chapter and update the light chapterMeta on the book doc.
@@ -475,8 +492,8 @@ export function useReading({
             )
           }))
           const targetIndex =
-            currentPublishingChapterIndex !== null
-              ? currentPublishingChapterIndex
+            pubChapterIndex !== null
+              ? pubChapterIndex
               : meta.length - 1
 
           let chapterId: string
@@ -486,7 +503,7 @@ export function useReading({
             chapterId = meta[targetIndex].id
             order = targetIndex
             resolvedChapterTitle =
-              currentPublishingChapterTitle.trim() ||
+              pubChapterTitle.trim() ||
               meta[targetIndex].title ||
               `Chapter ${targetIndex + 1}`
             meta[targetIndex] = {
@@ -498,7 +515,7 @@ export function useReading({
             order = meta.length
             chapterId = fbService.newChapterId(existingBook.id)
             resolvedChapterTitle =
-              currentPublishingChapterTitle.trim() ||
+              pubChapterTitle.trim() ||
               `Chapter ${meta.length + 1}`
             meta.push({
               id: chapterId,
@@ -524,10 +541,10 @@ export function useReading({
           )
 
           await fbService.commitChapterWrite(
-            currentPublishingId,
+            pubId,
             chapterId,
             {
-              content: currentPublishingContent,
+              content: pubContent,
               order,
               title: resolvedChapterTitle,
               authorUsername: user?.username || '',
@@ -585,10 +602,10 @@ export function useReading({
           }
           setBooks(prev =>
             prev.map(b =>
-              b.id === currentPublishingId ? { ...b, ...publishPatch } : b
+              b.id === pubId ? { ...b, ...publishPatch } : b
             )
           )
-          if (selectedBook?.id === currentPublishingId) {
+          if (selectedBook?.id === pubId) {
             setSelectedBook(prev => (prev ? { ...prev, ...publishPatch } : prev))
           }
 
@@ -596,12 +613,12 @@ export function useReading({
           // genuinely-new chapter (deduped so nobody is notified twice).
           const prevChapterCount = existingBook.chapterMeta?.length ?? 0
           if (
-            currentPublishingChapterIndex === null ||
-            currentPublishingChapterIndex >= prevChapterCount
+            pubChapterIndex === null ||
+            pubChapterIndex >= prevChapterCount
           ) {
             const libraryOwners = Object.entries(userBookData)
               .filter(([, udata]: [string, any]) =>
-                udata.ownedBookIds?.includes(currentPublishingId)
+                udata.ownedBookIds?.includes(pubId)
               )
               .map(([username]) => username)
             const chapterRecipients = new Set([
@@ -616,7 +633,7 @@ export function useReading({
                   'menu_book',
                   username,
                   user?.username,
-                  currentPublishingId || existingBook.id, // targetId = book id
+                  pubId || existingBook.id, // targetId = book id
                   undefined,
                   undefined,
                   'appUpdates'
@@ -630,11 +647,11 @@ export function useReading({
         const bookId = fbService.newBookId()
         const chapterId = fbService.newChapterId(bookId)
         const firstChapterTitle =
-          currentPublishingChapterTitle.trim() || 'Chapter 1'
+          pubChapterTitle.trim() || 'Chapter 1'
         const cover = await resolveCover(bookId, data.coverImage, null)
         const bookData = {
           id: bookId,
-          title: currentPublishingTitle,
+          title: pubTitle,
           authorUid: firebaseUid || '',
           authorUsername: user?.username || '',
           authorDisplayName: user?.displayName || '',
@@ -664,7 +681,7 @@ export function useReading({
         }
         await fbService.createBook(bookData)
         await fbService.saveChapter(bookId, chapterId, {
-          content: currentPublishingContent,
+          content: pubContent,
           order: 0,
           title: firstChapterTitle,
           authorUsername: user?.username || ''
@@ -699,7 +716,7 @@ export function useReading({
         mutualUsernames.forEach(username => {
           addNotification(
             'New Book',
-            `${user?.displayName} published a new book: "${currentPublishingTitle}"`,
+            `${user?.displayName} published a new book: "${pubTitle}"`,
             'auto_stories',
             username,
             user?.username,
@@ -1017,6 +1034,98 @@ export function useReading({
     return newBookId
   }
 
+  // Create a brand-new draft book from the setup screen — metadata plus a single
+  // empty, unpublished "Chapter 1" so the author lands straight into writing.
+  // Returns the new book id (or null on failure). Chapters are published
+  // directly from the editor afterwards.
+  const handleCreateBook = async (data: {
+    title: string
+    tagline?: string
+    genres?: string[]
+    hashtags?: string[]
+    isMature?: boolean
+    commentsEnabled?: boolean
+    coverImage?: string | null
+  }): Promise<string | null> => {
+    try {
+      if (
+        containsProfanity(data.title) ||
+        containsProfanity(data.tagline || '')
+      ) {
+        showToast(
+          'Your book title or tagline contains inappropriate language. Please revise.',
+          'warning'
+        )
+        return null
+      }
+      const id = fbService.newBookId()
+      const chapterId = fbService.newChapterId(id)
+      const cover = await resolveCover(id, data.coverImage ?? null, null)
+      const bookData = {
+        id,
+        title: (data.title || '').trim(),
+        authorUid: firebaseUid || '',
+        authorUsername: user?.username || '',
+        authorDisplayName: user?.displayName || '',
+        coverColor: cover
+          ? '#f5f5f5'
+          : '#' + Math.floor(Math.random() * 16777215).toString(16),
+        coverImage: cover ? cover.coverImage : null,
+        coverPath: cover ? cover.coverPath : null,
+        likes: [0],
+        commentsCount: 0,
+        publishedDate: new Date().toISOString().split('T')[0],
+        isCompleted: false,
+        isDraft: true,
+        isMature: data.isMature ?? false,
+        // No published chapters yet — the default Chapter 1 starts as a draft.
+        chaptersCount: 0,
+        tagline: data.tagline || '',
+        genres: data.genres || [],
+        hashtags: data.hashtags || [],
+        commentsEnabled: data.commentsEnabled ?? true,
+        chapterMeta: [{ id: chapterId, title: 'Chapter 1', published: false }],
+        schemaVersion: 2,
+        isFree: true,
+        price: 0
+      }
+      await fbService.createBook(bookData)
+      // Persist the empty first chapter body so it's a real, selectable chapter.
+      await fbService.saveChapter(id, chapterId, {
+        content: '',
+        order: 0,
+        title: 'Chapter 1',
+        authorUsername: user?.username || ''
+      })
+      // Optimistic insert so the book is in myWorks the moment the editor opens.
+      const optimisticBook = {
+        ...bookData,
+        author: {
+          username: user?.username || 'unknown',
+          displayName: user?.displayName || 'Unknown',
+          isOnline: false,
+          activity: 'Idle' as const,
+          position: [0, 0, 0] as [number, number, number],
+          isMutual: false,
+          points: 0,
+          admirersCount: 0,
+          mutualsCount: 0,
+          strikes: 0
+        },
+        likes: [0],
+        isFavorite: false
+      } as unknown as Book
+      setBooks(prev =>
+        prev.some(b => b.id === id) ? prev : [optimisticBook, ...prev]
+      )
+      return id
+    } catch (err) {
+      console.error('Failed to create book:', err)
+      showToast('Failed to create book. Please try again.', 'error')
+      return null
+    }
+  }
+
   const handleBookProgressUpdate = (
     bookId: string,
     scrollProgress: number,
@@ -1093,6 +1202,7 @@ export function useReading({
     handlePublish,
     handleRequestMonetization,
     handleSaveDraft,
+    handleCreateBook,
     handleBookProgressUpdate
   }
 }

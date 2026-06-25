@@ -28,15 +28,10 @@ export const WriteView = () => {
     setLastSelectedBookId,
     setLastSelectedChapterIndex,
     handleSaveDraft,
-    setCurrentPublishingId,
-    setCurrentPublishingTitle,
-    setCurrentPublishingContent,
-    setCurrentPublishingChapterTitle,
-    setCurrentPublishingChapterIndex,
     setPublishingInitialData,
     setView,
+    handlePublish,
     handleUnpublishChapter,
-    handleRepublishChapter,
     handleDeleteChapter,
     showToast,
     setNotifications,
@@ -45,7 +40,9 @@ export const WriteView = () => {
     writeReturnView,
     setWriteReturnView,
     writeMode,
-    setWriteMode
+    setWriteMode,
+    editorTarget,
+    setEditorTarget
   } = useApp()
   const initialBookId = lastSelectedBookId
   const initialChapterIndex = lastSelectedChapterIndex
@@ -53,57 +50,8 @@ export const WriteView = () => {
     setLastSelectedBookId(id)
     setLastSelectedChapterIndex(ch)
   }
-  const onPublish = async (
-    id: string | null,
-    title: string,
-    content: string,
-    chapterIndex: number | null,
-    chapterTitle: string
-  ) => {
-    let effectiveId = id
-    // Persist the draft first (schema 2: light book doc + chapter subcollection).
-    // handleSaveDraft creates the book for a new id and returns the real doc id.
-    try {
-      const savedId = await handleSaveDraft(
-        id,
-        title,
-        content,
-        chapterIndex,
-        chapterTitle
-      )
-      if (!effectiveId) {
-        if (!savedId) return
-        effectiveId = savedId
-      }
-    } catch (err) {
-      console.error('Failed to save book:', err)
-      return
-    }
-
-    if (effectiveId) {
-      const existingBook = books.find(b => b.id === effectiveId)
-      setCurrentPublishingId(effectiveId)
-      setCurrentPublishingTitle(title)
-      setCurrentPublishingContent(content)
-      setCurrentPublishingChapterTitle(chapterTitle.trim())
-      setCurrentPublishingChapterIndex(chapterIndex)
-      setPublishingInitialData(
-        existingBook
-          ? {
-              tagline: existingBook.tagline,
-              genres: existingBook.genres,
-              hashtags: existingBook.hashtags,
-              isMature: existingBook.isMature,
-              commentsEnabled: existingBook.commentsEnabled
-            }
-          : null
-      )
-      setView('publishing')
-    }
-  }
   const onSaveDraft = handleSaveDraft
   const onUnpublishChapter = handleUnpublishChapter
-  const onRepublishChapter = handleRepublishChapter
   const onDeleteChapter = handleDeleteChapter
   const onMonetize = () => setView('monetization-request')
   const onBack = () => {
@@ -152,6 +100,9 @@ export const WriteView = () => {
   const keyboardOffsetRef = useRef(0)
   keyboardOffsetRef.current = keyboardOffset
   const editorRef = useRef<HTMLDivElement>(null)
+  // The currently-selected pill in the chapter strip, so reopening a book at a
+  // deep chapter scrolls that pill into view instead of leaving it off-screen.
+  const activeChapterPillRef = useRef<HTMLButtonElement>(null)
   const loadedEditorTargetRef = useRef('')
   const lastValidHtmlRef = useRef('')
   const lastValidWordCountRef = useRef(0)
@@ -209,6 +160,15 @@ export const WriteView = () => {
   useEffect(() => {
     return () => setIsWriting(false)
   }, [setIsWriting])
+
+  // Keep the active chapter pill in view when switching books/chapters, so a
+  // book reopened at a later chapter doesn't hide the selection off-screen.
+  useEffect(() => {
+    activeChapterPillRef.current?.scrollIntoView({
+      inline: 'center',
+      block: 'nearest'
+    })
+  }, [selectedBookId, selectedChapterIndex])
 
   const myWorks = useMemo(
     () => books.filter((b: Book) => b.author.username === user.username),
@@ -714,8 +674,8 @@ export const WriteView = () => {
     wordCount >= MIN_WORD_COUNT &&
     (selectedBookId !== 'new' || newTitle.trim().length > 0)
   // A chapter is published per its own flag now (any position), not by sitting
-  // inside the [0, chaptersCount) prefix. An existing-but-unpublished chapter
-  // can be republished from here.
+  // inside the [0, chaptersCount) prefix. The bottom action button publishes the
+  // current chapter directly; isPublished only drives its label/unpublish row.
   const isExistingChapter =
     selectedChapterIndex !== 'new' && !!selectedBook
   const isPublished =
@@ -725,7 +685,49 @@ export const WriteView = () => {
       parseInt(selectedChapterIndex),
       selectedBook!.chaptersCount
     )
-  const isUnpublishedChapter = isExistingChapter && !isPublished
+
+  // A chapter is "active" (being written or edited) once one is selected or a
+  // new one has been started. Until then ('' = nothing started) the chapter
+  // title/content fields and publish footer stay hidden.
+  const hasActiveChapter = selectedChapterIndex !== ''
+
+  // Label for the single bottom action button. A brand-new book still routes
+  // through PublishingView (to collect cover/genres/etc.), so it reads
+  // "Publish"; chapters of an existing book publish directly and read
+  // "Publish Chapter" (or "Update Chapter" when re-publishing a live one).
+  const publishLabel =
+    selectedBookId === 'new'
+      ? 'Publish'
+      : isPublished
+      ? 'Update Chapter'
+      : 'Publish Chapter'
+
+  // Publish the current chapter straight into an existing book, skipping the
+  // PublishingView metadata screen — the book already carries its metadata,
+  // and we pass the current values through so nothing is reset.
+  const publishChapterDirect = async () => {
+    if (!selectedBook) return
+    const currentContent = editorRef.current?.innerHTML || ''
+    await handlePublish(
+      {
+        tagline: selectedBook.tagline,
+        genres: selectedBook.genres,
+        hashtags: selectedBook.hashtags,
+        isMature: selectedBook.isMature,
+        commentsEnabled: selectedBook.commentsEnabled
+      },
+      {
+        id: selectedBookId,
+        title: newTitle,
+        content: currentContent,
+        chapterIndex:
+          selectedChapterIndex === 'new'
+            ? null
+            : parseInt(selectedChapterIndex),
+        chapterTitle
+      }
+    )
+  }
 
   const handleDeleteClick = () => {
     if (selectedChapterIndex === 'new') return
@@ -760,34 +762,40 @@ export const WriteView = () => {
     }
   }
 
-  const handleRepublishClick = () => {
-    if (selectedChapterIndex === 'new') return
-    const idx = parseInt(selectedChapterIndex)
-    onRepublishChapter(selectedBookId, idx)
-  }
-
   // Open an existing work from the grid into the chapter editor. Land on the
   // first chapter when the book has any, otherwise on a fresh chapter.
+  // Adopt an externally-requested editor target (the new-book setup screen sets
+  // it after creating the draft) into local selection, then clear it.
+  useEffect(() => {
+    if (!editorTarget) return
+    setSelectedBookId(editorTarget.bookId)
+    setSelectedChapterIndex(editorTarget.chapterIndex)
+    setWriteMode('editor')
+    setEditorTarget(null)
+  }, [editorTarget, setWriteMode, setEditorTarget])
+
   const openBook = (b: Book) => {
     setSelectedBookId(b.id)
-    setSelectedChapterIndex((b.chapterMeta?.length ?? 0) > 0 ? '0' : 'new')
+    // Land on the first chapter when the book has any; otherwise on the empty
+    // state ('' = no chapter selected yet) so the editor only appears once the
+    // author taps "+ New" to start a chapter.
+    setSelectedChapterIndex((b.chapterMeta?.length ?? 0) > 0 ? '0' : '')
     setWriteMode('editor')
   }
 
-  // Start a brand-new work: the editor opens on an empty Chapter 1. The book
-  // doc is only created once that chapter has content (see performDraftSave).
+  // Start a brand-new work: first collect the book's metadata (title, cover,
+  // genres, …) on the setup screen. That screen creates the draft book and then
+  // routes into the chapter editor (via editorTarget). Chapters are published
+  // directly from the editor afterwards — no metadata screen per chapter.
   const openNewBook = () => {
-    setSelectedBookId('new')
-    setSelectedChapterIndex('new')
-    setNewTitle('')
-    setChapterTitle('Chapter 1')
-    setWriteMode('editor')
+    setPublishingInitialData(null)
+    setView('publishing')
   }
 
   return (
     <div
       className={`fixed inset-0 bg-white flex flex-col items-center animate-in fade-in duration-500 overflow-hidden ${
-        isWriting ? 'pb-0' : 'pb-20'
+        isWriting || writeMode === 'editor' ? 'pb-0' : 'pb-20'
       }`}
       // The max-w-3xl wrapper below makes <header> a non-direct child of
       // .fixed.inset-0, so the global `.fixed.inset-0 > header` safe-area rule
@@ -921,22 +929,68 @@ export const WriteView = () => {
 
           <div className='space-y-1.5'>
             <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
-              Chapter Selection
+              Chapters
             </label>
-            <select
-              className='w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium outline-none appearance-none cursor-pointer shadow-sm'
-              value={selectedChapterIndex}
-              onChange={e => setSelectedChapterIndex(e.target.value)}
-            >
-              <option value='new'>+ New Chapter</option>
-              {(selectedBook?.chapterMeta ?? []).map((ch: any, idx: number) => (
-                <option key={idx} value={idx}>
-                  {ch.title}
-                </option>
-              ))}
-            </select>
+            {/* Horizontal chapter strip: each existing chapter is a pill (with a
+                published/draft dot), the active one is highlighted, and "+ New"
+                is a clearly separate dashed action rather than a hidden option. */}
+            <div className='flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 py-1'>
+              {(selectedBook?.chapterMeta ?? []).map((ch: any, idx: number) => {
+                const active = selectedChapterIndex === idx.toString()
+                const published = isChapterPublished(
+                  selectedBook?.chapterMeta,
+                  idx,
+                  selectedBook?.chaptersCount
+                )
+                return (
+                  <button
+                    key={idx}
+                    ref={active ? activeChapterPillRef : undefined}
+                    onClick={() => setSelectedChapterIndex(idx.toString())}
+                    title={ch.title}
+                    className={`shrink-0 flex items-center gap-1.5 h-10 px-4 rounded-2xl text-xs font-bold shadow-sm transition-all active:scale-95 ${
+                      active
+                        ? 'bg-accent text-white'
+                        : 'bg-gray-50 text-gray-500 hover:text-accent'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        published
+                          ? active
+                            ? 'bg-white'
+                            : 'bg-emerald-400'
+                          : active
+                          ? 'bg-white/40'
+                          : 'bg-gray-300'
+                      }`}
+                    />
+                    <span className='max-w-30 truncate'>
+                      {ch.title || `Chapter ${idx + 1}`}
+                    </span>
+                  </button>
+                )
+              })}
+              <button
+                ref={
+                  selectedChapterIndex === 'new'
+                    ? activeChapterPillRef
+                    : undefined
+                }
+                onClick={() => setSelectedChapterIndex('new')}
+                className={`shrink-0 flex items-center gap-1 h-10 px-4 rounded-2xl text-xs font-bold border-2 border-dashed transition-all active:scale-95 ${
+                  selectedChapterIndex === 'new'
+                    ? 'border-accent text-accent bg-accent/5'
+                    : 'border-gray-200 text-gray-400 hover:border-accent hover:text-accent'
+                }`}
+              >
+                <span className='material-icons-round text-base'>add</span>
+                New
+              </button>
+            </div>
           </div>
 
+          {hasActiveChapter && (
           <div className='space-y-1.5'>
             <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
               Chapter Title
@@ -952,9 +1006,11 @@ export const WriteView = () => {
               className='w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium outline-none shadow-sm focus:ring-2 focus:ring-accent/10'
             />
           </div>
+          )}
         </div>
         )}
 
+        {hasActiveChapter && (
         <div className='relative space-y-1.5'>
           {!isWriting && !(selectedBook && selectedBook.isCompleted) && (
             <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
@@ -1045,8 +1101,9 @@ export const WriteView = () => {
             )}
           </div>
         </div>
+        )}
 
-        {!isWriting && selectedChapterIndex !== 'new' && (
+        {!isWriting && isExistingChapter && (
           <div className='flex gap-4 pt-4 pb-2 animate-in slide-in-from-bottom duration-300'>
             {isPublished && (
               <button
@@ -1067,15 +1124,6 @@ export const WriteView = () => {
                   : 'Unpublish Chapter'}
               </button>
             )}
-            {isUnpublishedChapter && (
-              <button
-                onClick={handleRepublishClick}
-                className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-emerald-500'
-              >
-                <span className='material-icons-round text-sm'>publish</span>
-                Publish Chapter
-              </button>
-            )}
             <button
               onClick={handleDeleteClick}
               className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
@@ -1093,7 +1141,7 @@ export const WriteView = () => {
         )}
       </div>
 
-      {!isWriting && (
+      {!isWriting && hasActiveChapter && (
       <div className='p-6 bg-white border-t border-gray-50'>
         <div className='flex justify-between items-center mb-6'>
           <div className='flex flex-col'>
@@ -1121,44 +1169,22 @@ export const WriteView = () => {
             </span>
           </div>
         </div>
-        <div className='grid grid-cols-2 gap-4'>
-          <Button
-            variant='outline'
-            disabled={
-              (selectedBookId === 'new' &&
-                (!newTitle.trim() || wordCount === 0)) ||
-              saveState === 'saving'
-            }
-            onClick={() => {
-              void performDraftSave('manual')
-            }}
-          >
-            {saveState === 'saving'
-              ? 'Saving...'
-              : saveState === 'saved'
-              ? '✓ Saved!'
-              : saveState === 'error'
-              ? 'Retry Save'
-              : 'Save Draft'}
-          </Button>
-          <Button
-            disabled={!canPublish}
-            onClick={() => {
-              const currentContent = editorRef.current?.innerHTML || ''
-              onPublish(
-                selectedBookId === 'new' ? null : selectedBookId,
-                newTitle,
-                currentContent,
-                selectedChapterIndex === 'new'
-                  ? null
-                  : parseInt(selectedChapterIndex),
-                chapterTitle
-              )
-            }}
-          >
-            Publish
-          </Button>
-        </div>
+        {/* Single action button: drafts persist via autosave, so the old
+            "Save Draft" button is gone — its Saving/Saved status now surfaces
+            here transiently before falling back to the publish label. */}
+        <Button
+          className='w-full'
+          disabled={!canPublish || saveState === 'saving'}
+          onClick={() => {
+            void publishChapterDirect()
+          }}
+        >
+          {saveState === 'saving'
+            ? 'Saving…'
+            : saveState === 'saved'
+            ? '✓ Saved'
+            : publishLabel}
+        </Button>
       </div>
       )}
       </>

@@ -83,7 +83,9 @@ export function useAppValue() {
     writeReturnView,
     setWriteReturnView,
     writeMode,
-    setWriteMode
+    setWriteMode,
+    editorTarget,
+    setEditorTarget
   } = ui
   // Auth identity/session state lives in useAuth (Phase B). Placed right after
   // useUI so its onIdTokenChanged effect registers in the same order as before.
@@ -308,6 +310,7 @@ export function useAppValue() {
     handlePublish,
     handleRequestMonetization,
     handleSaveDraft,
+    handleCreateBook,
     handleBookProgressUpdate
   } = reading
   setReadingActivityRef.current = setReadingActivity
@@ -584,8 +587,9 @@ export function useAppValue() {
     handleAddStrike, handleRemoveStrike, handleBanUser, handleUnbanUser, handleDismissReport, handleApproveMonetization, handleDenyMonetization, handleBlockUser, handleUnblockUser,
     handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, isBookPurchased, handleToggleFavorite, handleAddToCart,
     handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
-    handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,
+    handleMarkCompleted, handleRequestMonetization, handleSaveDraft, handleCreateBook, postComment, handleLikeComment, handleBookProgressUpdate,
     handleShareBook, isWriting, setIsWriting, writeReturnView, setWriteReturnView, writeMode, setWriteMode,
+    editorTarget, setEditorTarget,
     worldUsernames, getWorldEntry, sendEmote,
   }
 }

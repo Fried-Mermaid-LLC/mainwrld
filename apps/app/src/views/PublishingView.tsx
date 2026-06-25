@@ -4,12 +4,12 @@ import { GENRE_LIST } from '@/config/constants'
 import { useApp } from '@/state/AppContext'
 
 export const PublishingView = () => {
-  const { publishingInitialData, handlePublish, setView, currentPublishingId } =
+  const { publishingInitialData, handleCreateBook, setEditorTarget, setView } =
     useApp()
   const initialData = publishingInitialData
-  const onPost = handlePublish
   const onBack = () => setView('write')
-  const isNewBook = !currentPublishingId
+  const [bookTitle, setBookTitle] = useState(initialData?.title || '')
+  const [isCreating, setIsCreating] = useState(false)
   const [tagline, setTagline] = useState(initialData?.tagline || '')
   const [isMature, setIsMature] = useState(initialData?.isMature || false)
   const [commentsEnabled, setCommentsEnabled] = useState(
@@ -118,14 +118,28 @@ export const PublishingView = () => {
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto p-6 animate-in slide-in-from-right duration-500 z-[300]'>
       <header className='flex justify-between items-center mb-10'>
-        <h1 className='text-2xl font-bold'>
-          {isNewBook ? 'Publish' : 'Add Chapter'}
-        </h1>
+        <h1 className='text-2xl font-bold'>New Book</h1>
         <button onClick={onBack} className='w-10 h-10 text-gray-300'>
           <span className='material-icons-round'>close</span>
         </button>
       </header>
       <div className='space-y-8 pb-32'>
+        <Input
+          label='Book Title'
+          value={bookTitle}
+          onChange={setBookTitle}
+          placeholder='Enter book title...'
+        />
+
+        <Input
+          label='Tagline'
+          maxLength={200}
+          value={tagline}
+          onChange={setTagline}
+          placeholder='A short, catchy hook...'
+          description='Max 200 characters'
+        />
+
         <section className='space-y-4'>
           <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
             Cover Image
@@ -177,15 +191,6 @@ export const PublishingView = () => {
             </button>
           )}
         </section>
-
-        <Input
-          label='Tagline'
-          maxLength={200}
-          value={tagline}
-          onChange={setTagline}
-          placeholder='A short, catchy hook...'
-          description='Max 200 characters'
-        />
 
         <div className='space-y-2.5'>
           <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
@@ -255,13 +260,20 @@ export const PublishingView = () => {
         </div>
 
         <div className='grid grid-cols-2 gap-4'>
-          <Button variant='outline' onClick={onBack}>
+          <Button variant='outline' onClick={onBack} disabled={isCreating}>
             Cancel
           </Button>
           <Button
-            disabled={isProcessingCover || !!coverUploadError}
-            onClick={() => {
-              onPost({
+            disabled={
+              isProcessingCover ||
+              !!coverUploadError ||
+              !bookTitle.trim() ||
+              isCreating
+            }
+            onClick={async () => {
+              setIsCreating(true)
+              const id = await handleCreateBook({
+                title: bookTitle,
                 tagline,
                 isMature,
                 commentsEnabled,
@@ -272,9 +284,17 @@ export const PublishingView = () => {
                   .map(h => h.trim().replace(/^#/, ''))
                   .filter(h => h.length > 0)
               })
+              if (id) {
+                // Hand the freshly-created draft to the chapter editor and land
+                // on its default empty Chapter 1.
+                setEditorTarget({ bookId: id, chapterIndex: '0' })
+                setView('write')
+              } else {
+                setIsCreating(false)
+              }
             }}
           >
-            Post
+            {isCreating ? 'Creating…' : 'Create Book'}
           </Button>
         </div>
       </div>
