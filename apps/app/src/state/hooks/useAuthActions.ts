@@ -11,6 +11,7 @@ import { ageFromBirthDate } from '@/utils/age'
 import { usersApi } from '@/services/api/usersApi'
 import { authErrorMessage } from '@/utils/authErrors'
 import { parsePath, isPublicInitialView } from '@/navigation/routes'
+import { BLANK_LOGIN_FORM, BLANK_SIGNUP_FORM } from './useAuth'
 import type { User, View, NotificationCategory } from '@/types'
 
 interface AuthActionsDeps {
@@ -26,6 +27,7 @@ interface AuthActionsDeps {
   firebaseUid: string | null
   BLANK_USER: User
   loginForm: { username: string; password: string }
+  setLoginForm: Dispatch<SetStateAction<{ username: string; password: string }>>
   signUpForm: {
     email: string
     birthDate: string
@@ -33,6 +35,15 @@ interface AuthActionsDeps {
     username: string
     password: string
   }
+  setSignUpForm: Dispatch<
+    SetStateAction<{
+      email: string
+      birthDate: string
+      displayName: string
+      username: string
+      password: string
+    }>
+  >
   addNotification: (
     title: string, message: string, icon: string, recipient?: string,
     sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
@@ -58,7 +69,9 @@ export function useAuthActions({
   firebaseUid,
   BLANK_USER,
   loginForm,
+  setLoginForm,
   signUpForm,
+  setSignUpForm,
   addNotification
 }: AuthActionsDeps) {
   // Firebase Auth state listener - handles auto-login
@@ -203,6 +216,9 @@ export function useAuthActions({
       setFirebaseUid((result as any).uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)
+      // Wipe the form now that sign-in succeeded — clears the password from
+      // memory and leaves a blank form for the next visit to login.
+      setLoginForm(BLANK_LOGIN_FORM)
       // Land on home; the pending shared-book deep-link (F09) is opened by the
       // single pending-book effect in AppProvider once the user is fully ready
       // (profile loaded + onboarding done). Applying it here too used to race
@@ -319,6 +335,9 @@ export function useAuthActions({
       setFirebaseUid(result.uid)
       setFavoriteBookIds(new Set())
       setAuthError(null)
+      // Wipe the form now that signup succeeded — clears the password from
+      // memory and leaves a blank form for the next visit to signup.
+      setSignUpForm(BLANK_SIGNUP_FORM)
       // Land on home; the pending shared-book deep-link (F09) is opened by the
       // single pending-book effect in AppProvider (see handleLogin). For a fresh
       // signup that effect waits for the appearance onboarding to finish

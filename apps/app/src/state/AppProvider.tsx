@@ -546,7 +546,9 @@ export function useAppValue() {
     firebaseUid,
     BLANK_USER,
     loginForm,
+    setLoginForm,
     signUpForm,
+    setSignUpForm,
     addNotification
   })
   const { handleLogout, handleLogin, handleSignup } = authActions
