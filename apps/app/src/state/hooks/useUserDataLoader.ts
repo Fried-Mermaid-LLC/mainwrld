@@ -1,7 +1,14 @@
 import { useEffect } from 'react'
 import type { Dispatch, SetStateAction, MutableRefObject } from 'react'
 import * as fbService from '@/services/firebaseService'
-import type { User, Book, BookProgress, AvatarConfig, Coupon } from '@/types'
+import type {
+  User,
+  Book,
+  BookProgress,
+  AvatarConfig,
+  Coupon,
+  ReaderSettings
+} from '@/types'
 
 type UserBookDataMap = Record<
   string,
@@ -31,6 +38,7 @@ interface UserDataLoaderDeps {
   setCart: Dispatch<SetStateAction<Book[]>>
   setItemPriceOverrides: Dispatch<SetStateAction<Record<string, number>>>
   setUser: Dispatch<SetStateAction<User>>
+  setReaderSettings: Dispatch<SetStateAction<ReaderSettings>>
   setLastClaimedPoints: Dispatch<SetStateAction<number | null>>
   setUserDataLoaded: Dispatch<SetStateAction<boolean>>
 }
@@ -56,6 +64,7 @@ export function useUserDataLoader({
   setCart,
   setItemPriceOverrides,
   setUser,
+  setReaderSettings,
   setLastClaimedPoints,
   setUserDataLoaded
 }: UserDataLoaderDeps) {
@@ -108,6 +117,11 @@ export function useUserDataLoader({
             ...prev,
             [user.username]: profile.readingActivity
           }))
+        // Load reader settings (font size / inverted / scroll vs page-flip).
+        // Merge over the defaults so a partially-stored object (older docs that
+        // predate a newly added field) still hydrates cleanly.
+        if (profile.readerSettings)
+          setReaderSettings(prev => ({ ...prev, ...profile.readerSettings }))
         // Load coupons
         if (profile.coupons) setCoupons(profile.coupons)
         // Load cart (stored as full book objects)

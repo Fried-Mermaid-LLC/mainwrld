@@ -110,6 +110,17 @@ export interface User {
   stripeSubscriptionId?: string;           // sub_xxx, premium subscription (used by cancelMembership)
   // ---- Onboarding (F10) ----
   onboardingTutorialDismissed?: boolean;   // true once the welcome popup's "do not show again" is checked
+  // Reader preferences (font size, inverted colours, scroll vs page-flip mode).
+  // Client-editable; persisted on the profile so the reading experience follows
+  // the user across devices/sessions instead of resetting to defaults on reload.
+  readerSettings?: ReaderSettings;
+}
+
+// Reading-view preferences, owned by the client and synced via PATCH /users/me.
+export interface ReaderSettings {
+  fontSize: number;       // body text size in px
+  inverted: boolean;      // light-on-dark reading
+  scrollMode: boolean;    // true = continuous scroll, false = page-flip columns
 }
 
 export interface UserRecord extends User {

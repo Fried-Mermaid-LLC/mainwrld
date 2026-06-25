@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import * as THREE from 'three'
 import { parsePath, isPublicInitialView } from '@/navigation/routes'
-import type { View, Book, User } from '@/types'
+import type { View, Book, User, ReaderSettings } from '@/types'
 
 // Resolve the view to paint before auth settles, straight from the URL. Covers:
 //   • the Firebase password-reset link (?mode=resetPassword&oobCode=…) — without
@@ -81,7 +81,10 @@ export function useUI() {
   )
   const [selectedChatUser, setSelectedChatUser] = useState<string | null>(null)
   const [moveDir, setMoveDir] = useState(new THREE.Vector3())
-  const [readerSettings, setReaderSettings] = useState({
+  // Defaults applied until the persisted readerSettings (if any) hydrate from
+  // the profile in useUserDataLoader. Kept here (not on `user`) so the reader
+  // slice stays self-contained; persistence is wired through usePersist.
+  const [readerSettings, setReaderSettings] = useState<ReaderSettings>({
     fontSize: 13,
     inverted: false,
     scrollMode: true

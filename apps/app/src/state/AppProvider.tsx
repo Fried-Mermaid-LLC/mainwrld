@@ -392,7 +392,8 @@ export function useAppValue() {
     readingActivity,
     coupons,
     cart,
-    favoriteBookIds
+    favoriteBookIds,
+    readerSettings
   })
   const { persistTimerRef } = persist
 
@@ -497,6 +498,7 @@ export function useAppValue() {
     setCart,
     setItemPriceOverrides,
     setUser,
+    setReaderSettings,
     setLastClaimedPoints,
     setUserDataLoaded
   })

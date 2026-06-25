@@ -3,7 +3,15 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as worldService from '@/services/worldService'
-import type { User, Book, BookProgress, AvatarConfig, Coupon, View } from '@/types'
+import type {
+  User,
+  Book,
+  BookProgress,
+  AvatarConfig,
+  Coupon,
+  View,
+  ReaderSettings
+} from '@/types'
 
 type UserBookDataMap = Record<
   string,
@@ -33,6 +41,7 @@ interface PersistDeps {
   coupons: Coupon[]
   cart: Book[]
   favoriteBookIds: Set<string>
+  readerSettings: ReaderSettings
 }
 
 // Persistence domain (Phase B, the LAST extraction). Owns persistTimerRef and
@@ -56,7 +65,8 @@ export function usePersist({
   readingActivity,
   coupons,
   cart,
-  favoriteBookIds
+  favoriteBookIds,
+  readerSettings
 }: PersistDeps) {
   // Debounce ref for batched Firestore writes
   const persistTimerRef = useRef<any>(null)
@@ -118,7 +128,9 @@ export function usePersist({
         // Cart
         cart: cartData,
         // Favorites
-        favoriteBookIds: Array.from(favoriteBookIds)
+        favoriteBookIds: Array.from(favoriteBookIds),
+        // Reader preferences (font size / inverted / scroll vs page-flip)
+        readerSettings
       }
 
       fbService.updateUserProfile(firebaseUid, batchUpdate).catch(console.error)
@@ -145,6 +157,7 @@ export function usePersist({
     coupons,
     cart,
     favoriteBookIds,
+    readerSettings,
     firebaseUid,
     userDataLoaded,
     view
@@ -187,7 +200,8 @@ export function usePersist({
         ...(activity ? { readingActivity: activity } : {}),
         coupons,
         cart: cartData,
-        favoriteBookIds: Array.from(favoriteBookIds)
+        favoriteBookIds: Array.from(favoriteBookIds),
+        readerSettings
       }
       fbService.updateUserProfile(firebaseUid, batchUpdate).catch(() => {})
     }
