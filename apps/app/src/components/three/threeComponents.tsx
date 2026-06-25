@@ -19,6 +19,16 @@ import { SkeletonUtils } from "three-stdlib";
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+// Remote avatars are rendered this far in the past (seconds). The world layer
+// writes transforms at ~9 Hz (WORLD_WRITE_MS = 110ms); by holding the render
+// clock ~1.5 write-intervals behind we always have two buffered snapshots that
+// bracket the render time, so we can interpolate between them at a *constant*
+// velocity. Easing toward the latest snapshot instead (a low-pass chase) makes
+// the avatar accelerate right after each packet and decelerate as it arrives —
+// the velocity pulses at 9 Hz and reads as a stutter. 150ms trades a little
+// latency for genuinely smooth motion. See SNAPSHOT_BUFFER below.
+const INTERP_DELAY = 0.15;
+
 // Avatar colour is supplied almost entirely by the embedded baseColorTexture
 // maps (every material ships baseColorFactor=white, metallicFactor=0). If a map
 // fails to decode / upload — which is what happens in the memory-constrained
@@ -308,6 +318,16 @@ export const MovingAvatar: React.FC<{
   const targetPos = useRef(new THREE.Vector3(...initialPos));
   const waitTimer = useRef(0);
 
+  // Snapshot interpolation buffer (entity interpolation). Each distinct pose we
+  // see from the live store is recorded with a monotonic receive time, and the
+  // render loop interpolates between the two snapshots bracketing `clock -
+  // INTERP_DELAY`. `clock` accumulates useFrame's delta (no performance.now /
+  // Date.now dependency, and guaranteed monotonic across web + native).
+  const buffer = useRef<
+    { t: number; x: number; y: number; z: number; rotY: number }[]
+  >([]);
+  const clock = useRef(0);
+
   const [isMoving, setIsMoving] = useState(false);
   const lastMoving = useRef(false);
   const [activity, setActivity] = useState<string>(
@@ -341,6 +361,7 @@ export const MovingAvatar: React.FC<{
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
+    clock.current += delta;
     const entry = getWorldEntry?.(user.username);
     const currentPos = groupRef.current.position;
 
@@ -353,27 +374,69 @@ export const MovingAvatar: React.FC<{
     }
 
     if (entry) {
-      // LIVE: damped, frame-rate-independent interpolation toward the real pose.
+      // LIVE: snapshot interpolation. Record each new pose, then render a fixed
+      // delay in the past, lerping between the two snapshots that bracket it.
       if (entry.activity !== lastActivity.current) {
         lastActivity.current = entry.activity;
         setActivity(entry.activity);
       }
-      targetPos.current.set(
-        entry.position[0],
-        entry.position[1],
-        entry.position[2],
+
+      const buf = buffer.current;
+      const last = buf[buf.length - 1];
+      // The store keeps yielding the same entry while a peer is idle (RTDB's
+      // onValue fires for the whole /world subtree), so only push genuinely new
+      // poses — otherwise the buffer fills with duplicates and idle never holds.
+      if (
+        !last ||
+        last.x !== entry.position[0] ||
+        last.y !== entry.position[1] ||
+        last.z !== entry.position[2] ||
+        last.rotY !== entry.rotY
+      ) {
+        buf.push({
+          t: clock.current,
+          x: entry.position[0],
+          y: entry.position[1],
+          z: entry.position[2],
+          rotY: entry.rotY,
+        });
+        if (buf.length > 16) buf.shift();
+      }
+
+      const renderTime = clock.current - INTERP_DELAY;
+      // Pick the snapshot pair [older, newer] straddling renderTime. Falls back
+      // to clamping at either end: before the oldest sample, or holding the
+      // newest once a peer stops writing (idle) — we never extrapolate.
+      let older = buf[0];
+      let newer = buf[buf.length - 1];
+      for (let i = 0; i < buf.length - 1; i++) {
+        if (buf[i].t <= renderTime && buf[i + 1].t >= renderTime) {
+          older = buf[i];
+          newer = buf[i + 1];
+          break;
+        }
+      }
+      const span = newer.t - older.t;
+      const alpha =
+        span > 0 ? Math.min(Math.max((renderTime - older.t) / span, 0), 1) : 1;
+
+      const prevX = currentPos.x;
+      const prevZ = currentPos.z;
+      currentPos.set(
+        older.x + (newer.x - older.x) * alpha,
+        older.y + (newer.y - older.y) * alpha,
+        older.z + (newer.z - older.z) * alpha,
       );
-      const dist = currentPos.distanceTo(targetPos.current);
-      const k = 1 - Math.exp(-10 * delta);
-      currentPos.lerp(targetPos.current, k);
-      setMoving(dist > 0.05);
       // Rotation: shortest-arc lerp so it never spins the long way round.
-      const cur = groupRef.current.rotation.y;
-      const d = Math.atan2(
-        Math.sin(entry.rotY - cur),
-        Math.cos(entry.rotY - cur),
+      const dRot = Math.atan2(
+        Math.sin(newer.rotY - older.rotY),
+        Math.cos(newer.rotY - older.rotY),
       );
-      groupRef.current.rotation.y = cur + d * k;
+      groupRef.current.rotation.y = older.rotY + dRot * alpha;
+
+      // Moving = actually advancing this frame (idle holds, so displacement ~0).
+      const step = Math.hypot(currentPos.x - prevX, currentPos.z - prevZ);
+      setMoving(step > 0.001);
       return;
     }
 
