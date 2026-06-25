@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import type { Comment } from '@/types'
 import { useApp } from '@/state/AppContext'
 import { useReportFlow } from '@/components/reportFlow'
+import { MAX_COMMENT_LENGTH } from '@/config/constants'
 
 export const CommentsView = () => {
   const {
@@ -163,20 +164,26 @@ export const CommentsView = () => {
           </div>
         )}
       </div>
-      <div className='fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-50 flex gap-4'>
-        <input
-          placeholder={
-            chapters.length > 0
-              ? `Comment on ${
-                  chapters[activeChapter]?.title || 'this chapter'
-                }...`
-              : 'Add a comment...'
-          }
-          value={newText}
-          onChange={e => setNewText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handlePost()}
-          className='flex-1 bg-gray-50 rounded-2xl px-5 py-4 text-sm outline-none shadow-inner'
-        />
+      <div className='fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-50 flex gap-4 items-center'>
+        <div className='flex-1 relative'>
+          <input
+            placeholder={
+              chapters.length > 0
+                ? `Comment on ${
+                    chapters[activeChapter]?.title || 'this chapter'
+                  }...`
+                : 'Add a comment...'
+            }
+            value={newText}
+            maxLength={MAX_COMMENT_LENGTH}
+            onChange={e => setNewText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handlePost()}
+            className='w-full bg-gray-50 rounded-2xl px-5 py-4 pr-14 text-sm outline-none shadow-inner'
+          />
+          <span className='absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-gray-300 pointer-events-none'>
+            {newText.length}/{MAX_COMMENT_LENGTH}
+          </span>
+        </div>
         <button
           onClick={handlePost}
           className='w-14 h-14 bg-accent text-white rounded-2xl flex items-center justify-center shadow-lg transition-transform active:scale-90'

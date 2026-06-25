@@ -15,6 +15,6 @@ export class CreateCommentDto {
   author!: string;
 
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(500)
   text!: string;
 }

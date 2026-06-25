@@ -9,7 +9,7 @@ import {
 export class UpdateCommentDto {
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(500)
   text?: string;
 
   @IsOptional()

@@ -28,6 +28,9 @@ export const TUTORIAL_BOOK_ID = '25ea6ba3-9430-4852-9d68-e31121671b5f';
 export const MIN_WORD_COUNT = 150;
 export const MAX_DAILY_EARNED_POINTS = 25;
 export const COMMENT_LIKES_THRESHOLD = 50;
+// Max comment length. Also enforced server-side via MaxLength(500) on the
+// comments DTOs so a crafted client can't bypass it.
+export const MAX_COMMENT_LENGTH = 500;
 export const CHAPTER_LIKES_THRESHOLD = 10;
 export const MAX_DAILY_CHAPTERS = 7;
 export const MAX_WORD_COUNT = 11000;
@@ -122,6 +125,7 @@ export default {
   MIN_WORD_COUNT,
   MAX_DAILY_EARNED_POINTS,
   COMMENT_LIKES_THRESHOLD,
+  MAX_COMMENT_LENGTH,
   CHAPTER_LIKES_THRESHOLD,
   MAX_DAILY_CHAPTERS,
   MAX_WORD_COUNT,
