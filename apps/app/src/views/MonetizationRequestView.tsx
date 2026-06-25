@@ -138,13 +138,13 @@ export const MonetizationRequestView = () => {
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto p-6 animate-in slide-in-from-bottom duration-500 z-[300]'>
-      <header className='flex justify-between items-center mb-8'>
+      <header className='flex justify-between items-center mb-8 max-w-2xl mx-auto w-full'>
         <h1 className='text-2xl font-bold'>Monetize</h1>
         <button onClick={onBack} className='w-10 h-10 text-gray-300'>
           <span className='material-icons-round'>close</span>
         </button>
       </header>
-      <div className='space-y-8 pb-32'>
+      <div className='space-y-8 pb-32 max-w-2xl mx-auto w-full'>
         <div className='p-5 bg-gray-50 rounded-3xl border border-gray-100'>
           <p className='text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed'>
             Note: You have a maximum of 2 monetization attempts per book. If a
