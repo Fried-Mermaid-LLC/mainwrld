@@ -4,6 +4,7 @@ import { MatureCover } from '@/components/MatureCover'
 import { AvatarLayers } from '@/components/avatar'
 import type { Relationship, User, Book } from '@/types'
 import { useApp } from '@/state/AppContext'
+import { useProfilePresence } from '@/state/hooks/useProfilePresence'
 import { useReportFlow } from '@/components/reportFlow'
 
 export const OtherProfileView = () => {
@@ -28,6 +29,21 @@ export const OtherProfileView = () => {
   // isOnline/activity/currentBookId from it. (X06 Bug A fix.)
   const liveUser =
     registeredUsers.find((u: any) => u.username === user.username) ?? user
+  // Presence is read from the live RTDB /world node — the same source the 3D
+  // avatar renders from — so the profile's status can never drift from the
+  // character in the world. Fall back to the Firestore mirror only when the
+  // world layer is disabled (no RTDB configured), where /world is unavailable.
+  const presence = useProfilePresence(user.username)
+  // Use the live RTDB presence once its first snapshot has landed; until then
+  // (and when the world layer is disabled) show the Firestore mirror so the
+  // status never flashes "Offline" on open.
+  const useLive = presence.rtdbAvailable && presence.ready
+  const isOnline = useLive ? presence.isOnline : liveUser.isOnline
+  const liveActivity = useLive ? presence.activity : liveUser.activity
+  // The world maps the idle state to 'Exploring'; the Firestore mirror stores it
+  // as 'Idle'. Normalise the fallback path so both sources read the same word.
+  const activityLabel =
+    !liveActivity || liveActivity === 'Idle' ? 'Exploring' : liveActivity
   const onBack = () => setView('home')
   const onBookSelect = (b: Book) => {
     setSelectedBook(b)
@@ -202,16 +218,14 @@ export const OtherProfileView = () => {
           <div className='flex items-center gap-2 mb-10'>
             <div
               className={`w-2 h-2 rounded-full ${
-                liveUser.isOnline ? 'bg-green-500' : 'bg-gray-300'
+                isOnline ? 'bg-green-500' : 'bg-gray-300'
               }`}
             />
             <span className='text-[10px] font-bold text-gray-400 uppercase tracking-widest'>
               {/* Drive "Reading" from the live activity, not the never-emptying
                   readingActivity history (which made a mutual read "Reading"
                   forever after one read). X06 Bug B fix. */}
-              {liveUser.isOnline
-                ? `Online • ${liveUser.activity || 'Idle'}`
-                : 'Offline'}
+              {isOnline ? `Online • ${activityLabel}` : 'Offline'}
             </span>
           </div>
         ) : (
@@ -267,11 +281,12 @@ export const OtherProfileView = () => {
             (() => {
               // Only show "Currently Reading" while the mutual is ACTUALLY
               // reading right now (live presence), not for a stale history
-              // entry from days ago. X06 requirement. The book is the live
-              // currentBookId; timeSince comes from the matching history entry.
+              // entry from days ago. X06 requirement. The live reading state is
+              // the RTDB /world activity; the book id still comes from the
+              // Firestore mirror (currentBookId — /world doesn't carry it).
               const isReadingNow =
-                liveUser.isOnline &&
-                liveUser.activity === 'Reading' &&
+                isOnline &&
+                liveActivity === 'Reading' &&
                 !!liveUser.currentBookId
               const activities = readingActivity[user.username] || []
               const activity = isReadingNow
