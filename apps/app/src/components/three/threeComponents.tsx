@@ -116,6 +116,24 @@ const AVATAR_NODE_ALIASES: Record<string, string> = {
   M_Hair4: "M_Hair4_",
 };
 
+// Several "Alt" hairstyles reuse their base haircut's mesh in the GLB: the
+// *_variation1 nodes share the base sculpt (identical vertex count + bounds) and,
+// for some pairs (e.g. W_Hair_2), even the same baked baseColorTexture. So in 3D
+// a base and its Alt rendered identically, even though the 2D customiser previews
+// the Alt as a darker recolour. We can't resculpt the mesh, but the variation is
+// purely a recolour, so we reproduce it by multiplying the hair material by the
+// same darkening the 2D art applies: each tint is (mean colour of the Alt's
+// *_v1.png) / (mean colour of the base .png), sampled from the 2D previews. The
+// existing tint path multiplies the material colour by the baked texture, so the
+// Alt reads as the same haircut in a darker shade. Bases stay untinted.
+const HAIR_VARIATION_TINTS: Record<string, string> = {
+  M_Hair4_variation1: "#9d9b79",
+  M_Hair5_variation1: "#9d9888",
+  W_Hair_2_Variation1: "#7b806f",
+  W_Hair_4_Variation1: "#868270",
+  W_Hair_5_Variation1: "#989074",
+};
+
 // -----------------------------
 // Avatar Model
 // -----------------------------
@@ -229,7 +247,9 @@ export const AvatarModel: React.FC<{
       if (id) {
         child.visible = true;
         matchedIds.add(id);
-        styleMesh(child);
+        // Hair "Alt" variations share their base's mesh, so tint them to the 2D
+        // recolour; everything else (undefined tint) keeps its baked texture.
+        styleMesh(child, HAIR_VARIATION_TINTS[id]);
       }
     });
 
