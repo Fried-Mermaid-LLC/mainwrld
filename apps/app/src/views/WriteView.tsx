@@ -738,6 +738,11 @@ export const WriteView = () => {
       className={`fixed inset-0 bg-white flex flex-col items-center animate-in fade-in duration-500 overflow-hidden ${
         isWriting ? 'pb-0' : 'pb-20'
       }`}
+      // The max-w-3xl wrapper below makes <header> a non-direct child of
+      // .fixed.inset-0, so the global `.fixed.inset-0 > header` safe-area rule
+      // in index.css no longer matches and the header slid under the iOS status
+      // bar. Apply the top inset here so both writing and editing chrome clear it.
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <div className='w-full max-w-3xl flex-1 flex flex-col min-h-0'>
       {isWriting ? (
