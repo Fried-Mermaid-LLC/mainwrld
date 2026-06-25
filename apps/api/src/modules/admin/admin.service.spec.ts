@@ -5,11 +5,13 @@ describe('AdminService', () => {
   let fs: FakeFirestore;
   let auth: ReturnType<typeof createFakeAuth>;
   let svc: AdminService;
+  let notifications: { create: jest.Mock };
 
   beforeEach(() => {
     fs = new FakeFirestore();
     auth = createFakeAuth();
-    svc = new AdminService(fs as any, auth as any);
+    notifications = { create: jest.fn().mockResolvedValue(undefined) };
+    svc = new AdminService(fs as any, auth as any, notifications as any);
   });
 
   describe('setAdmin', () => {
