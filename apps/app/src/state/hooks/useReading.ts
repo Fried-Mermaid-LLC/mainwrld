@@ -412,6 +412,23 @@ export function useReading({
         )
         return
       }
+
+      // Mutuals = bidirectional admiration (we admire each other). These
+      // "friends" are notified when a new book or new chapter is published below.
+      const myAdmirers = relationships
+        .filter(r => r.target === user?.username)
+        .map(r => r.admirer)
+      const myAdmiring = new Set(
+        relationships
+          .filter(r => r.admirer === user?.username)
+          .map(r => r.target)
+      )
+      const mutualUsernames = [
+        ...new Set(
+          myAdmirers.filter(u => u !== user?.username && myAdmiring.has(u))
+        )
+      ]
+
       if (currentPublishingId) {
         // Update existing book - preserve existing metadata when just adding/updating chapters
         const existingBook = books.find(b => b.id === currentPublishingId)
@@ -534,32 +551,37 @@ export function useReading({
             setSelectedBook(prev => (prev ? { ...prev, ...publishPatch } : prev))
           }
 
-          // Notify users who have this book in their library about the new chapter
+          // Notify the book's library owners AND the author's mutuals about the
+          // genuinely-new chapter (deduped so nobody is notified twice).
           const prevChapterCount = existingBook.chapterMeta?.length ?? 0
           if (
             currentPublishingChapterIndex === null ||
             currentPublishingChapterIndex >= prevChapterCount
           ) {
-            Object.entries(userBookData).forEach(
-              ([username, udata]: [string, any]) => {
-                if (
-                  username !== user?.username &&
-                  udata.ownedBookIds?.includes(currentPublishingId)
-                ) {
-                  addNotification(
-                    'New Chapter',
-                    `"${existingBook.title}" has a new chapter!`,
-                    'menu_book',
-                    username,
-                    user?.username,
-                    currentPublishingId || existingBook.id, // targetId = book id
-                    undefined,
-                    undefined,
-                    'appUpdates'
-                  )
-                }
+            const libraryOwners = Object.entries(userBookData)
+              .filter(([, udata]: [string, any]) =>
+                udata.ownedBookIds?.includes(currentPublishingId)
+              )
+              .map(([username]) => username)
+            const chapterRecipients = new Set([
+              ...libraryOwners,
+              ...mutualUsernames
+            ])
+            chapterRecipients.forEach(username => {
+              if (username !== user?.username) {
+                addNotification(
+                  'New Chapter',
+                  `"${existingBook.title}" has a new chapter!`,
+                  'menu_book',
+                  username,
+                  user?.username,
+                  currentPublishingId || existingBook.id, // targetId = book id
+                  undefined,
+                  undefined,
+                  'appUpdates'
+                )
               }
-            )
+            })
           }
         }
       } else {
@@ -630,28 +652,19 @@ export function useReading({
           prev.some(b => b.id === bookId) ? prev : [optimisticBook, ...prev]
         )
 
-        // Notify admirers and mutuals about the new book
-        const myAdmirers = relationships
-          .filter(r => r.target === user?.username)
-          .map(r => r.admirer)
-        const myAdmiring = relationships
-          .filter(r => r.admirer === user?.username)
-          .map(r => r.target)
-        const notifyUsers = new Set([...myAdmirers, ...myAdmiring])
-        notifyUsers.forEach(username => {
-          if (username !== user?.username) {
-            addNotification(
-              'New Book',
-              `${user?.displayName} published a new book: "${currentPublishingTitle}"`,
-              'auto_stories',
-              username,
-              user?.username,
-              bookId, // targetId = the newly-created book id
-              undefined,
-              undefined,
-              'appUpdates'
-            )
-          }
+        // Notify mutuals (bidirectional connections) about the new book.
+        mutualUsernames.forEach(username => {
+          addNotification(
+            'New Book',
+            `${user?.displayName} published a new book: "${currentPublishingTitle}"`,
+            'auto_stories',
+            username,
+            user?.username,
+            bookId, // targetId = the newly-created book id
+            undefined,
+            undefined,
+            'appUpdates'
+          )
         })
       }
       setView('self-profile')
