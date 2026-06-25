@@ -311,6 +311,7 @@ export function useAppValue() {
     handleRequestMonetization,
     handleSaveDraft,
     handleCreateBook,
+    handleUpdateBookMeta,
     handleBookProgressUpdate
   } = reading
   setReadingActivityRef.current = setReadingActivity
@@ -587,7 +588,7 @@ export function useAppValue() {
     handleAddStrike, handleRemoveStrike, handleBanUser, handleUnbanUser, handleDismissReport, handleApproveMonetization, handleDenyMonetization, handleBlockUser, handleUnblockUser,
     handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, isBookPurchased, handleToggleFavorite, handleAddToCart,
     handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
-    handleMarkCompleted, handleRequestMonetization, handleSaveDraft, handleCreateBook, postComment, handleLikeComment, handleBookProgressUpdate,
+    handleMarkCompleted, handleRequestMonetization, handleSaveDraft, handleCreateBook, handleUpdateBookMeta, postComment, handleLikeComment, handleBookProgressUpdate,
     handleShareBook, isWriting, setIsWriting, writeReturnView, setWriteReturnView, writeMode, setWriteMode,
     editorTarget, setEditorTarget,
     worldUsernames, getWorldEntry, sendEmote,

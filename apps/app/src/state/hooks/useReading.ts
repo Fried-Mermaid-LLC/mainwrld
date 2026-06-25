@@ -1126,6 +1126,70 @@ export function useReading({
     }
   }
 
+  // Update an existing book's metadata (title, tagline, genres, hashtags, mature,
+  // comments, and optionally a freshly-picked cover) from the Book Details
+  // screen. Returns true on success. Does not touch chapters.
+  const handleUpdateBookMeta = async (
+    bookId: string,
+    data: {
+      title?: string
+      tagline?: string
+      genres?: string[]
+      hashtags?: string[]
+      isMature?: boolean
+      commentsEnabled?: boolean
+      coverImage?: string | null
+    }
+  ): Promise<boolean> => {
+    try {
+      const existingBook = books.find(b => b.id === bookId)
+      if (!existingBook) return false
+      if (
+        containsProfanity(data.title || '') ||
+        containsProfanity(data.tagline || '')
+      ) {
+        showToast(
+          'Your book title or tagline contains inappropriate language. Please revise.',
+          'warning'
+        )
+        return false
+      }
+      // Only a freshly-picked base64 cover is re-uploaded; an unchanged existing
+      // cover URL is left as-is (resolveCover returns null for non-data URLs).
+      const cover = await resolveCover(
+        bookId,
+        data.coverImage ?? null,
+        existingBook.coverPath
+      )
+      const patch: Partial<Book> = {
+        title: (data.title || '').trim() || existingBook.title,
+        tagline: data.tagline ?? existingBook.tagline ?? '',
+        genres: data.genres ?? existingBook.genres ?? [],
+        hashtags: data.hashtags ?? existingBook.hashtags ?? [],
+        isMature: data.isMature ?? existingBook.isMature ?? false,
+        commentsEnabled:
+          data.commentsEnabled ?? existingBook.commentsEnabled ?? true,
+        ...(cover
+          ? {
+              coverImage: cover.coverImage,
+              coverPath: cover.coverPath,
+              coverColor: '#f5f5f5'
+            }
+          : {})
+      }
+      await fbService.updateBook(bookId, patch)
+      setBooks(prev => prev.map(b => (b.id === bookId ? { ...b, ...patch } : b)))
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(prev => (prev ? { ...prev, ...patch } : prev))
+      }
+      return true
+    } catch (err) {
+      console.error('Failed to update book:', err)
+      showToast('Failed to save changes. Please try again.', 'error')
+      return false
+    }
+  }
+
   const handleBookProgressUpdate = (
     bookId: string,
     scrollProgress: number,
@@ -1203,6 +1267,7 @@ export function useReading({
     handleRequestMonetization,
     handleSaveDraft,
     handleCreateBook,
+    handleUpdateBookMeta,
     handleBookProgressUpdate
   }
 }

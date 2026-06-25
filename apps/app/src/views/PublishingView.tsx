@@ -4,9 +4,18 @@ import { GENRE_LIST } from '@/config/constants'
 import { useApp } from '@/state/AppContext'
 
 export const PublishingView = () => {
-  const { publishingInitialData, handleCreateBook, setEditorTarget, setView } =
-    useApp()
+  const {
+    publishingInitialData,
+    handleCreateBook,
+    handleUpdateBookMeta,
+    setEditorTarget,
+    setView
+  } = useApp()
   const initialData = publishingInitialData
+  // Editing an existing book's metadata (set by the cover pencil button) vs.
+  // creating a brand-new book.
+  const editingBookId: string | undefined = initialData?.bookId
+  const isEditing = !!editingBookId
   const onBack = () => setView('write')
   const [bookTitle, setBookTitle] = useState(initialData?.title || '')
   const [isCreating, setIsCreating] = useState(false)
@@ -117,30 +126,50 @@ export const PublishingView = () => {
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto p-6 animate-in slide-in-from-right duration-500 z-[300]'>
-      <header className='flex justify-between items-center mb-10'>
-        <h1 className='text-2xl font-bold'>New Book</h1>
-        <button onClick={onBack} className='w-10 h-10 text-gray-300'>
-          <span className='material-icons-round'>close</span>
+      {/* Back arrow on the left, centered title (+ book subtitle when editing),
+          matching the Write Studio editor header. */}
+      <header className='relative flex items-center justify-center mb-10'>
+        <button
+          onClick={onBack}
+          className='absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors'
+        >
+          <span className='material-icons-round'>arrow_back</span>
         </button>
+        <div className='flex flex-col items-center gap-1 min-w-0 px-14'>
+          <h1 className='text-[22px] font-bold leading-[1.24] text-[#1a1a1a]'>
+            {isEditing ? 'Book Details' : 'New Book'}
+          </h1>
+          {isEditing && bookTitle.trim() && (
+            <p className='text-[13px] font-semibold text-[#9aa1a9] tracking-[0.13px] leading-[1.2] truncate max-w-full'>
+              {bookTitle}
+            </p>
+          )}
+        </div>
       </header>
       <div className='space-y-8 pb-32'>
-        <Input
-          label='Book Title'
-          value={bookTitle}
-          onChange={setBookTitle}
-          placeholder='Enter book title...'
-        />
+        <div className='flex flex-col gap-8 md:flex-row-reverse md:items-start'>
+          {/* Wide screens: cover on the left, title/tagline on the right
+              (flex-row-reverse puts this first DOM child on the right). Mobile:
+              fields stack above the cover. */}
+          <div className='flex-1 space-y-8'>
+            <Input
+              label='Book Title'
+              value={bookTitle}
+              onChange={setBookTitle}
+              placeholder='Enter book title...'
+            />
 
-        <Input
-          label='Tagline'
-          maxLength={200}
-          value={tagline}
-          onChange={setTagline}
-          placeholder='A short, catchy hook...'
-          description='Max 200 characters'
-        />
+            <Input
+              label='Tagline'
+              maxLength={200}
+              value={tagline}
+              onChange={setTagline}
+              placeholder='A short, catchy hook...'
+              description='Max 200 characters'
+            />
+          </div>
 
-        <section className='space-y-4'>
+          <section className='space-y-4 shrink-0'>
           <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
             Cover Image
           </label>
@@ -190,7 +219,8 @@ export const PublishingView = () => {
               </span>
             </button>
           )}
-        </section>
+          </section>
+        </div>
 
         <div className='space-y-2.5'>
           <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
@@ -259,6 +289,17 @@ export const PublishingView = () => {
           </div>
         </div>
 
+        {isEditing && (
+          <Button
+            variant='secondary'
+            className='w-full'
+            disabled={isCreating}
+            onClick={() => setView('monetization-request')}
+          >
+            <span className='material-icons-round text-sm'>paid</span> Monetize
+          </Button>
+        )}
+
         <div className='grid grid-cols-2 gap-4'>
           <Button variant='outline' onClick={onBack} disabled={isCreating}>
             Cancel
@@ -272,7 +313,7 @@ export const PublishingView = () => {
             }
             onClick={async () => {
               setIsCreating(true)
-              const id = await handleCreateBook({
+              const payload = {
                 title: bookTitle,
                 tagline,
                 isMature,
@@ -283,7 +324,15 @@ export const PublishingView = () => {
                   .split(',')
                   .map(h => h.trim().replace(/^#/, ''))
                   .filter(h => h.length > 0)
-              })
+              }
+              if (isEditing && editingBookId) {
+                // Edit mode: persist metadata and return to the Studio.
+                const ok = await handleUpdateBookMeta(editingBookId, payload)
+                if (ok) setView('write')
+                else setIsCreating(false)
+                return
+              }
+              const id = await handleCreateBook(payload)
               if (id) {
                 // Hand the freshly-created draft to the chapter editor and land
                 // on its default empty Chapter 1.
@@ -294,7 +343,13 @@ export const PublishingView = () => {
               }
             }}
           >
-            {isCreating ? 'Creating…' : 'Create Book'}
+            {isEditing
+              ? isCreating
+                ? 'Saving…'
+                : 'Save'
+              : isCreating
+              ? 'Creating…'
+              : 'Create Book'}
           </Button>
         </div>
       </div>

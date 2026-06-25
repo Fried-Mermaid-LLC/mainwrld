@@ -312,14 +312,17 @@ export const SettingsView = () => {
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar animate-in slide-in-from-right duration-500'>
-      <header className='p-6 flex items-center gap-4 max-w-2xl mx-auto w-full'>
+      {/* Back arrow on the left, centered title — matching the other screens. */}
+      <header className='relative px-6 py-4 border-b border-[#eaeaea] flex items-center justify-center'>
         <button
           onClick={onBack}
-          className='w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400'
+          className='absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 hover:text-accent transition-colors'
         >
           <span className='material-icons-round'>arrow_back</span>
         </button>
-        <h1 className='text-xl font-bold'>Settings</h1>
+        <h1 className='text-[22px] font-bold leading-[1.24] text-[#1a1a1a]'>
+          Settings
+        </h1>
       </header>
 
       {/* Modal for editing */}
