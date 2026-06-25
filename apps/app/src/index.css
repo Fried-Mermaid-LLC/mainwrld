@@ -193,3 +193,20 @@ textarea,
 .emote-burst {
   animation: emote-burst 2s ease-out forwards;
 }
+
+/* Emote picker items pop in (staggered via inline animation-delay) when the
+   emote button is opened. */
+@keyframes emote-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.emote-menu-item {
+  animation: emote-menu-in 0.18s ease-out backwards;
+}

@@ -37,8 +37,12 @@ export const HomeView = () => {
   const [myEmote, setMyEmote] = useState<{ type: string; id: number } | null>(
     null
   )
+  // Emote picker open/closed. Collapsed to a single button (parallel to the
+  // joystick) and expands upward so it clears the bottom tab bar on phones.
+  const [emoteOpen, setEmoteOpen] = useState(false)
   const triggerEmote = (type: string) => {
     sendEmote(type)
+    setEmoteOpen(false)
     const id = (myEmote?.id ?? 0) + 1
     setMyEmote({ type, id })
     setTimeout(() => {
@@ -170,30 +174,48 @@ export const HomeView = () => {
           </button>
         </div>
       </div>
-      {/* Analog joystick. We mutate the shared moveDir vector in place rather
-          than calling setMoveDir: Player reads moveDir live every frame in
-          useFrame, so in-place writes drive movement without re-rendering
-          HomeView (and re-running the mutual-avatar layout) 60× a second. */}
-      <div className='absolute bottom-16 right-8 pointer-events-none'>
+      {/* Bottom-right controls: the emote button stacked ABOVE the analog
+          joystick, both raised clear of the bottom tab bar (which sits at
+          safe-area + 1rem). The whole column is bottom-anchored, so opening the
+          emote menu grows it upward and the joystick stays put.
+          The joystick mutates the shared moveDir vector in place rather than
+          calling setMoveDir: Player reads moveDir live every frame in useFrame,
+          so in-place writes drive movement without re-rendering HomeView (and
+          re-running the mutual-avatar layout) 60× a second. */}
+      <div
+        className='absolute right-8 z-[210] pointer-events-none flex flex-col items-end gap-4'
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 6.5rem)' }}
+      >
+        {/* Emote control — tap to reveal the emotes, which expand UPWARD so they
+            clear the joystick and the tab bar. Picking one broadcasts it over
+            RTDB (peers see a burst above your avatar) and collapses the menu. */}
+        <div className='pointer-events-auto flex flex-col-reverse items-end gap-3'>
+          <button
+            onClick={() => setEmoteOpen(o => !o)}
+            aria-label='Emotes'
+            aria-expanded={emoteOpen}
+            className='w-16 h-16 bg-white/90 backdrop-blur-xl rounded-full shadow-xl flex items-center justify-center text-3xl border border-white transition-all active:scale-90'
+          >
+            {emoteOpen ? '✕' : '😊'}
+          </button>
+          {emoteOpen &&
+            EMOTES.map((e, i) => (
+              <button
+                key={e.type}
+                onClick={() => triggerEmote(e.type)}
+                aria-label={e.label}
+                style={{ animationDelay: `${i * 30}ms` }}
+                className='emote-menu-item w-14 h-14 bg-white/95 backdrop-blur-xl rounded-full shadow-lg flex items-center justify-center text-2xl border border-white transition-all active:scale-90'
+              >
+                {e.emoji}
+              </button>
+            ))}
+        </div>
         <VirtualJoystick
           onChange={(x, z) => {
             moveDir.set(x, 0, z)
           }}
         />
-      </div>
-      {/* Emote bar — broadcast a quick emoji over RTDB; nearby players see a burst
-          above your avatar (and you see it locally for instant feedback). */}
-      <div className='absolute bottom-16 left-6 pointer-events-auto flex gap-2'>
-        {EMOTES.map(e => (
-          <button
-            key={e.type}
-            onClick={() => triggerEmote(e.type)}
-            aria-label={e.label}
-            className='w-12 h-12 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl flex items-center justify-center text-2xl border border-white transition-all active:scale-90'
-          >
-            {e.emoji}
-          </button>
-        ))}
       </div>
       {/* Splash-style cover that hides the world until its GLB models finish
           streaming in, so the avatars don't all pop into an empty scene at
