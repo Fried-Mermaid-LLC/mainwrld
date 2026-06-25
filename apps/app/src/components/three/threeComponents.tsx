@@ -19,6 +19,32 @@ import { SkeletonUtils } from "three-stdlib";
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+// Offline mutuals carry no real transform (Firestore stores [0,0,0] for them),
+// so without this they would all spawn stacked at the world centre. Derive a
+// stable scatter position from the username hash: deterministic so a given peer
+// always appears in the same spot (no jump on remount) yet spread across the
+// same zone the wander uses. Returns null for a non-origin position so a real
+// persisted/live transform is never overridden.
+const scatterPosition = (
+  username: string,
+): [number, number, number] => {
+  let h = 2166136261;
+  for (let i = 0; i < username.length; i++) {
+    h ^= username.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  // Two independent unit fractions from the hash → polar placement so peers
+  // fill the disc evenly rather than clustering on a diagonal.
+  const a = ((h >>> 0) % 10000) / 10000;
+  const b = (((h >>> 16) ^ h) >>> 0) % 10000 / 10000;
+  const angle = a * Math.PI * 2;
+  const radius = Math.sqrt(b) * WORLD_RADIUS * 0.4;
+  return [Math.cos(angle) * radius, 0, Math.sin(angle) * radius];
+};
+
+const isOrigin = (p?: [number, number, number]) =>
+  !p || (p[0] === 0 && p[1] === 0 && p[2] === 0);
+
 // Remote avatars are rendered this far in the past (seconds). The world layer
 // writes transforms at ~9 Hz (WORLD_WRITE_MS = 110ms); by holding the render
 // clock ~1.5 write-intervals behind we always have two buffered snapshots that
@@ -314,11 +340,14 @@ export const MovingAvatar: React.FC<{
 }> = ({ user, getWorldEntry, fallbackActivity, onClick }) => {
   const groupRef = useRef<THREE.Group>(null);
   const initialEntry = getWorldEntry?.(user.username);
-  const initialPos = (initialEntry?.position ?? user.position ?? [0, 0, 0]) as [
-    number,
-    number,
-    number,
-  ];
+  // Prefer a live transform, then a real persisted position; otherwise (offline
+  // mutual at the default origin) scatter by username so they don't pile up in
+  // the centre of the map.
+  const initialPos: [number, number, number] = initialEntry?.position
+    ? initialEntry.position
+    : !isOrigin(user.position)
+      ? (user.position as [number, number, number])
+      : scatterPosition(user.username);
   const targetPos = useRef(new THREE.Vector3(...initialPos));
   const waitTimer = useRef(0);
 
