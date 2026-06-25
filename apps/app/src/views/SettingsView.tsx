@@ -33,6 +33,43 @@ export const SettingsView = () => {
         .catch(console.error)
     }
   }
+  // Re-authenticate with the current password, then trigger Firebase's
+  // verify-before-update flow. The address doesn't change until the user clicks
+  // the link sent to the new inbox, so we never mutate local state here — the
+  // server reconciles the new email into the profile on the next /users/me load.
+  const onUpdateEmail = async (
+    currentPassword: string,
+    newEmail: string
+  ): Promise<boolean> => {
+    try {
+      await fbService.changeEmail(currentPassword, newEmail)
+      showToast(
+        `Verification link sent to ${newEmail}. Open it to finish the change.`,
+        'mark_email_read'
+      )
+      return true
+    } catch (err: any) {
+      const code = err?.code as string | undefined
+      if (
+        code === 'auth/wrong-password' ||
+        code === 'auth/invalid-credential'
+      ) {
+        showToast('Current password is incorrect', 'error')
+      } else if (code === 'auth/email-already-in-use') {
+        showToast('That email is already in use', 'error')
+      } else if (code === 'auth/invalid-email') {
+        showToast('Please enter a valid email', 'error')
+      } else if (code === 'auth/too-many-requests') {
+        showToast('Too many attempts. Please try again later.', 'error')
+      } else {
+        showToast(
+          'Failed to update email. You may need to log in again.',
+          'error'
+        )
+      }
+      return false
+    }
+  }
   const onUpdatePassword = async (
     currentPassword: string,
     newPassword: string
@@ -136,12 +173,25 @@ export const SettingsView = () => {
 
   const handleSave = async () => {
     if (activeModal === 'email') {
-      if (!formValue.includes('@')) {
+      if (!currentPassword) {
+        showToast('Please enter your current password', 'error')
+        return
+      }
+      const nextEmail = formValue.trim()
+      if (!/^\S+@\S+\.\S+$/.test(nextEmail)) {
         showToast('Please enter a valid email', 'error')
         return
       }
-      onUpdateUser({ ...user, email: formValue })
-      showToast('Email updated!', 'check_circle')
+      if (nextEmail.toLowerCase() === (user.email || '').toLowerCase()) {
+        showToast('That is already your email', 'error')
+        return
+      }
+      // Keep the modal open on failure (e.g. wrong password) so the user can
+      // correct it; onUpdateEmail owns the success/error toast. The email is
+      // not applied until the user confirms via the link, so don't touch local
+      // state — the server reflects it on a later /users/me load.
+      const ok = await onUpdateEmail(currentPassword, nextEmail)
+      if (!ok) return
     } else if (activeModal === 'displayName') {
       if (formValue.length < 3) {
         showToast('Display name must be at least 3 characters', 'error')
@@ -244,7 +294,7 @@ export const SettingsView = () => {
                 : 'Change Password'}
             </h2>
             <div className='space-y-4'>
-              {activeModal === 'password' && (
+              {(activeModal === 'password' || activeModal === 'email') && (
                 <input
                   type='password'
                   autoComplete='current-password'
@@ -263,7 +313,11 @@ export const SettingsView = () => {
                     : 'text'
                 }
                 autoComplete={
-                  activeModal === 'password' ? 'new-password' : undefined
+                  activeModal === 'password'
+                    ? 'new-password'
+                    : activeModal === 'email'
+                    ? 'email'
+                    : undefined
                 }
                 value={formValue}
                 onChange={e => setFormValue(e.target.value)}

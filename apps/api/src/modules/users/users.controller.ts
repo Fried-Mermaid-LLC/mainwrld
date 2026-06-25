@@ -39,7 +39,9 @@ export class UsersController {
 
   @Get('me')
   getMe(@CurrentUser() user: AuthUser) {
-    return this.users.getMe(user.uid);
+    // Pass the verified token email so getMe can reconcile an out-of-band email
+    // change (verifyBeforeUpdateEmail) into the profile + username index.
+    return this.users.getMe(user.uid, user.email);
   }
 
   @Post('me/welcome-email')

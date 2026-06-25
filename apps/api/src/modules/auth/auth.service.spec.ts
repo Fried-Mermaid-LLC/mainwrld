@@ -80,6 +80,21 @@ describe('AuthService', () => {
       expect(res).toEqual({ email: 'alice@test.com' });
     });
 
+    it('resolves the live Auth email by uid, ignoring a stale cached value', async () => {
+      auth = createFakeAuth({ u1: { email: 'new@test.com' } });
+      svc = new AuthService(fs as any, auth as any, email as any);
+      fs.seed('usernames/alice', { uid: 'u1', email: 'old@test.com' });
+      const res = await svc.resolveUsername('alice');
+      expect(res).toEqual({ email: 'new@test.com' });
+    });
+
+    it('falls back to the cached email when the live lookup fails', async () => {
+      fs.seed('usernames/alice', { uid: 'u1', email: 'cached@test.com' });
+      auth.getUser.mockRejectedValueOnce(new Error('boom'));
+      const res = await svc.resolveUsername('alice');
+      expect(res).toEqual({ email: 'cached@test.com' });
+    });
+
     it('lowercases the username before lookup', async () => {
       fs.seed('usernames/alice', { email: 'alice@test.com' });
       const res = await svc.resolveUsername('ALICE');

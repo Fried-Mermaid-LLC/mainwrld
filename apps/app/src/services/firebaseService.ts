@@ -95,6 +95,7 @@ export const onAuthChange = authService.onAuthChange;
 export const getCurrentFirebaseUser = authService.getCurrentFirebaseUser;
 export const ensureUsernameClaim = authService.ensureUsernameClaim;
 export const changePassword = authService.changePassword;
+export const changeEmail = authService.changeEmail;
 export const verifyResetCode = authService.verifyResetCode;
 export const completePasswordReset = authService.completePasswordReset;
 export const moderateUsername = authService.moderateUsername;

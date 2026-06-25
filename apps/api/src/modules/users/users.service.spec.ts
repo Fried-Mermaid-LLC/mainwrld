@@ -184,6 +184,23 @@ describe('UsersService', () => {
       fs.seed('users/u1', { username: 'alice', isBanned: true });
       await expect(svc.getMe('u1')).rejects.toThrow(ForbiddenException);
     });
+
+    it('reconciles a changed token email into the profile and username index', async () => {
+      fs.seed('users/u1', { username: 'Alice', email: 'old@test.com' });
+      fs.seed('usernames/alice', { uid: 'u1', email: 'old@test.com' });
+      const me = await svc.getMe('u1', 'new@test.com');
+      expect(me.email).toBe('new@test.com');
+      expect(fs.dump('users/u1')!.email).toBe('new@test.com');
+      expect(fs.dump('usernames/alice')!.email).toBe('new@test.com');
+    });
+
+    it('does not write when the token email matches the profile', async () => {
+      fs.seed('users/u1', { username: 'alice', email: 'same@test.com' });
+      const me = await svc.getMe('u1', 'same@test.com');
+      expect(me.email).toBe('same@test.com');
+      // No reconcile ran, so the (unseeded) username index was never touched.
+      expect(fs.dump('usernames/alice')).toBeUndefined();
+    });
   });
 
   describe('updateMe', () => {

@@ -259,14 +259,15 @@ export class UsersService {
   }
 
   // Own profile. Ban gate (defense-in-depth): block a banned user before any
-  // home-screen state loads.
-  async getMe(uid: string): Promise<UserDoc> {
+  // home-screen state loads. `tokenEmail` is the verified email from the
+  // caller's ID token, used to reconcile out-of-band email changes (see below).
+  async getMe(uid: string, tokenEmail?: string): Promise<UserDoc> {
     // Membership reward (200 pts after 25h, then yearly) lands here instead of a
     // client timer — best-effort, before the profile is read so it's reflected.
     await this.rewards.applyMembershipReward(uid);
     const snap = await this.col.doc(uid).get();
     if (!snap.exists) throw new NotFoundException('User profile not found');
-    const data = { uid, ...snap.data() } as UserDoc;
+    let data = { uid, ...snap.data() } as UserDoc;
     if (data.isBanned === true) {
       throw new ForbiddenException({
         code: 'banned',
@@ -274,7 +275,44 @@ export class UsersService {
           'This account has been suspended for repeated community guideline violations.',
       });
     }
+    // Backfill an out-of-band email change. verifyBeforeUpdateEmail swaps the
+    // Auth email only after the user clicks the link, and there is no Auth
+    // "user updated" trigger to mirror it into Firestore. The verified token
+    // email is the source of truth, so when it diverges from the stored profile
+    // we sync both the profile and the username index here. (resolve-username
+    // already reads the live Auth email, so login keeps working before this
+    // runs; this just keeps the Firestore copies consistent for everything else.)
+    if (tokenEmail && tokenEmail !== data.email) {
+      data = await this.reconcileEmail(uid, tokenEmail, data);
+    }
     return data;
+  }
+
+  // Write the verified email onto the profile and the username index. The
+  // username doc is rules-immutable for clients (`allow update: if false`), but
+  // the Admin SDK bypasses rules — and it must stay in step so legacy readers of
+  // the cached `usernames/*.email` don't drift. Best-effort on the index: a
+  // failure there must not break the profile read.
+  private async reconcileEmail(
+    uid: string,
+    email: string,
+    data: UserDoc,
+  ): Promise<UserDoc> {
+    await this.col.doc(uid).update({ email });
+    const username = data.username as string | undefined;
+    if (username) {
+      await this.usernames
+        .doc(username.toLowerCase())
+        .set({ email }, { merge: true })
+        .catch((err) =>
+          this.logger.warn(
+            `reconcileEmail: username index update failed for ${username}`,
+            err as Error,
+          ),
+        );
+    }
+    this.logger.log(`reconcileEmail synced new email for ${uid}`);
+    return { ...data, email };
   }
 
   async getById(uid: string): Promise<UserDoc> {

@@ -43,15 +43,36 @@ export class AuthService {
 
   // username -> email for login. NOTE(security): this exposes the email behind
   // a username to any unauthenticated caller — it preserves the legacy public
-  // `usernames` lookup the client did directly. Candidate for a follow-up
-  // (e.g. let Firebase Auth resolve it, or require the email at login).
+  // `usernames` lookup the client did directly.
+  //
+  // Resolve the LIVE Auth email by uid rather than trusting the cached `email`
+  // on the (rules-immutable) username doc. After a verifyBeforeUpdateEmail
+  // change the cached value goes stale, and since login-by-username happens
+  // before any session exists, a stale value would lock the user out (they'd
+  // sign in with the old address against an account that no longer has it). The
+  // Auth record is always current, so this keeps username login working the
+  // moment the change lands. Fall back to the cached field if the uid is absent
+  // (legacy docs) or the lookup fails.
   async resolveUsername(username: string): Promise<{ email: string | null }> {
     const snap = await this.db
       .collection(COLLECTIONS.usernames)
       .doc(username.toLowerCase())
       .get();
     if (!snap.exists) return { email: null };
-    return { email: (snap.data()?.email as string) ?? null };
+    const data = snap.data() ?? {};
+    const uid = data.uid as string | undefined;
+    if (uid) {
+      try {
+        const authUser = await this.auth.getUser(uid);
+        if (authUser.email) return { email: authUser.email };
+      } catch (err) {
+        this.logger.warn(
+          `resolveUsername: live email lookup failed for ${uid}`,
+          err as Error,
+        );
+      }
+    }
+    return { email: (data.email as string) ?? null };
   }
 
   // Branded password reset (ported from sendPasswordReset). Always returns

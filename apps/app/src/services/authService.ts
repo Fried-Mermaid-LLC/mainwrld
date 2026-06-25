@@ -7,6 +7,7 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  verifyBeforeUpdateEmail,
   verifyPasswordResetCode,
   confirmPasswordReset,
   type User as FirebaseUser,
@@ -47,6 +48,28 @@ export const changePassword = async (
   const credential = EmailAuthProvider.credential(user.email, currentPassword);
   await reauthenticateWithCredential(user, credential);
   await updatePassword(user, newPassword);
+};
+
+// Re-authenticate with the current password, then send a verification link to
+// the NEW address. Requiring the password closes the same "walk up to an
+// unlocked session and silently change the email" hole that changePassword
+// guards against. We use verifyBeforeUpdateEmail (not updateEmail): Firebase
+// swaps the account email only after the user clicks the link in the new inbox,
+// so nothing changes until they confirm ownership — and it keeps working with
+// Email Enumeration Protection enabled (the Firebase default), under which
+// updateEmail throws auth/operation-not-allowed. The server-side email backfill
+// (GET /users/me reconcile + resolve-username live lookup) picks the change up
+// once the user's next ID token carries the new address.
+export const changeEmail = async (
+  currentPassword: string,
+  newEmail: string
+): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  if (!user.email) throw new Error('No email on account');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await verifyBeforeUpdateEmail(user, newEmail);
 };
 
 export const verifyResetCode = (oobCode: string): Promise<string> =>
