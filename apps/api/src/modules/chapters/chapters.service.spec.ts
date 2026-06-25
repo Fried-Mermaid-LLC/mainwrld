@@ -98,6 +98,63 @@ describe('ChaptersService', () => {
       expect(res).toEqual({ title: 'Chapter Zero', content: 'preview body' });
     });
 
+    it('a middle chapter unpublished via its flag is forbidden for readers (despite being within the old prefix)', async () => {
+      // c1 is at order 1 (< chaptersCount 3) but explicitly unpublished — the
+      // per-chapter flag, not the prefix, decides visibility.
+      seedBook({
+        authorUid: 'someone-else',
+        chapterMeta: [
+          { id: 'c0', published: true },
+          { id: 'c1', published: false },
+          { id: 'c2', published: true },
+        ],
+      });
+      await expect(
+        svc.getContent('b1', 'c1', makeAuthUser({ uid: 'reader' })),
+      ).rejects.toThrow('Chapter not available.');
+    });
+
+    it('the free preview is the FIRST published chapter when the opening chapter is unpublished', async () => {
+      // c0 is unpublished → the preview shifts to c1, which becomes free to
+      // non-owners even though the book is paid/monetized.
+      seedBook({
+        authorUid: 'someone-else',
+        chapterMeta: [
+          { id: 'c0', published: false },
+          { id: 'c1', published: true },
+          { id: 'c2', published: true },
+        ],
+      });
+      fs.seed('users/reader', { purchasedBookIds: [] });
+      const res = await svc.getContent(
+        'b1',
+        'c1',
+        makeAuthUser({ uid: 'reader' }),
+      );
+      expect(res).toEqual({ title: 'Chapter One', content: 'paid body' });
+    });
+
+    it('a chapter flagged published is readable even past the legacy prefix', async () => {
+      // chaptersCount 1 (legacy prefix would hide c2), but c2 is flagged
+      // published → the flag wins and a free book serves it.
+      seedBook({
+        authorUid: 'someone-else',
+        isFree: true,
+        chaptersCount: 1,
+        chapterMeta: [
+          { id: 'c0', published: true },
+          { id: 'c1', published: false },
+          { id: 'c2', published: true },
+        ],
+      });
+      const res = await svc.getContent(
+        'b1',
+        'c2',
+        makeAuthUser({ uid: 'reader' }),
+      );
+      expect(res).toEqual({ title: 'Chapter Two', content: 'paid body two' });
+    });
+
     it('non-owner of a paid monetized book is denied (permission-denied)', async () => {
       seedBook({ authorUid: 'someone-else' });
       fs.seed('users/reader', { purchasedBookIds: [] });

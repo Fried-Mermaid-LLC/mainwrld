@@ -6,6 +6,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import { firstPublishedOrder, isChapterPublished } from '@mainwrld/types';
+import type { ChapterMeta } from '@mainwrld/types';
 import type { AuthUser } from '../../infra/auth/auth-user.interface';
 import {
   COLLECTIONS,
@@ -94,18 +96,22 @@ export class ChaptersService {
       throw new ForbiddenException('This book is no longer available.');
     }
 
-    const meta = (book.chapterMeta as Array<{ id: string }>) || [];
+    const meta = (book.chapterMeta as ChapterMeta[]) || [];
     const order = meta.findIndex((m) => m.id === chapterId);
     const chaptersCount = (book.chaptersCount as number) || 0;
 
-    if (!isAuthor && !isAdmin && (order < 0 || order >= chaptersCount)) {
+    // Per-chapter visibility: a chapter is readable by non-authors only if its
+    // meta entry is published (legacy docs fall back to the published prefix).
+    if (!isAuthor && !isAdmin && !isChapterPublished(meta, order, chaptersCount)) {
       throw new ForbiddenException('Chapter not available.');
     }
 
     if (!isAuthor && !isAdmin) {
       const isFreeOrUnmonetized =
         book.isFree === true || book.isMonetized !== true;
-      const isPreview = order === 0;
+      // The free preview is the first published chapter (no longer hard-wired to
+      // order 0, since the author may unpublish the opening chapter).
+      const isPreview = order === firstPublishedOrder(meta, chaptersCount);
       let owns = false;
       if (!isFreeOrUnmonetized && !isPreview) {
         const userSnap = await this.db
@@ -154,6 +160,19 @@ export class ChaptersService {
     if (dto.title) await this.assertClean(dto.title, true, mature);
 
     const bookUpdates = this.sanitizeBookUpdates(dto.bookUpdates);
+    // chaptersCount is a server-derived count of published chapters, not a
+    // client-trusted value: whenever the write carries chapterMeta, recompute it
+    // from the per-chapter `published` flags so the monetization/pricing signal
+    // can't be forged through the chapter-commit path.
+    const incomingMeta = bookUpdates.chapterMeta as ChapterMeta[] | undefined;
+    if (
+      Array.isArray(incomingMeta) &&
+      incomingMeta.some((m) => typeof m.published === 'boolean')
+    ) {
+      bookUpdates.chaptersCount = incomingMeta.filter(
+        (m) => m.published === true,
+      ).length;
+    }
     // Client-sent `likes` is stripped by BOOK_PROTECTED; publishing a chapter
     // can only grow the position-indexed array, so we pad it with zeros to cover
     // the new chapter set server-side, preserving the real reader counts.

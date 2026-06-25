@@ -4,6 +4,31 @@ import { logger } from 'firebase-functions/v2'
 
 const REGION = 'us-central1'
 
+// Per-chapter publish helpers (kept in sync with @mainwrld/types; the functions
+// codebase doesn't depend on that package). A chapter is published when its
+// chapterMeta entry's `published` flag is true; un-migrated docs fall back to the
+// legacy published-prefix rule (order < chaptersCount).
+type PublishMeta = { published?: boolean }
+function isChapterPublished(
+  meta: PublishMeta[] | undefined,
+  order: number,
+  chaptersCount: number,
+): boolean {
+  const entry = meta?.[order]
+  if (entry && typeof entry.published === 'boolean') return entry.published
+  return order >= 0 && order < (chaptersCount || 0)
+}
+function firstPublishedOrder(
+  meta: PublishMeta[] | undefined,
+  chaptersCount: number,
+): number {
+  const len = meta?.length || 0
+  for (let i = 0; i < len; i++) {
+    if (isChapterPublished(meta, i, chaptersCount)) return i
+  }
+  return -1
+}
+
 // Reader-facing gateway for chapter bodies. After chapters moved out of the book
 // document into books/{bookId}/chapters/{chapterId}, the security rules only let
 // the author/admin read those docs directly — everyone else must come through
@@ -51,20 +76,22 @@ export const getChapterContent = onCall<
 
   // Position in the book = index in chapterMeta (the source of truth for order),
   // so deleting a middle chapter never requires renumbering chapter docs.
-  const meta: Array<{ id: string }> = book.chapterMeta || []
+  const meta: Array<{ id: string; published?: boolean }> = book.chapterMeta || []
   const order = meta.findIndex((m) => m.id === chapterId)
   const chaptersCount = book.chaptersCount || 0
 
-  // Non-authors can never read unpublished (draft) chapters — those sit beyond
-  // the published prefix [0, chaptersCount). order === -1 means the chapter is
-  // not in the published meta at all.
-  if (!isAuthor && !isAdmin && (order < 0 || order >= chaptersCount)) {
+  // Non-authors can never read unpublished (draft) chapters. Visibility is the
+  // per-chapter `published` flag (no longer a [0, chaptersCount) prefix); order
+  // === -1 means the chapter isn't in chapterMeta at all.
+  if (!isAuthor && !isAdmin && !isChapterPublished(meta, order, chaptersCount)) {
     throw new HttpsError('permission-denied', 'Chapter not available.')
   }
 
   if (!isAuthor && !isAdmin) {
     const isFreeOrUnmonetized = book.isFree === true || book.isMonetized !== true
-    const isPreview = order === 0
+    // The free preview is the first published chapter (the author may unpublish
+    // the opening chapter, so it's no longer hard-wired to order 0).
+    const isPreview = order === firstPublishedOrder(meta, chaptersCount)
     let owns = false
     if (!isFreeOrUnmonetized && !isPreview) {
       const userSnap = await db.collection('users').doc(uid).get()

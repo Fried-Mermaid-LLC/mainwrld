@@ -41,7 +41,7 @@ import { useApp } from '@/state/AppContext'
 export const AppShell: React.FC = () => {
   const {
     view, setView, toast, confirmModal, setConfirmModal, userDataLoaded,
-    selectedBook, selectedProfileUser, isWriting, setWriteReturnView
+    selectedBook, selectedProfileUser, isWriting, setWriteReturnView, setWriteMode
   } = useApp()
 
   // Keep the native Capacitor splash up through the initial `splash` view and
@@ -212,8 +212,10 @@ export const AppShell: React.FC = () => {
               key={tab.id}
               onClick={() => {
                 // Plain tab navigation: clear any draft-origin so the editor's
-                // Back falls back to Home instead of a stale return view.
+                // Back falls back to Home instead of a stale return view, and
+                // open the Studio on its works grid rather than a stale editor.
                 setWriteReturnView(null)
+                if (tab.id === 'write') setWriteMode('list')
                 setView(tab.id as View)
               }}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-full transition-all ${

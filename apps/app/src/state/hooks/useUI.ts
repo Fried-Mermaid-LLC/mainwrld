@@ -102,6 +102,11 @@ export function useUI() {
   // opened from a specific origin (e.g. a draft tapped on the profile), so Back
   // goes there instead of the default Home. Cleared on plain tab navigation.
   const [writeReturnView, setWriteReturnView] = useState<View | null>(null)
+  // Which screen the Studio (WriteView) shows: the Library-like grid of the
+  // author's works ('list') or the chapter editor for one book ('editor').
+  // Shared (not WriteView-local) so it survives round-trips to the Publishing /
+  // Monetization sub-screens and back. Tab navigation resets it to 'list'.
+  const [writeMode, setWriteMode] = useState<'list' | 'editor'>('list')
 
   useEffect(() => {
     if (view !== 'home') return
@@ -157,6 +162,8 @@ export function useUI() {
     isWriting,
     setIsWriting,
     writeReturnView,
-    setWriteReturnView
+    setWriteReturnView,
+    writeMode,
+    setWriteMode
   }
 }

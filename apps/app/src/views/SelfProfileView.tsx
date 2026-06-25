@@ -27,6 +27,7 @@ export const SelfProfileView = () => {
     setLastSelectedBookId,
     setLastSelectedChapterIndex,
     setWriteReturnView,
+    setWriteMode,
     relationships,
     avatarConfig,
     handleDeleteBook
@@ -55,6 +56,7 @@ export const SelfProfileView = () => {
     setLastSelectedBookId(bookId)
     setLastSelectedChapterIndex('0')
     setWriteReturnView('self-profile')
+    setWriteMode('editor')
     setView('write')
   }
   const myDrafts = books.filter(

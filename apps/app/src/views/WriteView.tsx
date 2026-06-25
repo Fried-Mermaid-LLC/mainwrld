@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Button } from '@/components/sharedComponents'
+import { Button, CoverImg } from '@/components/sharedComponents'
 import { MAX_WORD_COUNT, MIN_WORD_COUNT } from '@/config/constants'
 import type { Book } from '@/types'
+import { isChapterPublished } from '@/types'
 import * as fbService from '@/services/firebaseService'
 import { useApp } from '@/state/AppContext'
 
@@ -36,13 +37,16 @@ export const WriteView = () => {
     setPublishingInitialData,
     setView,
     handleUnpublishChapter,
+    handleRepublishChapter,
     handleDeleteChapter,
     showToast,
     setNotifications,
     isWriting,
     setIsWriting,
     writeReturnView,
-    setWriteReturnView
+    setWriteReturnView,
+    writeMode,
+    setWriteMode
   } = useApp()
   const initialBookId = lastSelectedBookId
   const initialChapterIndex = lastSelectedChapterIndex
@@ -100,9 +104,18 @@ export const WriteView = () => {
   }
   const onSaveDraft = handleSaveDraft
   const onUnpublishChapter = handleUnpublishChapter
+  const onRepublishChapter = handleRepublishChapter
   const onDeleteChapter = handleDeleteChapter
   const onMonetize = () => setView('monetization-request')
   const onBack = () => {
+    // From the chapter editor, Back returns to the works grid — unless the
+    // editor was opened from a specific origin (e.g. a draft tapped on the
+    // profile), in which case it returns straight there. From the grid itself,
+    // Back leaves the Studio for the return view (or Home).
+    if (writeMode === 'editor' && !writeReturnView) {
+      setWriteMode('list')
+      return
+    }
     setView(writeReturnView || 'home')
     setWriteReturnView(null)
   }
@@ -525,6 +538,12 @@ export const WriteView = () => {
       const currentContent = editorRef.current?.innerHTML || ''
 
       if (!currentBookId && !currentTitle.trim()) return null
+      // Don't materialize a brand-new book until its first chapter has content.
+      // Creating it from a title alone left an empty, chapterless book (the
+      // editor would flip out of 'new' state, hiding the title field and
+      // showing no chapters). A book now always carries at least Chapter 1.
+      if (!currentBookId && !currentContent.replace(/<\/?[^>]+(>|$)/g, '').trim())
+        return null
       if (mode === 'auto' && !dirtyDraftRef.current) return currentBookId
 
       saveInFlightRef.current = true
@@ -695,10 +714,19 @@ export const WriteView = () => {
   const canPublish =
     wordCount >= MIN_WORD_COUNT &&
     (selectedBookId !== 'new' || newTitle.trim().length > 0)
+  // A chapter is published per its own flag now (any position), not by sitting
+  // inside the [0, chaptersCount) prefix. An existing-but-unpublished chapter
+  // can be republished from here.
+  const isExistingChapter =
+    selectedChapterIndex !== 'new' && !!selectedBook
   const isPublished =
-    selectedChapterIndex !== 'new' &&
-    selectedBook &&
-    parseInt(selectedChapterIndex) < selectedBook.chaptersCount
+    isExistingChapter &&
+    isChapterPublished(
+      selectedBook!.chapterMeta,
+      parseInt(selectedChapterIndex),
+      selectedBook!.chaptersCount
+    )
+  const isUnpublishedChapter = isExistingChapter && !isPublished
 
   const handleDeleteClick = () => {
     if (selectedChapterIndex === 'new') return
@@ -731,6 +759,30 @@ export const WriteView = () => {
       )
       setTimeout(() => setUnpublishConfirmIdx(null), 5000)
     }
+  }
+
+  const handleRepublishClick = () => {
+    if (selectedChapterIndex === 'new') return
+    const idx = parseInt(selectedChapterIndex)
+    onRepublishChapter(selectedBookId, idx)
+  }
+
+  // Open an existing work from the grid into the chapter editor. Land on the
+  // first chapter when the book has any, otherwise on a fresh chapter.
+  const openBook = (b: Book) => {
+    setSelectedBookId(b.id)
+    setSelectedChapterIndex((b.chapterMeta?.length ?? 0) > 0 ? '0' : 'new')
+    setWriteMode('editor')
+  }
+
+  // Start a brand-new work: the editor opens on an empty Chapter 1. The book
+  // doc is only created once that chapter has content (see performDraftSave).
+  const openNewBook = () => {
+    setSelectedBookId('new')
+    setSelectedChapterIndex('new')
+    setNewTitle('')
+    setChapterTitle('Chapter 1')
+    setWriteMode('editor')
   }
 
   return (
@@ -795,6 +847,53 @@ export const WriteView = () => {
         </header>
       )}
 
+      {writeMode === 'list' ? (
+        <div className='flex-1 p-4 pb-28 overflow-y-auto no-scrollbar'>
+          <div className='grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'>
+            {/* New Work tile — opens the editor on a fresh Chapter 1. */}
+            <button
+              onClick={openNewBook}
+              className='aspect-[2/3] w-full rounded-[16px] border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-2 text-gray-400 transition-all active:scale-95 hover:border-accent hover:text-accent'
+            >
+              <span className='material-icons-round text-4xl'>add</span>
+              <span className='text-[11px] font-bold uppercase tracking-[0.66px]'>
+                New Book
+              </span>
+            </button>
+            {myWorks.map((b: Book) => {
+              const chapterCount = b.chapterMeta?.length ?? 0
+              return (
+                <div
+                  key={b.id}
+                  onClick={() => openBook(b)}
+                  className='flex flex-col gap-2 cursor-pointer transition-transform active:scale-95'
+                >
+                  <div
+                    className='relative aspect-[2/3] w-full rounded-[16px] overflow-hidden bg-[#fbdddd] flex flex-col justify-end px-3 py-[18px]'
+                    style={{ backgroundColor: b.coverColor || '#fbdddd' }}
+                  >
+                    <CoverImg book={b} />
+                    {b.isDraft && (
+                      <span className='absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/55 text-white text-[8px] font-bold uppercase tracking-[0.5px]'>
+                        Draft
+                      </span>
+                    )}
+                  </div>
+                  <div className='flex flex-col gap-1'>
+                    <p className='text-[13px] font-semibold text-[#1a1a1a] tracking-[0.13px] leading-[1.2] line-clamp-2'>
+                      {b.title || 'Untitled'}
+                    </p>
+                    <p className='text-[11px] font-semibold text-[#9aa1a9] tracking-[0.66px] uppercase truncate'>
+                      {chapterCount} {chapterCount === 1 ? 'Chapter' : 'Chapters'}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+      <>
       <div
         className='flex-1 p-6 space-y-6 overflow-y-auto no-scrollbar'
         style={{ WebkitOverflowScrolling: 'touch', scrollBehavior: 'smooth' }}
@@ -803,41 +902,23 @@ export const WriteView = () => {
         <div className='space-y-4'>
           <div className='space-y-1.5'>
             <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
-              Your Works
+              Book Title
             </label>
-            <select
-              className='w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium outline-none appearance-none cursor-pointer shadow-sm'
-              value={selectedBookId}
+            <input
+              placeholder='Enter book title...'
+              value={newTitle}
               onChange={e => {
-                setSelectedBookId(e.target.value)
-                setSelectedChapterIndex('new')
+                dirtyDraftRef.current = true
+                setNewTitle(e.target.value)
+                // Persist renames of an existing book. For a brand-new book the
+                // doc is created only once Chapter 1 has content (see
+                // performDraftSave), so typing a title alone must not autosave —
+                // that would spawn an empty, chapterless book.
+                if (selectedBookId !== 'new') scheduleAutoSave()
               }}
-            >
-              <option value='new'>Start a New Work</option>
-              {myWorks.map((w: Book) => (
-                <option key={w.id} value={w.id}>
-                  {w.title}
-                </option>
-              ))}
-            </select>
+              className='w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium outline-none shadow-sm focus:ring-2 focus:ring-accent/10'
+            />
           </div>
-
-          {selectedBookId === 'new' && (
-            <div className='space-y-1.5 animate-in slide-in-from-top duration-300'>
-              <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
-                Book Title
-              </label>
-              <input
-                placeholder='Enter new book title...'
-                value={newTitle}
-                onChange={e => {
-                  dirtyDraftRef.current = true
-                  setNewTitle(e.target.value)
-                }}
-                className='w-full bg-gray-50 border-none rounded-2xl px-6 py-4 text-sm font-medium outline-none shadow-sm focus:ring-2 focus:ring-accent/10'
-              />
-            </div>
-          )}
 
           <div className='space-y-1.5'>
             <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
@@ -987,6 +1068,15 @@ export const WriteView = () => {
                   : 'Unpublish Chapter'}
               </button>
             )}
+            {isUnpublishedChapter && (
+              <button
+                onClick={handleRepublishClick}
+                className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-emerald-500'
+              >
+                <span className='material-icons-round text-sm'>publish</span>
+                Publish Chapter
+              </button>
+            )}
             <button
               onClick={handleDeleteClick}
               className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
@@ -1036,7 +1126,8 @@ export const WriteView = () => {
           <Button
             variant='outline'
             disabled={
-              (selectedBookId === 'new' && !newTitle.trim()) ||
+              (selectedBookId === 'new' &&
+                (!newTitle.trim() || wordCount === 0)) ||
               saveState === 'saving'
             }
             onClick={() => {
@@ -1070,6 +1161,8 @@ export const WriteView = () => {
           </Button>
         </div>
       </div>
+      )}
+      </>
       )}
       </div>
 

@@ -42,14 +42,30 @@ function allowedPriceTiers(chaptersCount: number): number[] {
   if (chaptersCount >= 5) return PRICE_TIERS.slice(0, 1)
   return []
 }
+// Published chapters are no longer a [0, chaptersCount) prefix — visibility is
+// the per-chapter `published` flag on chapterMeta (un-migrated docs fall back to
+// the prefix). Read the like at each published position; likes stay indexed by
+// absolute chapter order.
+function isChapterPublished(
+  meta: Array<{ published?: boolean }> | undefined,
+  order: number,
+  chaptersCount: number
+): boolean {
+  const entry = meta?.[order]
+  if (entry && typeof entry.published === 'boolean') return entry.published
+  return order >= 0 && order < (chaptersCount || 0)
+}
 function minLikesPerPublishedChapter(book: any): number {
-  const count = (book?.chaptersCount as number) || 0
-  if (count <= 0) return 0
+  const meta: Array<{ published?: boolean }> = book?.chapterMeta || []
+  const chaptersCount = (book?.chaptersCount as number) || 0
   const arr: number[] = Array.isArray(book?.likes)
     ? book.likes
     : [typeof book?.likes === 'number' ? book.likes : 0]
   const published: number[] = []
-  for (let i = 0; i < count; i++) published.push(arr[i] || 0)
+  const len = Math.max(meta.length, chaptersCount)
+  for (let i = 0; i < len; i++) {
+    if (isChapterPublished(meta, i, chaptersCount)) published.push(arr[i] || 0)
+  }
   return published.length ? Math.min(...published) : 0
 }
 function canMonetize(book: any): boolean {

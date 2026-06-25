@@ -202,10 +202,11 @@ describe('BooksService', () => {
       expect(fs.dump('books/b1')!.likes).toEqual([5]);
     });
 
-    it('trims stale likes + chapterLikedBy when a chapter is unpublished', async () => {
-      // Author had 3 published chapters, all with 100 likes. Unpublishing one
-      // (chaptersCount 3 -> 2) must drop the freed tail slot so a chapter later
-      // published there starts from zero — not inherit the old 100 likes.
+    it('unpublishing a middle chapter (flag) leaves likes/chapterLikedBy untouched and re-derives chaptersCount', async () => {
+      // 3 published chapters, all with 100 likes. Unpublishing the MIDDLE one
+      // flips its per-chapter flag; positions don't move, so the position-indexed
+      // likes stay intact (a republish later legitimately keeps its own likes).
+      // chaptersCount is re-derived from the flags (3 -> 2).
       fs.seed('books/b1', {
         id: 'b1',
         authorUid: 'u1',
@@ -217,32 +218,63 @@ describe('BooksService', () => {
           '1': ['c'],
           '2': ['d', 'e'],
         },
+        chapterMeta: [
+          { id: 'c0', title: 'C0', published: true },
+          { id: 'c1', title: 'C1', published: true },
+          { id: 'c2', title: 'C2', published: true },
+        ],
       });
       await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
-        chaptersCount: 2,
+        chapterMeta: [
+          { id: 'c0', title: 'C0', published: true },
+          { id: 'c1', title: 'C1', published: false },
+          { id: 'c2', title: 'C2', published: true },
+        ],
       } as any);
       const stored = fs.dump('books/b1')!;
-      expect(stored.likes).toEqual([100, 100]);
-      expect(stored.chapterLikedBy).toEqual({ '0': ['a', 'b'], '1': ['c'] });
+      expect(stored.chaptersCount).toBe(2);
+      // Likes are NOT pruned — positions are stable.
+      expect(stored.likes).toEqual([100, 100, 100]);
+      expect(stored.chapterLikedBy).toEqual({
+        '0': ['a', 'b'],
+        '1': ['c'],
+        '2': ['d', 'e'],
+      });
     });
 
-    it('leaves likes untouched when chaptersCount is unchanged or grows', async () => {
+    it('derives chaptersCount from chapterMeta published flags', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'old',
+        chaptersCount: 1,
+        chapterMeta: [{ id: 'c0', title: 'C0', published: true }],
+      });
+      // Republishing/adding a second published chapter raises the derived count.
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        chapterMeta: [
+          { id: 'c0', title: 'C0', published: true },
+          { id: 'c1', title: 'C1', published: true },
+        ],
+      } as any);
+      expect(fs.dump('books/b1')!.chaptersCount).toBe(2);
+    });
+
+    it('does not touch chaptersCount when chapterMeta carries no published flags', async () => {
+      // Legacy/un-migrated edit (no per-chapter flags) must not zero the count.
       fs.seed('books/b1', {
         id: 'b1',
         authorUid: 'u1',
         title: 'old',
         chaptersCount: 2,
-        likes: [100, 100],
-        chapterLikedBy: { '0': ['a'], '1': ['b'] },
       });
-      // Publishing a new chapter raises the count; the existing likes survive
-      // and the new slot is simply absent (read as 0 downstream).
       await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
-        chaptersCount: 3,
+        chapterMeta: [
+          { id: 'c0', title: 'C0' },
+          { id: 'c1', title: 'C1' },
+        ],
       } as any);
-      const stored = fs.dump('books/b1')!;
-      expect(stored.likes).toEqual([100, 100]);
-      expect(stored.chapterLikedBy).toEqual({ '0': ['a'], '1': ['b'] });
+      expect(fs.dump('books/b1')!.chaptersCount).toBe(2);
     });
 
     it('permanently demonetizes a monetized book on unpublish (isDraft -> true)', async () => {

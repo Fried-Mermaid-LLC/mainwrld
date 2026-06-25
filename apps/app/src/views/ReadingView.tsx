@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { renderFormattedContent } from '@/utils/renderFormattedContent'
 import type { BookProgress } from '@/types'
+import { isChapterPublished, firstPublishedOrder } from '@/types'
 import { useApp } from '@/state/AppContext'
 import { useReportFlow } from '@/components/reportFlow'
 import * as fbService from '@/services/firebaseService'
@@ -59,15 +60,19 @@ export const ReadingView = () => {
   ).length
   const onProgressUpdate = (
     scrollProgress: number,
-    chapterIndex: number,
+    // Index into the visible chapter list — used to persist/restore the reading
+    // position (currentChapterIdx).
+    visibleIdx: number,
+    // Absolute chapter order — the chapter identity used by comments/URL.
+    absoluteOrder: number,
     exact?: Partial<BookProgress>
   ) => {
-    setReadingChapterIndex(chapterIndex)
+    setReadingChapterIndex(absoluteOrder)
     selectedBook &&
       handleBookProgressUpdate(
         selectedBook.id,
         scrollProgress,
-        chapterIndex,
+        visibleIdx,
         exact
       )
   }
@@ -197,15 +202,26 @@ export const ReadingView = () => {
 
   // Chapter list comes from light metadata (chapterMeta); chapter bodies are
   // fetched lazily one at a time via the getChapterContent callable.
-  const allMeta: { id: string; title: string }[] = book?.chapterMeta || []
+  const allMeta: { id: string; title: string; published?: boolean }[] =
+    book?.chapterMeta || []
+  // Each visible chapter carries its absolute `order` (index in the full
+  // chapterMeta). Published is now a per-chapter flag, not a contiguous prefix,
+  // so likes/comments must key off `order`, never the filtered list position.
+  const withOrder = allMeta.map((m, i) => ({ ...m, order: i }))
+  const firstPub = firstPublishedOrder(allMeta, book?.chaptersCount)
   // Author sees all chapters (including drafts), others with access see only
-  // published chapters, non-access users see only the first chapter (preview).
+  // published chapters, non-access users see only the first published chapter
+  // (the free preview).
   const visibleChapters = isAuthor
-    ? allMeta
+    ? withOrder
     : canAccessAll
-    ? allMeta.slice(0, book?.chaptersCount || allMeta.length)
-    : allMeta.slice(0, 1)
+    ? withOrder.filter(m => isChapterPublished(allMeta, m.order, book?.chaptersCount))
+    : firstPub >= 0
+    ? [withOrder[firstPub]]
+    : []
   const currentMeta = visibleChapters[currentChapterIdx]
+  // Absolute chapter position — the key for likes, comments and progress.
+  const currentOrder = currentMeta?.order ?? currentChapterIdx
   const currentChapterTitle = currentMeta?.title || book?.title || 'Story'
 
   // Paged (page-flip) reading column. We keep the page-flip container full
@@ -468,7 +484,12 @@ export const ReadingView = () => {
       exact.clientWidthPx = pageFlipRef.current.clientWidth
     }
 
-    onProgressUpdateRef.current(localScrollProgress, currentChapterIdx, exact)
+    onProgressUpdateRef.current(
+      localScrollProgress,
+      currentChapterIdx,
+      currentOrder,
+      exact
+    )
   }, [localScrollProgress, currentChapterIdx])
 
   // Scroll to top when chapter changes (skip initial mount to allow restore)
@@ -560,7 +581,8 @@ export const ReadingView = () => {
                   }
                 >
                   {ch.title || `Chapter ${i + 1}`}
-                  {isAuthor && i >= (book?.chaptersCount || 0)
+                  {isAuthor &&
+                  !isChapterPublished(allMeta, ch.order, book?.chaptersCount)
                     ? ' (Draft)'
                     : ''}
                 </option>
@@ -830,15 +852,15 @@ export const ReadingView = () => {
       <div className='max-w-2xl mx-auto border-t border-gray-100 py-12 flex flex-col items-center gap-10'>
         <div className='flex items-center gap-12'>
           {(() => {
-            const chapterLikeKey = `${book?.id}:${currentChapterIdx}`
+            const chapterLikeKey = `${book?.id}:${currentOrder}`
             const chapterIsLiked = likedChapters?.has(chapterLikeKey) || false
             const chapterLikesArr = Array.isArray(book?.likes)
               ? book.likes
               : [book?.likes || 0]
-            const chapterLikesCount = chapterLikesArr[currentChapterIdx] || 0
+            const chapterLikesCount = chapterLikesArr[currentOrder] || 0
             return (
               <button
-                onClick={() => onLike(currentChapterIdx)}
+                onClick={() => onLike(currentOrder)}
                 className='flex flex-col items-center gap-1 transition-all active:scale-90'
               >
                 <span
@@ -866,7 +888,7 @@ export const ReadingView = () => {
             )
           })()}
           <button
-            onClick={() => onComments(currentChapterIdx)}
+            onClick={() => onComments(currentOrder)}
             className='flex flex-col items-center gap-1 transition-all active:scale-90'
           >
             <span className='material-icons-round text-2xl text-gray-400'>

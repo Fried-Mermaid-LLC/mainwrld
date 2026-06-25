@@ -6,6 +6,7 @@ import * as stripeConnect from '@/services/stripeConnect'
 import { MAX_DAILY_CHAPTERS, libraryLimitFor, LIBRARY_FULL_TOAST } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import type { User, Book, BookProgress, View, Relationship, NotificationCategory } from '@/types'
+import { isChapterPublished } from '@/types'
 
 interface ReadingDeps {
   user: User
@@ -194,35 +195,61 @@ export function useReading({
     }
   }
 
-  const handleUnpublishChapter = (bookId: string, chapterIndex: number) => {
+  // Toggle the published flag of a single chapter (any position, not just the
+  // last). Visibility is now a per-chapter flag, so we materialize the flags for
+  // every chapter from the current state (covers legacy prefix docs), flip the
+  // target, and let the server re-derive chaptersCount from the flags. Chapter
+  // positions and the position-indexed reader likes are left untouched.
+  const setChapterPublished = (
+    bookId: string,
+    chapterIndex: number,
+    published: boolean
+  ) => {
     setBooks(prev =>
       prev.map(b => {
-        if (b.id === bookId) {
-          if (chapterIndex < b.chaptersCount) {
-            const newChaptersCount = Math.max(0, b.chaptersCount - 1)
-            fbService
-              .updateBook(bookId, { chaptersCount: newChaptersCount })
-              .catch(console.error)
-            return { ...b, chaptersCount: newChaptersCount }
-          }
-        }
-        return b
+        if (b.id !== bookId) return b
+        const old = b.chapterMeta || []
+        if (chapterIndex < 0 || chapterIndex >= old.length) return b
+        const meta = old.map((m, i) => ({
+          id: m.id,
+          title: m.title,
+          published: isChapterPublished(old, i, b.chaptersCount)
+        }))
+        meta[chapterIndex] = { ...meta[chapterIndex], published }
+        const chaptersCount = meta.filter(m => m.published).length
+        fbService
+          .updateBook(bookId, { chapterMeta: meta, chaptersCount })
+          .catch(console.error)
+        return { ...b, chapterMeta: meta, chaptersCount }
       })
     )
+  }
+
+  const handleUnpublishChapter = (bookId: string, chapterIndex: number) => {
+    setChapterPublished(bookId, chapterIndex, false)
     showToast('Chapter unpublished and moved to drafts.', 'info')
+  }
+
+  const handleRepublishChapter = (bookId: string, chapterIndex: number) => {
+    setChapterPublished(bookId, chapterIndex, true)
+    showToast('Chapter published.', 'success')
   }
 
   const handleDeleteChapter = async (bookId: string, chapterIndex: number) => {
     const book = books.find(b => b.id === bookId)
     if (!book) return
-    const meta = (book.chapterMeta || []).map(m => ({ id: m.id, title: m.title }))
+    // Preserve per-chapter published flags (materializing legacy prefix docs);
+    // deleting a chapter shifts positions, so the server splices the
+    // position-indexed reader likes for the removed slot.
+    const meta = (book.chapterMeta || []).map((m, i) => ({
+      id: m.id,
+      title: m.title,
+      published: isChapterPublished(book.chapterMeta, i, book.chaptersCount)
+    }))
     if (chapterIndex < 0 || chapterIndex >= meta.length) return
     const chapterId = meta[chapterIndex].id
     const newMeta = meta.filter((_, i) => i !== chapterIndex)
-    const newChaptersCount =
-      chapterIndex < book.chaptersCount
-        ? Math.max(0, book.chaptersCount - 1)
-        : book.chaptersCount
+    const newChaptersCount = newMeta.filter(m => m.published).length
 
     try {
       await fbService.commitChapterDelete(bookId, chapterId, {
@@ -435,9 +462,16 @@ export function useReading({
         if (existingBook) {
           // Chapter bodies live in the subcollection: edit only the target
           // chapter and update the light chapterMeta on the book doc.
-          const meta = (existingBook.chapterMeta || []).map(m => ({
+          // Preserve per-chapter published flags (materializing legacy prefix
+          // docs); the chapter being published is flagged published below.
+          const meta = (existingBook.chapterMeta || []).map((m, i) => ({
             id: m.id,
-            title: m.title
+            title: m.title,
+            published: isChapterPublished(
+              existingBook.chapterMeta,
+              i,
+              existingBook.chaptersCount
+            )
           }))
           const targetIndex =
             currentPublishingChapterIndex !== null
@@ -454,15 +488,24 @@ export function useReading({
               currentPublishingChapterTitle.trim() ||
               meta[targetIndex].title ||
               `Chapter ${targetIndex + 1}`
-            meta[targetIndex] = { id: chapterId, title: resolvedChapterTitle }
+            meta[targetIndex] = {
+              id: chapterId,
+              title: resolvedChapterTitle,
+              published: true
+            }
           } else {
             order = meta.length
             chapterId = fbService.newChapterId(existingBook.id)
             resolvedChapterTitle =
               currentPublishingChapterTitle.trim() ||
               `Chapter ${meta.length + 1}`
-            meta.push({ id: chapterId, title: resolvedChapterTitle })
+            meta.push({
+              id: chapterId,
+              title: resolvedChapterTitle,
+              published: true
+            })
           }
+          const publishedChaptersCount = meta.filter(m => m.published).length
 
           const updatedLikes = (() => {
             const arr = Array.isArray(existingBook.likes)
@@ -508,10 +551,7 @@ export function useReading({
                 : existingBook.coverColor ||
                   '#' + Math.floor(Math.random() * 16777215).toString(16),
               chapterMeta: meta,
-              chaptersCount: Math.max(
-                existingBook.chaptersCount || 0,
-                order + 1
-              ),
+              chaptersCount: publishedChaptersCount,
               likes: updatedLikes,
               isDraft: false,
               commentsEnabled: data.commentsEnabled ?? true
@@ -537,7 +577,7 @@ export function useReading({
               : {}),
             coverColor: cover ? '#f5f5f5' : existingBook.coverColor,
             chapterMeta: meta,
-            chaptersCount: Math.max(existingBook.chaptersCount || 0, order + 1),
+            chaptersCount: publishedChaptersCount,
             likes: updatedLikes,
             isDraft: false,
             commentsEnabled: data.commentsEnabled ?? true
@@ -614,7 +654,9 @@ export function useReading({
           hashtags: data.hashtags || [],
           isDraft: false,
           commentsEnabled: data.commentsEnabled ?? true,
-          chapterMeta: [{ id: chapterId, title: firstChapterTitle }],
+          chapterMeta: [
+            { id: chapterId, title: firstChapterTitle, published: true }
+          ],
           schemaVersion: 2,
           isFree: true,
           price: 0
@@ -756,9 +798,18 @@ export function useReading({
       // Update existing draft in Firestore (schema 2: chapter body → subcollection)
       const existingBook = books.find(b => b.id === bookId)
       if (existingBook) {
-        const meta = (existingBook.chapterMeta || []).map(m => ({
+        // Preserve per-chapter published flags (materializing legacy prefix
+        // docs). Saving a draft never changes visibility: an edited chapter
+        // keeps its flag, and a newly appended chapter stays unpublished until
+        // the author explicitly publishes it.
+        const meta = (existingBook.chapterMeta || []).map((m, i) => ({
           id: m.id,
-          title: m.title
+          title: m.title,
+          published: isChapterPublished(
+            existingBook.chapterMeta,
+            i,
+            existingBook.chaptersCount
+          )
         }))
         let chapterId: string
         let order: number
@@ -774,13 +825,21 @@ export function useReading({
             (chapterTitle || '').trim() ||
             meta[chapterIndex].title ||
             `Chapter ${chapterIndex + 1}`
-          meta[chapterIndex] = { id: chapterId, title: resolvedChapterTitle }
+          meta[chapterIndex] = {
+            id: chapterId,
+            title: resolvedChapterTitle,
+            published: meta[chapterIndex].published
+          }
         } else if (content.trim()) {
           order = meta.length
           chapterId = fbService.newChapterId(bookId)
           resolvedChapterTitle =
             (chapterTitle || '').trim() || `Chapter ${meta.length + 1}`
-          meta.push({ id: chapterId, title: resolvedChapterTitle })
+          meta.push({
+            id: chapterId,
+            title: resolvedChapterTitle,
+            published: false
+          })
         } else {
           // Nothing to write (empty new chapter) — just persist the title.
           const nextTitle = title.trim() || existingBook.title
@@ -852,7 +911,13 @@ export function useReading({
         },
         {
           title: title.trim() || existingDraft.title,
-          chapterMeta: [{ id: chapterId, title: resolvedChapterTitle }],
+          chapterMeta: [
+            {
+              id: chapterId,
+              title: resolvedChapterTitle,
+              published: !!content.trim()
+            }
+          ],
           chaptersCount: content.trim() ? 1 : 0,
           isDraft: true
         }
@@ -864,7 +929,13 @@ export function useReading({
             ? {
                 ...b,
                 title: title.trim() || existingDraft.title,
-                chapterMeta: [{ id: chapterId, title: resolvedChapterTitle }],
+                chapterMeta: [
+                  {
+                    id: chapterId,
+                    title: resolvedChapterTitle,
+                    published: !!content.trim()
+                  }
+                ],
                 chaptersCount: content.trim() ? 1 : 0,
                 isDraft: true
               }
@@ -896,7 +967,7 @@ export function useReading({
         hashtags: [],
         chapterMeta:
           hasContent && chapterId
-            ? [{ id: chapterId, title: resolvedChapterTitle }]
+            ? [{ id: chapterId, title: resolvedChapterTitle, published: true }]
             : [],
         schemaVersion: 2
       }
@@ -1012,6 +1083,7 @@ export function useReading({
     lastSelectedChapterIndex,
     setLastSelectedChapterIndex,
     handleUnpublishChapter,
+    handleRepublishChapter,
     handleDeleteChapter,
     handleSaveToLibrary,
     handleRemoveFromLibrary,

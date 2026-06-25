@@ -76,6 +76,27 @@ describe('MonetizationService', () => {
       );
     });
 
+    it('counts min-likes over the PUBLISHED set, ignoring an unpublished low-like chapter', async () => {
+      // 6 chapters; the order-2 chapter has only 5 likes but is unpublished, so
+      // it must not drag the min below 100 — the 5 published chapters all have
+      // 100+ and the published count (5) still clears the tier/threshold gates.
+      seedBook({
+        chaptersCount: 5,
+        likes: [100, 100, 5, 100, 100, 100],
+        chapterMeta: [
+          { id: 'c0', published: true },
+          { id: 'c1', published: true },
+          { id: 'c2', published: false },
+          { id: 'c3', published: true },
+          { id: 'c4', published: true },
+          { id: 'c5', published: true },
+        ],
+      });
+      fs.seed('books/b1/chapters/c5', { order: 5 });
+      const res = await svc.submit(makeAuthUser(), 'b1', 9.99);
+      expect(res.ok).toBe(true);
+    });
+
     it('rejects when published less than 21 days', async () => {
       seedBook({ publishedDate: new Date(Date.now() - 5 * 864e5).toISOString() });
       await expect(svc.submit(makeAuthUser(), 'b1', 9.99)).rejects.toThrow(

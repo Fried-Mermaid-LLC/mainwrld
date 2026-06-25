@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { instanceToPlain } from 'class-transformer';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import type { ChapterMeta } from '@mainwrld/types';
 import type { Storage } from 'firebase-admin/storage';
 import type { AuthUser } from '../../infra/auth/auth-user.interface';
 import {
@@ -136,14 +137,16 @@ export class BooksService {
     const ex = existing as { isMature?: boolean; isExplicit?: boolean };
     const mature = (dto.isMature ?? ex.isMature ?? ex.isExplicit) === true;
     await this.screenMetadata(dto.title, dto.tagline, mature);
-    // Unpublishing a chapter shrinks the published prefix (chaptersCount--).
-    // `likes`/`chapterLikedBy` are indexed by chapter position, so the tail
-    // entries [newCount, oldCount) belong to chapters that just left the
-    // published set. We MUST drop them: otherwise the next chapter published
-    // into that slot inherits the old reader likes, which previously let an
-    // author unpublish a popular book, publish brand-new chapters, and have the
-    // stale 100+ counts satisfy the monetization "100 likes/chapter" gate.
-    const prune = this.pruneLikesForShrink(existing, dto);
+    // chaptersCount is the server-derived count of published chapters. When the
+    // update carries chapterMeta with per-chapter `published` flags, recompute it
+    // here so it always mirrors the authoritative flags (and the client can't
+    // forge the monetization/pricing signal). Unpublishing a chapter now only
+    // flips its flag — it does NOT move chapter positions, so `likes`/
+    // `chapterLikedBy` (indexed by absolute order) stay valid and are left
+    // untouched. A republished chapter is the same doc at the same order, so it
+    // legitimately keeps its own reader likes; brand-new chapters append at a
+    // fresh order with zero likes, closing the old shrink→republish forgery.
+    const deriveCount = this.deriveChaptersCount(dto);
     // Un-monetize permanence (terminal lock). The monetization flags are
     // server-managed (NOT on UpdateBookDto), so the client's isMonetized:false /
     // wasMonetizedBefore:true sent on an unpublish/reopen are silently dropped by
@@ -154,7 +157,7 @@ export class BooksService {
     // only serializes plain objects.
     await ref.update({
       ...instanceToPlain(dto),
-      ...prune,
+      ...deriveCount,
       ...demonetize,
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -217,35 +220,19 @@ export class BooksService {
     };
   }
 
-  // When an update lowers chaptersCount (an unpublish), return the trimmed
-  // server-managed like state so the freed tail slots can't carry stale reader
-  // likes into a future chapter published there. Returns {} when the published
-  // prefix isn't shrinking, so normal edits are untouched. Both `likes` (a
-  // position-indexed number[]) and `chapterLikedBy` (a position-keyed
-  // username-set map, the source of truth likeChapter rebuilds counts from) are
-  // cut to the new length — trimming only one would leave the other able to
-  // resurrect the count.
-  private pruneLikesForShrink(
-    existing: BookDoc,
-    dto: { chaptersCount?: number },
-  ): { likes?: number[]; chapterLikedBy?: Record<string, string[]> } {
-    const oldCount = (existing.chaptersCount as number) || 0;
-    const newCount = dto.chaptersCount;
-    if (typeof newCount !== 'number' || newCount >= oldCount) return {};
-    const likes = Array.isArray(existing.likes)
-      ? (existing.likes as number[]).slice(0, Math.max(0, newCount))
-      : [];
-    const likedBy =
-      (existing as { chapterLikedBy?: Record<string, string[]> })
-        .chapterLikedBy ?? {};
-    const trimmedLikedBy: Record<string, string[]> = {};
-    for (const key of Object.keys(likedBy)) {
-      const idx = Number(key);
-      if (Number.isInteger(idx) && idx >= 0 && idx < newCount) {
-        trimmedLikedBy[key] = likedBy[key];
-      }
-    }
-    return { likes, chapterLikedBy: trimmedLikedBy };
+  // chaptersCount is the count of published chapters, derived server-side from
+  // the per-chapter `published` flags on the incoming chapterMeta. Returns {}
+  // when the update doesn't carry flagged chapterMeta, so edits that don't touch
+  // chapter visibility leave the stored count alone. This replaces the legacy
+  // published-prefix accounting (and its like-pruning): visibility is now a flag,
+  // not a count, and unpublishing never moves a chapter's position.
+  private deriveChaptersCount(dto: {
+    chapterMeta?: ChapterMeta[];
+  }): { chaptersCount?: number } {
+    const meta = dto.chapterMeta;
+    if (!Array.isArray(meta)) return {};
+    if (!meta.some((m) => typeof m.published === 'boolean')) return {};
+    return { chaptersCount: meta.filter((m) => m.published === true).length };
   }
 
   // Server-authoritative per-chapter like toggle (the only path that mutates a

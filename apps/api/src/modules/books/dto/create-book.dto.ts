@@ -17,6 +17,12 @@ export class ChapterMetaDto {
   @IsString()
   @MaxLength(200)
   title!: string;
+
+  // Per-chapter publish flag (source of truth for the reader gate). Server
+  // re-derives chaptersCount from these; legacy callers may omit it.
+  @IsOptional()
+  @IsBoolean()
+  published?: boolean;
 }
 
 // Full set of author-writable book fields (matches what useReading sends on

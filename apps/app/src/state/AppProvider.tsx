@@ -81,7 +81,9 @@ export function useAppValue() {
     isWriting,
     setIsWriting,
     writeReturnView,
-    setWriteReturnView
+    setWriteReturnView,
+    writeMode,
+    setWriteMode
   } = ui
   // Auth identity/session state lives in useAuth (Phase B). Placed right after
   // useUI so its onIdTokenChanged effect registers in the same order as before.
@@ -297,6 +299,7 @@ export function useAppValue() {
     lastSelectedChapterIndex,
     setLastSelectedChapterIndex,
     handleUnpublishChapter,
+    handleRepublishChapter,
     handleDeleteChapter,
     handleSaveToLibrary,
     handleRemoveFromLibrary,
@@ -576,13 +579,13 @@ export function useAppValue() {
     setCurrentPublishingContent, currentPublishingTitle, setCurrentPublishingTitle, currentPublishingChapterTitle, setCurrentPublishingChapterTitle, currentPublishingId,
     setCurrentPublishingId, currentPublishingChapterIndex, setCurrentPublishingChapterIndex, publishingInitialData, setPublishingInitialData, lastSelectedBookId,
     setLastSelectedBookId, lastSelectedChapterIndex, setLastSelectedChapterIndex, addNotification,
-    handleUnpublishChapter, handleDeleteChapter, handleLogout, handleNotificationClick, handleLogin, handleSignup,
+    handleUnpublishChapter, handleRepublishChapter, handleDeleteChapter, handleLogout, handleNotificationClick, handleLogin, handleSignup,
     handleSendMessage, handleLike, handleAdmire, handleReport, handleRemoveBook, handleRemoveComment,
     handleAddStrike, handleRemoveStrike, handleBanUser, handleUnbanUser, handleDismissReport, handleApproveMonetization, handleDenyMonetization, handleBlockUser, handleUnblockUser,
     handleSaveToLibrary, handleRemoveFromLibrary, isBookInLibrary, isBookPurchased, handleToggleFavorite, handleAddToCart,
     handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
     handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,
-    handleShareBook, isWriting, setIsWriting, writeReturnView, setWriteReturnView,
+    handleShareBook, isWriting, setIsWriting, writeReturnView, setWriteReturnView, writeMode, setWriteMode,
     worldUsernames, getWorldEntry, sendEmote,
   }
 }

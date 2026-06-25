@@ -247,9 +247,56 @@ export interface AvatarItem {
 // Lightweight per-chapter metadata kept on the book document so dropdowns,
 // chapter lists and lazy-load can work without reading any chapter bodies.
 // `id` is the stable docId of the chapter in the books/{id}/chapters subcollection.
+// `published` is the authoritative per-chapter visibility flag (source of truth
+// for the reader gate). It replaces the legacy "published prefix" model where
+// chapters [0, chaptersCount) were considered published — see isChapterPublished.
 export interface ChapterMeta {
   id: string;
   title: string;
+  published?: boolean;
+}
+
+// --- Per-chapter publish helpers (single source of truth, shared by API + app) ---
+// Visibility is driven by the per-chapter `published` flag on ChapterMeta. Until
+// the backfill migration has run, entries may lack the flag — those fall back to
+// the legacy published-prefix rule (order < chaptersCount). The fallback is
+// removable once every chapterMeta entry carries an explicit flag.
+type PublishMeta = { published?: boolean };
+
+export function isChapterPublished(
+  meta: PublishMeta[] | undefined,
+  order: number,
+  chaptersCount: number | undefined,
+): boolean {
+  const entry = meta?.[order];
+  if (entry && typeof entry.published === 'boolean') return entry.published;
+  return order >= 0 && order < (chaptersCount || 0); // legacy prefix fallback
+}
+
+// Number of published chapters — derived from per-chapter flags when present,
+// otherwise the legacy prefix length. This is the value used for pricing tiers,
+// public previews and library progress.
+export function publishedCount(
+  meta: PublishMeta[] | undefined,
+  chaptersCount: number | undefined,
+): number {
+  if (meta?.some((e) => typeof e.published === 'boolean')) {
+    return meta.filter((e) => e.published).length;
+  }
+  return chaptersCount || 0;
+}
+
+// Order (absolute position in chapterMeta) of the first published chapter, or
+// -1 if none. Used to pick the free preview chapter for monetized books.
+export function firstPublishedOrder(
+  meta: PublishMeta[] | undefined,
+  chaptersCount: number | undefined,
+): number {
+  const len = meta?.length || 0;
+  for (let i = 0; i < len; i++) {
+    if (isChapterPublished(meta, i, chaptersCount)) return i;
+  }
+  return -1;
 }
 
 // Body of a single chapter, stored in books/{bookId}/chapters/{chapterId}.
@@ -294,8 +341,9 @@ export interface Book {
   isOwned?: boolean;
   minLikesPerChapter?: number;
   // Chapter bodies live in the books/{id}/chapters subcollection, not on the
-  // book doc. `chapterMeta` carries order + titles for the UI; chaptersCount is
-  // the published-prefix length.
+  // book doc. `chapterMeta` carries order + titles + per-chapter `published`
+  // flags for the UI; chaptersCount is the derived count of published chapters
+  // (no longer a prefix length — see isChapterPublished/publishedCount).
   chapterMeta?: ChapterMeta[];
   schemaVersion?: number;
   favoritesLastWeek?: number;       // legacy/mock-only; superseded by favoritesTotal (X04)

@@ -90,18 +90,27 @@ export function canMonetize(book: {
 
 // Lowest-likes-per-published-chapter, derived from the real per-chapter
 // `likes` array on the book doc (NOT the never-set mock `minLikesPerChapter`
-// field). An empty/short array treats missing chapters as 0 likes → blocked.
+// field). Published chapters are identified by their per-chapter `published`
+// flag (likes stay indexed by absolute order); legacy docs without flags fall
+// back to the old published-prefix rule (position < chaptersCount). An
+// empty/short likes array treats missing chapters as 0 likes → blocked.
 export function minLikesPerPublishedChapter(book: {
   likes?: number[] | number;
   chaptersCount?: number;
+  chapterMeta?: { published?: boolean }[];
 }): number {
+  const meta = book.chapterMeta || [];
   const count = book.chaptersCount || 0;
-  if (count <= 0) return 0;
+  const hasFlags = meta.some(m => typeof m.published === 'boolean');
   const arr = Array.isArray(book.likes)
     ? book.likes
     : [typeof book.likes === 'number' ? book.likes : 0];
   const published: number[] = [];
-  for (let i = 0; i < count; i++) published.push(arr[i] || 0);
+  const len = Math.max(meta.length, count);
+  for (let i = 0; i < len; i++) {
+    const isPub = hasFlags ? meta[i]?.published === true : i < count;
+    if (isPub) published.push(arr[i] || 0);
+  }
   return published.length ? Math.min(...published) : 0;
 }
 

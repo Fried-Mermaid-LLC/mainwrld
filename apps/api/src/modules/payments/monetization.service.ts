@@ -8,7 +8,13 @@ import {
   PreconditionFailedException,
 } from '@nestjs/common';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
-import { allowedPriceTiers, PRICE_TIERS } from '@mainwrld/types';
+import {
+  allowedPriceTiers,
+  isChapterPublished,
+  publishedCount,
+  PRICE_TIERS,
+} from '@mainwrld/types';
+import type { ChapterMeta } from '@mainwrld/types';
 import type { AuthUser } from '../../infra/auth/auth-user.interface';
 import {
   COLLECTIONS,
@@ -27,14 +33,21 @@ export class MonetizationService {
     private readonly effects: MonetizationEffectsService,
   ) {}
 
+  // Minimum reader-like count across the PUBLISHED chapters. Likes are indexed
+  // by absolute chapter order; published chapters are no longer a [0, count)
+  // prefix, so we read the like at each published position via the per-chapter
+  // flag (legacy docs fall back to the prefix inside isChapterPublished).
   private minLikesPerPublishedChapter(book: Record<string, unknown>): number {
-    const count = (book.chaptersCount as number) || 0;
-    if (count <= 0) return 0;
+    const meta = (book.chapterMeta as ChapterMeta[]) || [];
+    const chaptersCount = (book.chaptersCount as number) || 0;
     const arr: number[] = Array.isArray(book.likes)
       ? (book.likes as number[])
       : [typeof book.likes === 'number' ? (book.likes as number) : 0];
     const published: number[] = [];
-    for (let i = 0; i < count; i++) published.push(arr[i] || 0);
+    const len = Math.max(meta.length, chaptersCount);
+    for (let i = 0; i < len; i++) {
+      if (isChapterPublished(meta, i, chaptersCount)) published.push(arr[i] || 0);
+    }
     return published.length ? Math.min(...published) : 0;
   }
 
@@ -70,11 +83,16 @@ export class MonetizationService {
       );
     }
 
-    // Server-truth chapter count caps the client-writable chaptersCount.
+    // Server-truth chapter count caps the client-writable count. The published
+    // count is derived from the per-chapter flags (falling back to the legacy
+    // prefix for un-migrated docs).
     const realChapters = (await found.ref.collection('chapters').count().get())
       .data().count;
     const effectiveChapters = Math.min(
-      (book.chaptersCount as number) || 0,
+      publishedCount(
+        book.chapterMeta as ChapterMeta[] | undefined,
+        book.chaptersCount as number | undefined,
+      ),
       realChapters,
     );
 
