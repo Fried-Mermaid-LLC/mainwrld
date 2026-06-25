@@ -272,12 +272,12 @@ export const AvatarModel: React.FC<{
       {emote && (
         <Html
           key={emote.id}
-          position={[0, 2.7, 0]}
+          position={[0, 2.3, 0]}
           center
           distanceFactor={10}
           zIndexRange={[100, 0]}
         >
-          <div className="emote-burst pointer-events-none select-none text-3xl drop-shadow-lg">
+          <div className="emote-burst pointer-events-none select-none text-2xl drop-shadow-lg">
             {emojiForEmote(emote.type)}
           </div>
         </Html>
