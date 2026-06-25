@@ -56,13 +56,16 @@ const worldRef = (uid: string): DatabaseReference => ref(rtdb!, `world/${uid}`);
 
 const doWrite = (handle: Handle, now: number): void => {
   handle.lastWriteAt = now;
-  // Include username so the node satisfies the rules' hasChildren(['username',
-  // 'position','updatedAt']) validation even if a transform write lands before the
-  // .info/connected join set (e.g. the user moves within ~50ms of entering).
+  // Include username AND activity so the node is self-healing: a transform write
+  // that lands before the .info/connected join set (e.g. the user walks within
+  // ~50ms of entering) still satisfies the rules' hasChildren(['username',
+  // 'position','updatedAt']) validation AND carries the current label, so peers
+  // never see a transient activity-less node default to 'Idle'.
   void update(handle.ref, {
     username: handle.username,
     position: handle.position,
     rotY: handle.rotY,
+    activity: handle.activity,
     updatedAt: now,
   });
 };
