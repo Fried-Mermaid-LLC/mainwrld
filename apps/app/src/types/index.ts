@@ -12,4 +12,21 @@ export type View =
   | 'notification-settings' | 'settings' | 'comments' | 'blocked-users' | 'admin-dashboard' | 'daily-rewards' | 'cart'
   | 'chat' | 'chat-conversation' | 'public-book';
 
+// A one-shot emote bumped through RTDB. `id` increments on every send so the same
+// `type` fired twice still triggers readers (id-change detection). `activity` here
+// is the realtime world state, a superset of the persisted User.activity that also
+// allows 'Exploring' — it lives only in RTDB and is never written to Firestore.
+export interface WorldEmote {
+  type: string;
+  id: number;
+}
+export interface WorldEntry {
+  uid: string;          // Firebase Auth uid (RTDB key / rules owner)
+  username: string;     // join key to the username-keyed social graph (mutuals/blocked)
+  position: [number, number, number];
+  rotY: number;
+  activity: string;
+  emote?: WorldEmote;
+}
+
 export default {};

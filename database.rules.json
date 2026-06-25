@@ -11,6 +11,31 @@
         ".read": "auth != null",
         ".write": "auth != null && auth.uid === $uid"
       }
+    },
+    "world": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['username', 'position', 'updatedAt'])",
+        "username": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "position": {
+          ".validate": "newData.hasChildren(['x', 'y', 'z'])",
+          "x": { ".validate": "newData.isNumber() && newData.val() >= -5000 && newData.val() <= 5000" },
+          "y": { ".validate": "newData.isNumber() && newData.val() >= -50 && newData.val() <= 50" },
+          "z": { ".validate": "newData.isNumber() && newData.val() >= -5000 && newData.val() <= 5000" },
+          "$other": { ".validate": false }
+        },
+        "rotY": { ".validate": "newData.isNumber()" },
+        "activity": { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "emote": {
+          ".validate": "newData.hasChildren(['type', 'id'])",
+          "type": { ".validate": "newData.isString() && newData.val().length <= 16" },
+          "id": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
     }
   }
 }

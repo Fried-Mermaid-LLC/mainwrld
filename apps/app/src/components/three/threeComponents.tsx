@@ -4,7 +4,9 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { Html, useGLTF, useAnimations } from '@react-three/drei'
 import { BASE } from '@/config/config'
 import { ACCENT_COLOR, WORLD_RADIUS, SKIN_TONE_COLORS } from '@/config/constants'
-import { AvatarConfig, User } from '@/types'
+import { emojiForEmote } from '@/config/emotes'
+import { AvatarConfig, User, WorldEntry } from '@/types'
+import * as worldService from '@/services/worldService'
 import { SkeletonUtils } from 'three-stdlib'
 
 // -----------------------------
@@ -88,6 +90,7 @@ export const AvatarModel: React.FC<{
   avatarConfig?: AvatarConfig
   isMoving?: boolean
   hideLabel?: boolean
+  emote?: { type: string; id: number } | null
 }> = ({
   name,
   activity,
@@ -97,7 +100,8 @@ export const AvatarModel: React.FC<{
   skinColor,
   avatarConfig,
   isMoving = false,
-  hideLabel = false
+  hideLabel = false,
+  emote = null
 }) => {
   // Animated avatar models are served from public/characters_animated/. useGLTF
   // caches by URL, so the ~16MB man / ~11MB woman models load once and are
@@ -260,6 +264,20 @@ export const AvatarModel: React.FC<{
         </div>
       </Html>
       )}
+
+      {emote && (
+        <Html
+          key={emote.id}
+          position={[0, 2.7, 0]}
+          center
+          distanceFactor={10}
+          zIndexRange={[100, 0]}
+        >
+          <div className='emote-burst pointer-events-none select-none text-3xl drop-shadow-lg'>
+            {emojiForEmote(emote.type)}
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
@@ -268,14 +286,41 @@ export const AvatarModel: React.FC<{
 // Moving Avatar (NPCs)
 // -----------------------------
 
-export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({
-  user,
-  onClick
-}) => {
+export const MovingAvatar: React.FC<{
+  user: User
+  // Live RTDB transform reader (keyed by username). When present, the avatar
+  // follows the real remote position/rotation/activity/emote; the random wander
+  // below is only a fallback for when no live transform exists (e.g. RTDB off).
+  getWorldEntry?: (username: string) => WorldEntry | undefined
+  onClick?: () => void
+}> = ({ user, getWorldEntry, onClick }) => {
   const groupRef = useRef<THREE.Group>(null)
-  const targetPos = useRef(new THREE.Vector3(...user.position))
+  const initialEntry = getWorldEntry?.(user.username)
+  const initialPos = (initialEntry?.position ??
+    user.position ?? [0, 0, 0]) as [number, number, number]
+  const targetPos = useRef(new THREE.Vector3(...initialPos))
   const waitTimer = useRef(0)
+
   const [isMoving, setIsMoving] = useState(false)
+  const lastMoving = useRef(false)
+  const [activity, setActivity] = useState<string>(
+    initialEntry?.activity ?? user.activity
+  )
+  const lastActivity = useRef(activity)
+  const [emote, setEmote] = useState<{ type: string; id: number } | null>(null)
+  const lastEmoteId = useRef(0)
+  const emoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (emoteTimer.current) clearTimeout(emoteTimer.current)
+  }, [])
+
+  const setMoving = (m: boolean) => {
+    if (m !== lastMoving.current) {
+      lastMoving.current = m
+      setIsMoving(m)
+    }
+  }
 
   const getNewTarget = () =>
     new THREE.Vector3(
@@ -286,26 +331,53 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({
 
   useFrame((_, delta) => {
     if (!groupRef.current) return
+    const entry = getWorldEntry?.(user.username)
+    const currentPos = groupRef.current.position
 
-    if (waitTimer.current > 0) {
-      waitTimer.current -= delta
-      setIsMoving(false)
+    // Emote: fire a one-shot burst when the id changes (auto-clears after ~2s).
+    if (entry?.emote && entry.emote.id !== lastEmoteId.current) {
+      lastEmoteId.current = entry.emote.id
+      setEmote({ type: entry.emote.type, id: entry.emote.id })
+      if (emoteTimer.current) clearTimeout(emoteTimer.current)
+      emoteTimer.current = setTimeout(() => setEmote(null), 2000)
+    }
+
+    if (entry) {
+      // LIVE: damped, frame-rate-independent interpolation toward the real pose.
+      if (entry.activity !== lastActivity.current) {
+        lastActivity.current = entry.activity
+        setActivity(entry.activity)
+      }
+      targetPos.current.set(entry.position[0], entry.position[1], entry.position[2])
+      const dist = currentPos.distanceTo(targetPos.current)
+      const k = 1 - Math.exp(-10 * delta)
+      currentPos.lerp(targetPos.current, k)
+      setMoving(dist > 0.05)
+      // Rotation: shortest-arc lerp so it never spins the long way round.
+      const cur = groupRef.current.rotation.y
+      const d = Math.atan2(
+        Math.sin(entry.rotY - cur),
+        Math.cos(entry.rotY - cur)
+      )
+      groupRef.current.rotation.y = cur + d * k
       return
     }
 
-    const currentPos = groupRef.current.position
+    // FALLBACK (no live transform): legacy random wander.
+    if (waitTimer.current > 0) {
+      waitTimer.current -= delta
+      setMoving(false)
+      return
+    }
     const distance = currentPos.distanceTo(targetPos.current)
-
     if (distance < 0.2) {
       waitTimer.current = 2 + Math.random() * 5
       targetPos.current = getNewTarget()
-      setIsMoving(false)
+      setMoving(false)
     } else {
-      setIsMoving(true)
-
+      setMoving(true)
       const moveDir = targetPos.current.clone().sub(currentPos).normalize()
       currentPos.add(moveDir.multiplyScalar(1.5 * delta))
-
       const targetRotation = Math.atan2(moveDir.x, moveDir.z)
       groupRef.current.rotation.y = THREE.MathUtils.lerp(
         groupRef.current.rotation.y,
@@ -315,17 +387,16 @@ export const MovingAvatar: React.FC<{ user: User; onClick?: () => void }> = ({
     }
   })
 
-  // console.log(user.displayName + " : " + user.isOnline)
-
   return (
-    <group ref={groupRef} position={user.position}>
+    <group ref={groupRef} position={initialPos}>
       <AvatarModel
         name={user.displayName}
-        activity={user.activity}
-        online={user.isOnline}
+        activity={activity}
+        online={getWorldEntry ? true : user.isOnline}
         onClick={onClick}
         avatarConfig={user.avatarConfig}
         isMoving={isMoving}
+        emote={emote}
       />
     </group>
   )
@@ -339,7 +410,9 @@ export const Player: React.FC<{
   moveDir: THREE.Vector3
   skinColor?: string
   avatarConfig?: AvatarConfig
-}> = ({ moveDir, skinColor, avatarConfig }) => {
+  firebaseUid?: string | null
+  emote?: { type: string; id: number } | null
+}> = ({ moveDir, skinColor, avatarConfig, firebaseUid, emote = null }) => {
   const meshRef = useRef<THREE.Group>(null)
   const keys = useRef<Record<string, boolean>>({})
   const zoom = useRef(1)
@@ -348,6 +421,11 @@ export const Player: React.FC<{
   const dragLast = useRef<number | null>(null)
   const gl = useThree((s) => s.gl)
   const [isMoving, setIsMoving] = useState(false)
+  // Dedup setIsMoving so it only fires on an actual change, not every frame.
+  const lastIsMoving = useRef(false)
+  // Tracks the moving→idle transition so we write one final "settle" transform
+  // after stopping (the trailing throttle in worldService then lands it).
+  const wasMoving = useRef(false)
 
   const MIN_ZOOM = 0.5
   const MAX_ZOOM = 2.5
@@ -485,7 +563,10 @@ export const Player: React.FC<{
     if (moveDir.length() > 0) direction.add(moveDir)
 
     const moving = direction.length() > 0
-    setIsMoving(moving)
+    if (moving !== lastIsMoving.current) {
+      lastIsMoving.current = moving
+      setIsMoving(moving)
+    }
 
     if (moving) {
       // Analog joystick gives a 0..1 magnitude; keyboard gives 1 (or √2 on a
@@ -500,6 +581,21 @@ export const Player: React.FC<{
       meshRef.current.position.add(direction)
       meshRef.current.rotation.y = Math.atan2(direction.x, direction.z)
     }
+
+    // Broadcast our transform to RTDB while moving, plus one settle frame after
+    // stopping. Throttled inside worldService (≈9 Hz); reads meshRef imperatively
+    // so this never triggers a React re-render of the world.
+    if (firebaseUid && (moving || wasMoving.current)) {
+      const p = meshRef.current.position
+      worldService.writeTransform(
+        firebaseUid,
+        p.x,
+        p.y,
+        p.z,
+        meshRef.current.rotation.y
+      )
+    }
+    wasMoving.current = moving
 
     const idealOffset = new THREE.Vector3(0, 3.2, 5)
       .multiplyScalar(zoom.current)
@@ -523,6 +619,7 @@ export const Player: React.FC<{
         skinColor={skinColor}
         avatarConfig={avatarConfig}
         isMoving={isMoving}
+        emote={emote}
       />
     </group>
   )

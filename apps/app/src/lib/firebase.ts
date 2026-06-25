@@ -4,11 +4,14 @@ import {
   indexedDBLocalPersistence,
   browserLocalPersistence,
 } from 'firebase/auth'
+import { getDatabase, connectDatabaseEmulator } from 'firebase/database'
 
-// Firebase is now used ONLY for Auth (login/signup/session/reset). All data
-// access (Firestore/Storage/RTDB) and callables moved to the NestJS API — see
-// services/api/* + apiClient/sseClient. Native FCM/Crashlytics use the
-// @capacitor-firebase plugins + GoogleService-Info.plist, not this JS config.
+// Firebase is used for Auth (login/signup/session/reset) and — re-introduced for
+// the realtime 3D world layer — the Realtime Database. RTDB carries ONLY the
+// ephemeral world state under /world/{uid} (position, rotation, activity, emote)
+// with onDisconnect cleanup; everything else (Firestore/Storage/callables) still
+// goes through the NestJS API — see services/api/* + apiClient/sseClient. Native
+// FCM/Crashlytics use the @capacitor-firebase plugins + GoogleService-Info.plist.
 
 const requireEnv = (key: keyof ImportMetaEnv): string => {
   const value = import.meta.env[key]
@@ -39,5 +42,24 @@ const app = initializeApp(firebaseConfig)
 export const auth = initializeAuth(app, {
   persistence: [indexedDBLocalPersistence, browserLocalPersistence],
 })
+
+// Realtime Database for the world layer. Optional: when VITE_FIREBASE_DATABASE_URL
+// is unset, rtdb is null and the world layer disables itself (worldService no-ops)
+// so the rest of the app is unaffected. getDatabase reuses this app's authed user,
+// so the ID token rides the websocket automatically — gate world ops on a resolved
+// firebaseUid or the first writes hit `auth == null` and are rejected by the rules.
+const databaseURL = import.meta.env.VITE_FIREBASE_DATABASE_URL
+export const rtdb = databaseURL ? getDatabase(app, databaseURL) : null
+
+// Local dev against the Firebase RTDB emulator (web only — on a device 127.0.0.1
+// is the device, not your Mac). Opt-in via VITE_USE_FIREBASE_EMULATORS so normal
+// dev still hits the real instance.
+if (
+  rtdb &&
+  import.meta.env.DEV &&
+  import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
+) {
+  connectDatabaseEmulator(rtdb, '127.0.0.1', 9000)
+}
 
 export default app

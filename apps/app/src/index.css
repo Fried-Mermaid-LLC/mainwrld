@@ -168,3 +168,28 @@ textarea,
 .reader-content p:last-child {
   margin-bottom: 0;
 }
+
+/* World emote burst — a quick emoji that pops in over an avatar and floats up as
+   it fades. Rendered inside a drei <Html> in AvatarModel; re-keyed per emote id
+   so the animation restarts on each send. */
+@keyframes emote-burst {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.4);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0) scale(1.15);
+  }
+  35% {
+    transform: translateY(-2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) scale(0.9);
+  }
+}
+
+.emote-burst {
+  animation: emote-burst 2s ease-out forwards;
+}

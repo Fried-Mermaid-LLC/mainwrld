@@ -23,6 +23,7 @@ import { useUrlSync } from './hooks/useUrlSync'
 import { usePayments } from './hooks/usePayments'
 import { usePersist } from './hooks/usePersist'
 import { useAppLifecycle } from './hooks/useAppLifecycle'
+import { useWorldPresence } from './hooks/useWorldPresence'
 
 // useAppValue composes the app's domain hooks (Phase B complete). Each hook owns
 // one slice of state / effects / handlers; this function only wires them together.
@@ -398,6 +399,16 @@ export function useAppValue() {
   // Native background/foreground presence (X06) — no-op on web.
   useAppLifecycle(firebaseUid)
 
+  // Realtime 3D-world presence over RTDB (position/rotation/activity/emote). Joins
+  // /world only while in the world (view === 'home'); transforms flow into a ref
+  // read per-frame, so this does NOT re-render the app on movement — only on
+  // join/leave. No-op when RTDB is disabled (VITE_FIREBASE_DATABASE_URL unset).
+  const { worldUsernames, getWorldEntry, sendEmote } = useWorldPresence({
+    firebaseUid,
+    username: user.username,
+    view
+  })
+
   // Shared-book deep-link taps on native (F09). main.tsx's appUrlOpen listener
   // dispatches `mainwrld:open-book` with the tapped book id (the bundled iOS app
   // loads from capacitor://localhost, so window.location is never the share
@@ -568,6 +579,7 @@ export function useAppValue() {
     handleClaimPoints, handleSpinWheel, handlePublish, handleUnpublish, handleDeleteBook,
     handleMarkCompleted, handleRequestMonetization, handleSaveDraft, postComment, handleLikeComment, handleBookProgressUpdate,
     handleShareBook, isWriting, setIsWriting, writeReturnView, setWriteReturnView,
+    worldUsernames, getWorldEntry, sendEmote,
   }
 }
 

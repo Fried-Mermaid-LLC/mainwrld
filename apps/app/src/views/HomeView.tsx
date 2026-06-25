@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Environment, PerspectiveCamera } from '@react-three/drei'
 import { Capacitor } from '@capacitor/core'
@@ -11,6 +11,7 @@ import { WorldLoadingOverlay } from '@/components/WorldLoadingOverlay'
 import { SafeImg } from '@/components/SafeImg'
 import { ModelErrorBoundary } from '@/components/three/ModelErrorBoundary'
 import type { User } from '@/types'
+import { EMOTES } from '@/config/emotes'
 import { useApp } from '@/state/AppContext'
 
 export const HomeView = () => {
@@ -19,14 +20,31 @@ export const HomeView = () => {
     avatarConfig,
     relationships,
     user,
+    firebaseUid,
     registeredUsers,
     MUTUALS,
     blockedUsers,
     setSelectedProfileUser,
     setView,
     notifications,
-    userDataLoaded
+    userDataLoaded,
+    worldUsernames,
+    getWorldEntry,
+    sendEmote
   } = useApp()
+  // Own emote shown locally for immediate feedback (peers get it via RTDB). The
+  // id makes AvatarModel's burst re-trigger even on the same emote type twice.
+  const [myEmote, setMyEmote] = useState<{ type: string; id: number } | null>(
+    null
+  )
+  const triggerEmote = (type: string) => {
+    sendEmote(type)
+    const id = (myEmote?.id ?? 0) + 1
+    setMyEmote({ type, id })
+    setTimeout(() => {
+      setMyEmote(prev => (prev?.id === id ? null : prev))
+    }, 2000)
+  }
   return (
     <div className='fixed inset-0 bg-white'>
       <Canvas shadows>
@@ -60,10 +78,15 @@ export const HomeView = () => {
               same batched setState that populates avatarConfig, so gating here
               means the correct, configured model is the first thing shown. */}
           {userDataLoaded && (
-            <Player moveDir={moveDir} avatarConfig={avatarConfig} />
+            <Player
+              moveDir={moveDir}
+              avatarConfig={avatarConfig}
+              firebaseUid={firebaseUid}
+              emote={myEmote}
+            />
           )}
           {(() => {
-            // Get usernames of actual mutuals (both directions exist)
+            // Mutuals = both admire directions exist.
             const myAdmiring = relationships
               .filter(r => r.admirer === user.username)
               .map(r => r.target)
@@ -72,60 +95,32 @@ export const HomeView = () => {
                 r => r.admirer === t && r.target === user.username
               )
             )
-            // Build User objects for actual mutuals from registeredUsers
-            const dynamicMutuals: User[] = actualMutualUsernames
-              .map((username, i) => {
-                const regUser = registeredUsers.find(
-                  u => u.username === username
+            // Render only the intersection of (mutual) ∩ (present in /world) ∩
+            // (not blocked). Position/rotation/emote come live from RTDB via
+            // getWorldEntry — no more client-side random fabrication.
+            return actualMutualUsernames
+              .filter(
+                username =>
+                  worldUsernames.has(username) && !blockedUsers.has(username)
+              )
+              .map(username => {
+                const found =
+                  registeredUsers.find(u => u.username === username) ||
+                  MUTUALS.find(u => u.username === username)
+                if (!found) return null
+                return (
+                  <MovingAvatar
+                    key={username}
+                    user={found as User}
+                    getWorldEntry={getWorldEntry}
+                    onClick={() => {
+                      setSelectedProfileUser(found as User)
+                      setView('profile')
+                    }}
+                  />
                 )
-                const mutualUser = MUTUALS.find(
-                  u => u.username === username
-                )
-                const found = regUser || mutualUser
-                if (
-                  found &&
-                  (!found.position ||
-                    (found.position[0] === 0 && found.position[2] === 0))
-                ) {
-                  const angle =
-                    (i / Math.max(actualMutualUsernames.length, 1)) *
-                    Math.PI *
-                    2
-                  const radius = 8 + Math.random() * 10
-                  found.position = [
-                    Math.cos(angle) * radius,
-                    0,
-                    Math.sin(angle) * radius
-                  ] as [number, number, number]
-                }
-                return found
               })
-              .filter(Boolean) as User[]
-            // If no dynamic mutuals, show MUTUALS as fallback so world isn't empty
-            const avatarsToShow =
-              dynamicMutuals.length > 0 ? dynamicMutuals : MUTUALS
-            // Limit visible mutuals to avoid overwhelming the scene
-            // const eightHoursAgo = Date.now() - 8 * 3600 * 1000
-            const visibleMutuals =
-              avatarsToShow.length > 200
-                ? avatarsToShow
-                    .filter((m: any) => m.isOnline)
-                    .slice(0, 200)
-                : avatarsToShow.slice(0, 200)
-            // Filter out blocked users
-            return visibleMutuals
-              .filter(u => !blockedUsers.has(u.username))
-              .map(u => (
-                <MovingAvatar
-                  key={u.username}
-                  user={u}
-                  onClick={() => {
-                    setSelectedProfileUser(u)
-                    setView('profile')
-                  }}
-                />
-              ))
-            // ONLY SHOW USERS WHO ARE ONLINE & MUTUAL
+              .filter(Boolean)
           })()}
         </Suspense>
         </ModelErrorBoundary>
@@ -185,6 +180,20 @@ export const HomeView = () => {
             moveDir.set(x, 0, z)
           }}
         />
+      </div>
+      {/* Emote bar — broadcast a quick emoji over RTDB; nearby players see a burst
+          above your avatar (and you see it locally for instant feedback). */}
+      <div className='absolute bottom-16 left-6 pointer-events-auto flex gap-2'>
+        {EMOTES.map(e => (
+          <button
+            key={e.type}
+            onClick={() => triggerEmote(e.type)}
+            aria-label={e.label}
+            className='w-12 h-12 bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl flex items-center justify-center text-2xl border border-white transition-all active:scale-90'
+          >
+            {e.emoji}
+          </button>
+        ))}
       </div>
       {/* Splash-style cover that hides the world until its GLB models finish
           streaming in, so the avatars don't all pop into an empty scene at
