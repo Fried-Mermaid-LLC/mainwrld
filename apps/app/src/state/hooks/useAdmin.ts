@@ -147,18 +147,9 @@ export function useAdmin({
       return
 
     const newStrikes = (targetUser.strikes || 0) + 1
+    // The "Strike Received" in-app notification is created server-side in
+    // AdminService.addStrike, so every strike path (API/automated) is covered.
     fbService.addStrikeToUser(targetUser.uid, reportId).catch(console.error)
-    addNotification(
-      'Strike Received',
-      `You received a strike (${newStrikes}/3) for violating community guidelines. 3 strikes permanently suspend your account.`,
-      'warning',
-      username,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'system'
-    )
 
     if (newStrikes >= 3) {
       // Third strike → permanent ban via the admin SDK (disable Auth + claim).

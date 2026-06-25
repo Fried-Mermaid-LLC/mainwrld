@@ -12,6 +12,7 @@ import {
   FIREBASE_AUTH,
   FIRESTORE,
 } from '../../infra/firebase/firebase.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const STRIKE_LIMIT = 3;
 
@@ -24,6 +25,7 @@ export class AdminService {
   constructor(
     @Inject(FIRESTORE) private readonly db: Firestore,
     @Inject(FIREBASE_AUTH) private readonly auth: Auth,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private get users() {
@@ -178,6 +180,27 @@ export class AdminService {
     });
     const data = (await ref.get()).data() ?? {};
     const strikes = (data.strikes as number) || 0;
+
+    // Notify the struck user in-app (category 'system' → always shown, never
+    // pushed). Moved server-side so EVERY strike path is covered — previously
+    // only the admin client emitted this, so API-driven / automated strikes
+    // went silent. Best-effort: a notification failure must not abort the
+    // strike (or the auto-ban that may follow).
+    const username = data.username as string | undefined;
+    if (username) {
+      await this.notifications
+        .create(undefined, {
+          recipient: username,
+          title: 'Strike Received',
+          message: `You received a strike (${strikes}/${STRIKE_LIMIT}) for violating community guidelines. ${STRIKE_LIMIT} strikes permanently suspend your account.`,
+          icon: 'warning',
+          category: 'system',
+        })
+        .catch((err) =>
+          this.logger.error('strike notification failed', err as Error),
+        );
+    }
+
     let banned = false;
     if (
       strikes >= STRIKE_LIMIT &&
