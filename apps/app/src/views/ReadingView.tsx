@@ -208,6 +208,20 @@ export const ReadingView = () => {
   const currentMeta = visibleChapters[currentChapterIdx]
   const currentChapterTitle = currentMeta?.title || book?.title || 'Story'
 
+  // Paged (page-flip) reading column. We keep the page-flip container full
+  // width (the layout context CSS multicolumn needs to fragment horizontally),
+  // but cap the visible text column to a comfortable measure so it no longer
+  // stretches across wide monitors. The leftover viewport width is poured into
+  // the inter-page gap + symmetric side padding, preserving the snap invariants
+  // columnWidth + columnGap === page step (clientWidth) and padding === gap / 2.
+  const pagedColumnWidth = 'min(100vw - 48px, 640px)'
+  const pagedColumnGap = `calc(100vw - ${pagedColumnWidth})`
+  const pagedSidePadding = `calc((100vw - ${pagedColumnWidth}) / 2)`
+  // Page-flip arrows sit just outside the centered column on wide screens
+  // (button is w-12 = 48px, plus a 16px gap), clamped to 8px so they stay at
+  // the window edge on narrow screens where the column nearly fills the width.
+  const pagedArrowInset = `max(8px, calc(50% - ${pagedColumnWidth} / 2 - 64px))`
+
   // Load the current chapter body lazily via the callable. Cancels in-flight
   // loads on chapter/book change, and prefetches the next chapter into the cache.
   useEffect(() => {
@@ -518,7 +532,7 @@ export const ReadingView = () => {
           settings.inverted ? 'border-gray-800' : 'border-gray-50'
         }`}
       >
-        <button onClick={onBack} className='w-10 h-10 opacity-40'>
+        <button onClick={onBack} className='w-10 h-10 shrink-0 opacity-40'>
           <span className='material-icons-round'>close</span>
         </button>
 
@@ -564,13 +578,13 @@ export const ReadingView = () => {
         </div>
 
         <div className='flex items-center gap-1'>
-          <button onClick={onShare} className='w-10 h-10 opacity-40'>
+          <button onClick={onShare} className='w-10 h-10 shrink-0 opacity-40'>
             <span className='material-icons-round'>share</span>
           </button>
           {book && (
             <button
               onClick={() => startReport('Book', book.id)}
-              className='w-10 h-10 opacity-40'
+              className='w-10 h-10 shrink-0 opacity-40'
               aria-label='Report this book'
             >
               <span className='material-icons-round'>report</span>
@@ -578,7 +592,7 @@ export const ReadingView = () => {
           )}
           <button
             onClick={() => setShowOptions(!showOptions)}
-            className='w-10 h-10 opacity-40'
+            className='w-10 h-10 shrink-0 opacity-40'
           >
             <span className='material-icons-round'>settings</span>
           </button>
@@ -642,7 +656,8 @@ export const ReadingView = () => {
         <>
           <button
             onClick={handleBackward}
-            className={`fixed left-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full backdrop-blur-md border flex items-center justify-center z-[150] active:scale-90 transition-all shadow-md opacity-80 hover:opacity-100 ${
+            style={{ left: pagedArrowInset }}
+            className={`fixed top-1/2 -translate-y-1/2 w-12 h-12 rounded-full backdrop-blur-md border flex items-center justify-center z-[150] active:scale-90 transition-all shadow-md opacity-80 hover:opacity-100 ${
               settings.inverted
                 ? 'bg-white/20 border-white/40 text-white'
                 : 'bg-white/60 border-white/80 text-black'
@@ -653,7 +668,8 @@ export const ReadingView = () => {
           </button>
           <button
             onClick={handleForward}
-            className={`fixed right-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full backdrop-blur-md border flex items-center justify-center z-[150] active:scale-90 transition-all shadow-md opacity-80 hover:opacity-100 ${
+            style={{ right: pagedArrowInset }}
+            className={`fixed top-1/2 -translate-y-1/2 w-12 h-12 rounded-full backdrop-blur-md border flex items-center justify-center z-[150] active:scale-90 transition-all shadow-md opacity-80 hover:opacity-100 ${
               settings.inverted
                 ? 'bg-white/20 border-white/40 text-white'
                 : 'bg-white/60 border-white/80 text-black'
@@ -773,19 +789,21 @@ export const ReadingView = () => {
           )}
           <div
             ref={pageFlipRef}
-            className='page-flip-container no-scrollbar h-full w-full max-w-2xl mx-auto overflow-x-auto snap-x snap-mandatory'
+            className='page-flip-container no-scrollbar h-full w-full overflow-x-auto snap-x snap-mandatory'
             onScroll={handlePageFlipScroll}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
             <div
-              className={`page-flip-content reader-content h-full p-14 pt-10 relative z-10" ${
+              className={`page-flip-content reader-content h-full py-14 pt-10 relative z-10" ${
                 isBlurred ? 'blur-xl' : ''
               }`}
               style={{
                 fontSize: `${settings.fontSize}px`,
-                columnWidth: 'calc(min(100vw, 42rem) - 112px)',
-                columnGap: '112px'
+                columnWidth: pagedColumnWidth,
+                columnGap: pagedColumnGap,
+                paddingLeft: pagedSidePadding,
+                paddingRight: pagedSidePadding
               }}
             >
               <h1 className='text-3xl font-bold mb-12 pt-10'>
