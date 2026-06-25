@@ -99,7 +99,16 @@ export const MonetizationRequestView = () => {
   const submitRequest = async () => {
     if (!selectedBook) return
     const ok = await handleRequestMonetization(selectedBook.id, price)
-    if (ok) onBack()
+    if (ok) {
+      // Stay on the Monetize screen and optimistically flip to the pending
+      // state (hides the form, shows "Pending review") instead of bouncing
+      // back to Book Details. The books subscription reconciles to server truth.
+      setSelectedBook(prev =>
+        prev
+          ? { ...prev, monetizationStatus: 'pending', requestedPrice: price }
+          : prev
+      )
+    }
   }
 
   const handleSend = async () => {
