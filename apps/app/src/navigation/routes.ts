@@ -9,7 +9,7 @@ import type { View } from '@/types'
 
 export interface Route {
   view: View
-  bookId?: string // book-detail / public-book / reading / comments
+  bookId?: string // book-detail / public-book / reading / comments / write / publishing
   username?: string // profile (another user)
   chatUsername?: string // chat-conversation
   chapterIndex?: number // reading
@@ -90,9 +90,13 @@ export function routeToPath(r: Route): string | null {
     case 'library':
       return '/library'
     case 'write':
-      return '/write'
+      // Editing a specific book carries its id; the works grid (no book open)
+      // stays on the bare /write.
+      return r.bookId ? `/write/${r.bookId}` : '/write'
     case 'publishing':
-      return '/publishing'
+      // Book Details for an existing book carries its id; the New Book setup
+      // screen (no id yet) stays on the bare /publish.
+      return r.bookId ? `/publish/${r.bookId}` : '/publish'
     case 'monetization-request':
       return '/monetization'
     case 'self-profile':
@@ -174,9 +178,12 @@ export function parsePath(pathname: string, search: string): Route | null {
     case 'library':
       return { view: 'library' }
     case 'write':
-      return { view: 'write' }
+      return { view: 'write', bookId: id(segs[1]) }
+    // `/publish/<id>` is the current path; `/publishing` is kept as a legacy
+    // alias so old bookmarks still resolve.
+    case 'publish':
     case 'publishing':
-      return { view: 'publishing' }
+      return { view: 'publishing', bookId: id(segs[1]) }
     case 'monetization':
       return { view: 'monetization-request' }
     case 'me':

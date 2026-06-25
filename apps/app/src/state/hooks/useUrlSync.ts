@@ -19,12 +19,21 @@ interface UrlSyncDeps {
   selectedProfileUser: User | null
   selectedChatUser: string | null
   readingChapterIndex: number
+  // Book the chapter editor (/write) currently has open, and the book whose
+  // metadata the Book Details screen (/publish) is editing. Undefined when those
+  // screens aren't bound to a specific book (works grid / New Book setup).
+  writeBookId?: string
+  publishBookId?: string
   // Setters.
   setView: Dispatch<SetStateAction<View>>
   setSelectedBook: Dispatch<SetStateAction<Book | null>>
   setSelectedProfileUser: Dispatch<SetStateAction<User | null>>
   setSelectedChatUser: Dispatch<SetStateAction<string | null>>
   setReadingChapterIndex: Dispatch<SetStateAction<number>>
+  // Deep-load / Back-Forward into the editor & Book Details screens.
+  setEditorTarget: (t: { bookId: string; chapterIndex: string } | null) => void
+  setLastSelectedBookId: Dispatch<SetStateAction<string>>
+  setPublishingInitialData: (data: any) => void
   // Data for in-memory lookups + book conversion.
   registeredUsers: User[]
   mutuals: User[]
@@ -118,6 +127,43 @@ export function useUrlSync(deps: UrlSyncDeps) {
           }
           return
         }
+        case 'write': {
+          // Deep-link into the editor on a specific book. editorTarget is the
+          // one-shot WriteView consumes to adopt the book/chapter; without an id
+          // it's the bare works grid.
+          if (route.bookId) {
+            d.setLastSelectedBookId(route.bookId)
+            d.setEditorTarget({ bookId: route.bookId, chapterIndex: '0' })
+          }
+          d.setView('write')
+          return
+        }
+        case 'publishing': {
+          // Deep-link into Book Details for a specific book — fetch it so the
+          // metadata form opens populated (an empty form here would autosave
+          // blank values over the book). No id → the New Book setup screen.
+          if (route.bookId) {
+            const fb = await fbService.getBook(route.bookId)
+            if (!fb) {
+              d.setView('home')
+              return
+            }
+            const b = convertFirestoreBook(fb, d.favoriteBookIds)
+            d.setPublishingInitialData({
+              bookId: b.id,
+              title: b.title,
+              tagline: b.tagline,
+              genres: b.genres,
+              hashtags: b.hashtags,
+              isMature: b.isMature,
+              commentsEnabled: b.commentsEnabled,
+              coverImage: b.coverImage,
+              isDraft: b.isDraft,
+            })
+          }
+          d.setView('publishing')
+          return
+        }
         default:
           d.setView(route.view)
       }
@@ -135,9 +181,17 @@ export function useUrlSync(deps: UrlSyncDeps) {
     if (!isWeb) return
     if (!bootstrappedRef.current) return
     if (applyingRef.current) return
+    // The book id baked into the path depends on the screen: the editor and
+    // Book Details carry their own target, everything else uses selectedBook.
+    const bookId =
+      deps.view === 'write'
+        ? deps.writeBookId
+        : deps.view === 'publishing'
+        ? deps.publishBookId
+        : deps.selectedBook?.id
     const path = routeToPath({
       view: deps.view,
-      bookId: deps.selectedBook?.id,
+      bookId,
       username: deps.selectedProfileUser?.username,
       chatUsername: deps.selectedChatUser ?? undefined,
       chapterIndex: deps.readingChapterIndex,
@@ -150,6 +204,8 @@ export function useUrlSync(deps: UrlSyncDeps) {
   }, [
     deps.view,
     deps.selectedBook?.id,
+    deps.writeBookId,
+    deps.publishBookId,
     deps.selectedProfileUser?.username,
     deps.selectedChatUser,
     deps.readingChapterIndex,

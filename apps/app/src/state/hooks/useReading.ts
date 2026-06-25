@@ -441,8 +441,9 @@ export function useReading({
         showToast(
           `You've reached your daily publishing limit of ${MAX_DAILY_CHAPTERS} chapters. Please try again tomorrow!`
         )
-        return
+        return false
       }
+
       // Profanity blocked client-side (instant); the server
       // (moderateBookOnWrite / moderateChapterOnWrite) re-checks profanity +
       // OpenAI authoritatively after the write.
@@ -455,7 +456,7 @@ export function useReading({
           'Your book title, chapter title, or tagline contains inappropriate language. Please revise before publishing.',
           'warning'
         )
-        return
+        return false
       }
 
       // Mutuals = bidirectional admiration (we admire each other). These
@@ -727,7 +728,9 @@ export function useReading({
           )
         })
       }
-      setView('self-profile')
+      // Direct chapter publish (ctx provided) keeps the author in the editor so
+      // they can keep writing; only the metadata-screen flow returns to profile.
+      if (!ctx) setView('self-profile')
       setCurrentPublishingContent('')
       setCurrentPublishingTitle('')
       setCurrentPublishingChapterTitle('')
@@ -748,9 +751,11 @@ export function useReading({
             : prev.lastChapterPublishReset
         }
       })
+      return true
     } catch (err: any) {
       console.error('Publish error:', err)
       showToast('Failed to publish. Please try again.', 'error')
+      return false
     }
   }
 

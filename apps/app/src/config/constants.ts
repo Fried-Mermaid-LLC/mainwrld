@@ -32,7 +32,7 @@ export const COMMENT_LIKES_THRESHOLD = 50;
 // comments DTOs so a crafted client can't bypass it.
 export const MAX_COMMENT_LENGTH = 500;
 export const CHAPTER_LIKES_THRESHOLD = 10;
-export const MAX_DAILY_CHAPTERS = 7;
+export const MAX_DAILY_CHAPTERS = 100;
 export const MAX_WORD_COUNT = 11000;
 // Messaging caps (F08). MAX_MESSAGE_LENGTH is also enforced server-side in
 // firestore.rules (text.size() <= 500) so a crafted client can't bypass it.

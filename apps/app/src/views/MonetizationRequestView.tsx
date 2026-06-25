@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { Button, CoverImg } from '@/components/sharedComponents'
+import { Button } from '@/components/sharedComponents'
 import type { Book } from '@/types'
 import { useApp } from '@/state/AppContext'
 import {
@@ -19,27 +19,33 @@ export const MonetizationRequestView = () => {
     setView,
     showToast,
     showConfirm,
+    publishingInitialData,
   } = useApp()
   const works = books.filter(
     b => b.author.username?.toLowerCase() === user.username?.toLowerCase()
   )
   // Monetize is reached from the Book Details screen, so Back returns there
-  // (the book's metadata, still held in publishingInitialData).
+  // (the book's metadata, still held in publishingInitialData). That same data
+  // carries the book id we're monetizing, so target it directly instead of
+  // making the user pick from a list.
   const onBack = () => setView('publishing')
-  const [selectedBook, setSelectedBook] = useState<Book | null>(works[0] || null)
+  const targetBookId = publishingInitialData?.bookId
+  const initialBook =
+    works.find(b => b.id === targetBookId) || works[0] || null
+  const [selectedBook, setSelectedBook] = useState<Book | null>(initialBook)
   const [price, setPrice] = useState<number>(9.99)
   const [submitting, setSubmitting] = useState(false)
 
   // `books` load asynchronously, so on first render `works` can still be empty
   // and the useState initializer leaves `selectedBook` null forever. Re-sync
-  // the selection once works arrive (and clear it if the selected book is gone).
+  // to the targeted book once works arrive (and clear it if it's gone).
   useEffect(() => {
-    if (!selectedBook && works.length > 0) {
-      setSelectedBook(works[0])
+    if (!selectedBook && initialBook) {
+      setSelectedBook(initialBook)
     } else if (selectedBook && !works.some(w => w.id === selectedBook.id)) {
-      setSelectedBook(works[0] || null)
+      setSelectedBook(initialBook)
     }
-  }, [works, selectedBook])
+  }, [works, selectedBook, initialBook])
 
   // Admins may price any book at any tier (eligibility is bypassed for them).
   const allowedTiers = useMemo(
@@ -70,7 +76,7 @@ export const MonetizationRequestView = () => {
   const eligibility = useMemo(() => {
     if (!selectedBook) return { met: false, reasons: ['No works selected'] }
     const r: string[] = []
-    if (!selectedBook.isCompleted) r.push('Mark as complete')
+    if (selectedBook.isDraft) r.push('Published')
     if (selectedBook.chaptersCount < 5) r.push('At least 5 published chapters')
     // Derived from the real per-chapter `likes` array (not the never-set
     // minLikesPerChapter mock field) — see minLikesPerPublishedChapter.
@@ -148,9 +154,16 @@ export const MonetizationRequestView = () => {
         >
           <span className='material-icons-round'>arrow_back</span>
         </button>
-        <h1 className='text-[22px] font-bold leading-[1.24] text-[#1a1a1a]'>
-          Monetize
-        </h1>
+        <div className='flex flex-col items-center gap-1 min-w-0 px-14'>
+          <h1 className='text-[22px] font-bold leading-[1.24] text-[#1a1a1a]'>
+            Monetize
+          </h1>
+          {selectedBook?.title?.trim() && (
+            <p className='text-[13px] font-semibold text-[#9aa1a9] tracking-[0.13px] leading-[1.2] truncate max-w-full'>
+              {selectedBook.title}
+            </p>
+          )}
+        </div>
       </header>
       <div className='p-6 pb-32 space-y-8 max-w-3xl mx-auto w-full'>
         <div className='p-5 bg-gray-50 rounded-3xl border border-gray-100'>
@@ -162,61 +175,17 @@ export const MonetizationRequestView = () => {
           </p>
         </div>
 
-        <section className='space-y-4'>
-          <label className='text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2'>
-            Select Work
-          </label>
-          {works.length === 0 && (
-            <div className='p-6 bg-gray-50 rounded-3xl border border-gray-100 text-center'>
-              <p className='text-[11px] font-bold text-gray-400'>
-                No works to monetize yet.
-              </p>
-              <p className='text-[10px] text-gray-300 mt-1'>
-                Publish a book to request monetization.
-              </p>
-            </div>
-          )}
-          <div className='flex gap-4 overflow-x-auto no-scrollbar'>
-            {works.map((b: Book) => (
-              <button
-                key={b.id}
-                onClick={() => setSelectedBook(b)}
-                className={`w-24 flex-shrink-0 transition-all ${
-                  selectedBook?.id === b.id
-                    ? 'scale-105 opacity-100'
-                    : 'opacity-40'
-                }`}
-              >
-                <div
-                  className='aspect-[2/3] rounded-lg mb-2 overflow-hidden relative'
-                  style={{ backgroundColor: b.coverColor }}
-                >
-                  <CoverImg book={b} />
-                  {(b.isMonetized ||
-                    b.monetizationStatus === 'pending' ||
-                    b.monetizationStatus === 'denied') && (
-                    <div
-                      className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold uppercase tracking-wider text-white ${
-                        b.isMonetized
-                          ? 'bg-green-500'
-                          : b.monetizationStatus === 'pending'
-                          ? 'bg-amber-500'
-                          : 'bg-red-500'
-                      }`}
-                    >
-                      {b.isMonetized
-                        ? 'Live'
-                        : b.monetizationStatus === 'pending'
-                        ? 'Pending'
-                        : 'Denied'}
-                    </div>
-                  )}
-                </div>
-                <p className='text-[10px] font-bold truncate'>{b.title}</p>
-              </button>
-            ))}
+        {/* No works to monetize — the targeted book isn't eligible/loaded. */}
+        {works.length === 0 && (
+          <div className='p-6 bg-gray-50 rounded-3xl border border-gray-100 text-center'>
+            <p className='text-[11px] font-bold text-gray-400'>
+              No works to monetize yet.
+            </p>
+            <p className='text-[10px] text-gray-300 mt-1'>
+              Publish a book to request monetization.
+            </p>
           </div>
-        </section>
+        )}
 
         {/* Pending review — request already submitted, awaiting admin. */}
         {selectedBook && isPending && (

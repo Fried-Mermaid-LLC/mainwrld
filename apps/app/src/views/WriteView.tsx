@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { Button, CoverImg } from "@/components/sharedComponents";
+import { CoverImg } from "@/components/sharedComponents";
 import {
   MAX_WORD_COUNT,
   MIN_WORD_COUNT,
@@ -102,6 +102,12 @@ export const WriteView = () => {
     useState<string>(initialChapterIndex);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
+  >("idle");
+  // Tracks the direct chapter-publish action: "publishing" while the write is in
+  // flight, "published" once it lands (button reads "Published" and disables
+  // until the next edit). Reset to "idle" on any edit or chapter switch.
+  const [publishState, setPublishState] = useState<
+    "idle" | "publishing" | "published"
   >("idle");
   const [wordCount, setWordCount] = useState(0); // Reactive word count state
   // True while a chapter body is being lazily fetched into the editor (schema 2).
@@ -454,6 +460,8 @@ export const WriteView = () => {
     (event: React.FormEvent<HTMLDivElement>) => {
       // Flag dirty BEFORE any early return so autosave never misses a change.
       dirtyDraftRef.current = true;
+      // An edit invalidates the "Published" state — re-enable the publish button.
+      setPublishState("idle");
       scheduleAutoSave();
       scheduleWordCountUpdate();
       // Keep the caret above the fixed formatting toolbar on every edit. The
@@ -479,6 +487,7 @@ export const WriteView = () => {
         event.preventDefault();
         document.execCommand("insertParagraph");
         dirtyDraftRef.current = true;
+        setPublishState("idle");
         scheduleAutoSave();
         scheduleWordCountUpdate();
         ensureCaretVisible();
@@ -626,6 +635,7 @@ export const WriteView = () => {
       setChapterTitle(nextChapterTitle);
       dirtyDraftRef.current = false;
       setSaveState("idle");
+      setPublishState("idle");
     };
 
     // Chapter metadata (id + title) from the book's chapterMeta.
@@ -727,24 +737,14 @@ export const WriteView = () => {
   // title/content fields and publish footer stay hidden.
   const hasActiveChapter = selectedChapterIndex !== "";
 
-  // Label for the single bottom action button. A brand-new book still routes
-  // through PublishingView (to collect cover/genres/etc.), so it reads
-  // "Publish"; chapters of an existing book publish directly and read
-  // "Publish Chapter" (or "Update Chapter" when re-publishing a live one).
-  const publishLabel =
-    selectedBookId === "new"
-      ? "Publish"
-      : isPublished
-        ? "Update Chapter"
-        : "Publish Chapter";
-
   // Publish the current chapter straight into an existing book, skipping the
   // PublishingView metadata screen — the book already carries its metadata,
   // and we pass the current values through so nothing is reset.
   const publishChapterDirect = async () => {
     if (!selectedBook) return;
     const currentContent = editorRef.current?.innerHTML || "";
-    await handlePublish(
+    setPublishState("publishing");
+    const ok = await handlePublish(
       {
         tagline: selectedBook.tagline,
         genres: selectedBook.genres,
@@ -763,6 +763,9 @@ export const WriteView = () => {
         chapterTitle,
       },
     );
+    // On success the editor stays put (handlePublish skips the profile redirect
+    // for direct chapter publishes) and the button settles on "Published".
+    setPublishState(ok ? "published" : "idle");
   };
 
   const handleDeleteClick = () => {
@@ -959,11 +962,15 @@ export const WriteView = () => {
                       style={{ backgroundColor: b.coverColor || "#fbdddd" }}
                     >
                       <CoverImg book={b} />
-                      {b.isDraft && (
-                        <span className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full bg-black/55 text-white text-[8px] font-bold uppercase tracking-[0.5px]">
-                          Draft
-                        </span>
-                      )}
+                      {/* Status pill over the cover: amber for an unpublished
+                          draft, emerald once the book is live. */}
+                      <span
+                        className={`absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-white text-[8px] font-bold uppercase tracking-[0.5px] ${
+                          b.isDraft ? "bg-amber-500/90" : "bg-emerald-500/90"
+                        }`}
+                      >
+                        {b.isDraft ? "Draft" : "Published"}
+                      </span>
                     </div>
                     <div className="flex flex-col gap-1">
                       <p className="text-[13px] font-semibold text-[#1a1a1a] tracking-[0.13px] leading-[1.2] line-clamp-2">
@@ -1025,9 +1032,7 @@ export const WriteView = () => {
                               <span
                                 className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                   published
-                                    ? active
-                                      ? "bg-white"
-                                      : "bg-emerald-400"
+                                    ? "bg-emerald-400"
                                     : active
                                       ? "bg-white/40"
                                       : "bg-gray-300"
@@ -1180,44 +1185,6 @@ export const WriteView = () => {
                 </div>
               )}
 
-              {!isWriting && isExistingChapter && (
-                <div className="flex gap-4 pt-4 pb-2 animate-in slide-in-from-bottom duration-300">
-                  {isPublished && (
-                    <button
-                      onClick={handleUnpublishClick}
-                      className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
-                        unpublishConfirmIdx !== null
-                          ? "bg-amber-50 border-amber-200 text-amber-600"
-                          : "bg-gray-50 border-gray-100 text-gray-400 hover:text-amber-500"
-                      }`}
-                    >
-                      <span className="material-icons-round text-sm">
-                        {unpublishConfirmIdx !== null
-                          ? "priority_high"
-                          : "unpublished"}
-                      </span>
-                      {unpublishConfirmIdx !== null
-                        ? "Confirm Unpublish?"
-                        : "Unpublish Chapter"}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleDeleteClick}
-                    className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
-                      deleteConfirmIdx !== null
-                        ? "bg-red-50 border-red-200 text-red-600 shadow-lg shadow-red-500/10"
-                        : "bg-gray-50 border-gray-100 text-gray-400 hover:text-red-500"
-                    }`}
-                  >
-                    <span className="material-icons-round text-sm">
-                      {deleteConfirmIdx !== null ? "report" : "delete_forever"}
-                    </span>
-                    {deleteConfirmIdx !== null
-                      ? "Confirm Delete?"
-                      : "Delete Chapter"}
-                  </button>
-                </div>
-              )}
             </div>
 
             {!isWriting && hasActiveChapter && (
@@ -1249,22 +1216,75 @@ export const WriteView = () => {
                     </span>
                   </div>
                 </div>
-                {/* Single action button: drafts persist via autosave, so the old
-            "Save Draft" button is gone — its Saving/Saved status now surfaces
-            here transiently before falling back to the publish label. */}
-                <Button
-                  className="w-full"
-                  disabled={!canPublish || saveState === "saving"}
-                  onClick={() => {
-                    void publishChapterDirect();
-                  }}
-                >
+                {/* Mirrors the Book Details footer: the autosave status pill
+            always stays on top (drafts persist via autosave), then a row of
+            secondary actions below — Delete + a Publish/Unpublish toggle. */}
+                <div className="w-full h-14 rounded-2xl bg-accent text-white shadow-xl shadow-accent/20 font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2">
                   {saveState === "saving"
                     ? "Saving…"
                     : saveState === "saved"
                       ? "✓ Saved"
-                      : publishLabel}
-                </Button>
+                      : "All Changes Saved"}
+                </div>
+                <div className="flex gap-4 pt-4 animate-in slide-in-from-bottom duration-300">
+                  {isExistingChapter && (
+                    <button
+                      onClick={handleDeleteClick}
+                      className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
+                        deleteConfirmIdx !== null
+                          ? "bg-red-50 border-red-200 text-red-600 shadow-lg shadow-red-500/10"
+                          : "bg-gray-50 border-gray-100 text-gray-400 hover:text-red-500"
+                      }`}
+                    >
+                      <span className="material-icons-round text-sm">
+                        {deleteConfirmIdx !== null ? "report" : "delete_forever"}
+                      </span>
+                      {deleteConfirmIdx !== null
+                        ? "Confirm Delete?"
+                        : "Delete Chapter"}
+                    </button>
+                  )}
+                  {isPublished ? (
+                    // Published → two-click unpublish; flips back to Publish.
+                    <button
+                      onClick={handleUnpublishClick}
+                      className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
+                        unpublishConfirmIdx !== null
+                          ? "bg-amber-50 border-amber-200 text-amber-600"
+                          : "bg-gray-50 border-gray-100 text-gray-400 hover:text-amber-500"
+                      }`}
+                    >
+                      <span className="material-icons-round text-sm">
+                        {unpublishConfirmIdx !== null
+                          ? "priority_high"
+                          : "unpublished"}
+                      </span>
+                      {unpublishConfirmIdx !== null
+                        ? "Confirm Unpublish?"
+                        : "Unpublish Chapter"}
+                    </button>
+                  ) : (
+                    // Draft → publish the chapter; flips this button to Unpublish.
+                    <button
+                      disabled={
+                        !canPublish ||
+                        saveState === "saving" ||
+                        publishState === "publishing"
+                      }
+                      onClick={() => {
+                        void publishChapterDirect();
+                      }}
+                      className="flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-accent disabled:opacity-50"
+                    >
+                      <span className="material-icons-round text-sm">
+                        publish
+                      </span>
+                      {publishState === "publishing"
+                        ? "Publishing…"
+                        : "Publish Chapter"}
+                    </button>
+                  )}
+                </div>
                 </div>
               </div>
             )}

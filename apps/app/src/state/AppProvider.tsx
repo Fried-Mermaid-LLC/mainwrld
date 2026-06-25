@@ -521,11 +521,21 @@ export function useAppValue() {
     selectedProfileUser,
     selectedChatUser,
     readingChapterIndex,
+    // /write/<id> only when the editor is actually open on a saved book; the
+    // works grid and brand-new ('new') drafts stay on the bare /write.
+    writeBookId:
+      writeMode === 'editor' && lastSelectedBookId !== 'new'
+        ? lastSelectedBookId
+        : undefined,
+    publishBookId: publishingInitialData?.bookId,
     setView,
     setSelectedBook,
     setSelectedProfileUser,
     setSelectedChatUser,
     setReadingChapterIndex,
+    setEditorTarget,
+    setLastSelectedBookId,
+    setPublishingInitialData,
     registeredUsers,
     mutuals: MUTUALS,
     favoriteBookIds,

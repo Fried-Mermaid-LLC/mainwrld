@@ -5,10 +5,13 @@ import { useApp } from '@/state/AppContext'
 
 export const PublishingView = () => {
   const {
+    books,
     publishingInitialData,
     handleCreateBook,
     handleUpdateBookMeta,
     handlePublishBook,
+    handleUnpublish,
+    handleDeleteBook,
     setEditorTarget,
     setView
   } = useApp()
@@ -17,11 +20,23 @@ export const PublishingView = () => {
   // creating a brand-new book.
   const editingBookId: string | undefined = initialData?.bookId
   const isEditing = !!editingBookId
-  // A still-unpublished (draft) book shows the Publish Book action.
-  const bookIsDraft = initialData?.isDraft !== false
+  // A still-unpublished (draft) book shows the Publish Book action. Derive it
+  // from the live `books` entry (whose optimistic isDraft patches land on
+  // publish/unpublish) rather than the one-shot initialData snapshot — otherwise
+  // the footer kept showing a stale Publish/Unpublish until a page reload. Fall
+  // back to the snapshot before the books subscription has the doc (deep-load).
+  const liveBook = editingBookId
+    ? books.find((b: any) => b.id === editingBookId)
+    : undefined
+  const bookIsDraft = liveBook
+    ? liveBook.isDraft !== false
+    : initialData?.isDraft !== false
   const [bookTitle, setBookTitle] = useState(initialData?.title || '')
   const [isCreating, setIsCreating] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  // Two-click confirm for Unpublish Book (handleUnpublish is immediate); Delete
+  // Book opens its own confirm dialog, so it needs no local guard.
+  const [unpublishConfirm, setUnpublishConfirm] = useState(false)
   // Edit mode autosaves metadata; its status surfaces on the Publish button.
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const saveTimerRef = useRef<number | null>(null)
@@ -371,37 +386,72 @@ export const PublishingView = () => {
         </div>
 
         {isEditing ? (
-          // Edit mode: metadata autosaves. The Publish Book button doubles as
-          // the Saving/Saved indicator; an already-published book just shows
-          // the save status.
-          bookIsDraft && editingBookId ? (
-            <Button
-              className='w-full'
-              disabled={isPublishing}
-              onClick={async () => {
-                setIsPublishing(true)
-                const ok = await handlePublishBook(editingBookId)
-                if (ok) setView('write')
-                else setIsPublishing(false)
-              }}
-            >
-              {isPublishing
-                ? 'Publishing…'
-                : saveState === 'saving'
-                ? 'Saving…'
-                : saveState === 'saved'
-                ? '✓ Saved'
-                : 'Publish Book'}
-            </Button>
-          ) : (
-            <p className='text-center text-[10px] font-bold uppercase tracking-widest text-gray-400 py-3'>
+          // Edit mode mirrors the Write Studio chapter footer: the autosave
+          // status pill always stays on top, then a row of secondary book
+          // actions below (Publish/Unpublish toggle + Delete).
+          <div className='space-y-4'>
+            {/* Always-on-top autosave status. */}
+            <div className='w-full h-14 rounded-2xl bg-accent text-white shadow-xl shadow-accent/20 font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2'>
               {saveState === 'saving'
                 ? 'Saving…'
                 : saveState === 'saved'
                 ? '✓ Saved'
                 : 'All changes saved'}
-            </p>
-          )
+            </div>
+
+            {editingBookId && (
+              <div className='flex gap-4'>
+                <button
+                  onClick={() => handleDeleteBook(editingBookId)}
+                  className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-red-500'
+                >
+                  <span className='material-icons-round text-sm'>
+                    delete_forever
+                  </span>
+                  Delete Book
+                </button>
+                {bookIsDraft ? (
+                  // Draft → publish the book; flips this button to Unpublish.
+                  <button
+                    disabled={isPublishing}
+                    onClick={async () => {
+                      setIsPublishing(true)
+                      // handlePublishBook patches the live book's isDraft → the
+                      // footer flips to Unpublish reactively, no local flag.
+                      await handlePublishBook(editingBookId)
+                      setIsPublishing(false)
+                    }}
+                    className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-accent disabled:opacity-50'
+                  >
+                    <span className='material-icons-round text-sm'>publish</span>
+                    {isPublishing ? 'Publishing…' : 'Publish Book'}
+                  </button>
+                ) : (
+                  // Published → two-click unpublish; flips back to Publish.
+                  <button
+                    onClick={() => {
+                      if (!unpublishConfirm) {
+                        setUnpublishConfirm(true)
+                        return
+                      }
+                      setUnpublishConfirm(false)
+                      void handleUnpublish(editingBookId)
+                    }}
+                    className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
+                      unpublishConfirm
+                        ? 'bg-amber-50 border-amber-200 text-amber-600'
+                        : 'bg-gray-50 border-gray-100 text-gray-400 hover:text-amber-500'
+                    }`}
+                  >
+                    <span className='material-icons-round text-sm'>
+                      {unpublishConfirm ? 'priority_high' : 'unpublished'}
+                    </span>
+                    {unpublishConfirm ? 'Confirm Unpublish?' : 'Unpublish Book'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <div className='grid grid-cols-2 gap-4'>
             <Button variant='outline' onClick={onBack} disabled={isCreating}>
