@@ -97,9 +97,8 @@ export class MonetizationService {
     );
 
     if (!isAdmin) {
-      if (!book.isCompleted) {
-        throw new PreconditionFailedException('Book must be completed.');
-      }
+      // The "completed" gate was removed; the published requirement is already
+      // enforced by the isDraft check above (applies to everyone).
       if (effectiveChapters < 5) {
         throw new PreconditionFailedException('Need at least 5 chapters.');
       }

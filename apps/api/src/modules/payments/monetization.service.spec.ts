@@ -16,7 +16,6 @@ describe('MonetizationService', () => {
       id: 'b1',
       authorUid: 'u1',
       isDraft: false,
-      isCompleted: true,
       chaptersCount: 5,
       likes: [100, 100, 100, 100, 100],
       publishedDate: new Date(Date.now() - 30 * 864e5).toISOString(),
@@ -120,7 +119,7 @@ describe('MonetizationService', () => {
     });
 
     it('lets an admin bypass eligibility gates (still a real tier)', async () => {
-      seedBook({ isCompleted: false, chaptersCount: 1 });
+      seedBook({ chaptersCount: 1 });
       const res = await svc.submit(makeAuthUser({ admin: true }), 'b1', 14.99);
       expect(res.ok).toBe(true);
     });

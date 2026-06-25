@@ -4,6 +4,7 @@ import type { Book } from '@/types'
 import { useApp } from '@/state/AppContext'
 import {
   PRICE_TIERS,
+  PRICE_TIER_MIN_CHAPTERS,
   allowedPriceTiers,
   canMonetize,
   minLikesPerPublishedChapter,
@@ -274,14 +275,15 @@ export const MonetizationRequestView = () => {
                 Pricing Option
               </label>
               <div className='grid grid-cols-3 gap-2'>
-                {PRICE_TIERS.map(p => {
+                {PRICE_TIERS.map((p, i) => {
                   const unlocked = allowedTiers.includes(p)
+                  const minChapters = PRICE_TIER_MIN_CHAPTERS[i]
                   return (
                     <button
                       key={p}
                       disabled={!unlocked}
                       onClick={() => unlocked && setPrice(p)}
-                      className={`py-3 rounded-xl border text-[10px] font-bold flex items-center justify-center gap-1 ${
+                      className={`py-2.5 rounded-xl border text-[10px] font-bold flex flex-col items-center justify-center gap-0.5 ${
                         !unlocked
                           ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
                           : price === p
@@ -289,12 +291,23 @@ export const MonetizationRequestView = () => {
                           : 'bg-white border-gray-100 text-gray-400'
                       }`}
                     >
-                      {!unlocked && (
-                        <span className='material-icons-round text-[11px]'>
-                          lock
-                        </span>
-                      )}
-                      ${p.toFixed(2)}
+                      <span className='flex items-center justify-center gap-1'>
+                        {!unlocked && (
+                          <span className='material-icons-round text-[11px]'>
+                            lock
+                          </span>
+                        )}
+                        ${p.toFixed(2)}
+                      </span>
+                      <span
+                        className={`text-[8px] font-bold uppercase tracking-wide ${
+                          price === p && unlocked
+                            ? 'text-white/80'
+                            : 'text-gray-300'
+                        }`}
+                      >
+                        {minChapters}+ chapters
+                      </span>
                     </button>
                   )
                 })}

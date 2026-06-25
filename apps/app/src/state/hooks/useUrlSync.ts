@@ -138,10 +138,12 @@ export function useUrlSync(deps: UrlSyncDeps) {
           d.setView('write')
           return
         }
-        case 'publishing': {
-          // Deep-link into Book Details for a specific book — fetch it so the
-          // metadata form opens populated (an empty form here would autosave
-          // blank values over the book). No id → the New Book setup screen.
+        case 'publishing':
+        case 'monetization-request': {
+          // Deep-link into Book Details / Monetize for a specific book — fetch
+          // it so the screen opens bound to that book (Book Details' metadata
+          // form would otherwise autosave blank values over the book). No id →
+          // the New Book setup screen (publishing only).
           if (route.bookId) {
             const fb = await fbService.getBook(route.bookId)
             if (!fb) {
@@ -161,7 +163,7 @@ export function useUrlSync(deps: UrlSyncDeps) {
               isDraft: b.isDraft,
             })
           }
-          d.setView('publishing')
+          d.setView(route.view)
           return
         }
         default:
@@ -186,7 +188,7 @@ export function useUrlSync(deps: UrlSyncDeps) {
     const bookId =
       deps.view === 'write'
         ? deps.writeBookId
-        : deps.view === 'publishing'
+        : deps.view === 'publishing' || deps.view === 'monetization-request'
         ? deps.publishBookId
         : deps.selectedBook?.id
     const path = routeToPath({

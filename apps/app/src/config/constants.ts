@@ -58,13 +58,12 @@ export const GENRE_LIST = ['Mystery', 'Sci-Fi', 'Romance', 'Horror', 'Dystopian'
 // in submitMonetizationRequest / reviewMonetization (those duplicate the
 // table because functions/ cannot import from src/).
 export const PRICE_TIERS = [9.99, 14.99, 19.99, 24.99, 29.99] as const;
+// Minimum published-chapter count that unlocks each PRICE_TIERS entry (same
+// order/index). Single source of truth for both the gating and the per-button
+// "N+ chapters" hint shown in MonetizationRequestView.
+export const PRICE_TIER_MIN_CHAPTERS = [5, 8, 12, 20, 25] as const;
 export function allowedPriceTiers(chaptersCount: number): number[] {
-  if (chaptersCount >= 25) return PRICE_TIERS.slice(0, 5);
-  if (chaptersCount >= 20) return PRICE_TIERS.slice(0, 4);
-  if (chaptersCount >= 12) return PRICE_TIERS.slice(0, 3);
-  if (chaptersCount >= 8) return PRICE_TIERS.slice(0, 2);
-  if (chaptersCount >= 5) return PRICE_TIERS.slice(0, 1);
-  return [];
+  return PRICE_TIERS.filter((_, i) => chaptersCount >= PRICE_TIER_MIN_CHAPTERS[i]);
 }
 
 // Platform fee on the cash (Stripe) rail. The seller's connected account

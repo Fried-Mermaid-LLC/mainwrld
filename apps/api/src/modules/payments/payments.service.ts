@@ -55,7 +55,12 @@ export class PaymentsService {
   }
 
   private safeOrigin(origin?: string): string {
-    if (typeof origin === 'string' && /^https?:\/\/[^\s]+$/.test(origin)) {
+    // Stripe runs in livemode everywhere and rejects non-HTTPS return/refresh
+    // URLs ("Livemode requests must always be redirected via HTTPS"). Only
+    // accept https origins; anything else — http://localhost in dev,
+    // capacitor:// on native — falls back to the canonical https site so the
+    // account link can be created (onboarding then returns to mainwrld.com).
+    if (typeof origin === 'string' && /^https:\/\/[^\s]+$/.test(origin)) {
       return origin.replace(/\/+$/, '');
     }
     return DEFAULT_ORIGIN;

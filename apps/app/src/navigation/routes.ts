@@ -98,7 +98,8 @@ export function routeToPath(r: Route): string | null {
       // screen (no id yet) stays on the bare /publish.
       return r.bookId ? `/publish/${r.bookId}` : '/publish'
     case 'monetization-request':
-      return '/monetization'
+      // Carries the target book id, like /write and /publish.
+      return r.bookId ? `/monetize/${r.bookId}` : '/monetize'
     case 'self-profile':
       return '/me'
     case 'customization':
@@ -184,8 +185,10 @@ export function parsePath(pathname: string, search: string): Route | null {
     case 'publish':
     case 'publishing':
       return { view: 'publishing', bookId: id(segs[1]) }
+    // `/monetize/<id>` is current; `/monetization` is a legacy alias.
+    case 'monetize':
     case 'monetization':
-      return { view: 'monetization-request' }
+      return { view: 'monetization-request', bookId: id(segs[1]) }
     case 'me':
       return { view: 'self-profile' }
     case 'customize':

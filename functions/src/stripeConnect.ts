@@ -308,9 +308,8 @@ export const submitMonetizationRequest = onCall<
   // ownership check, payout gate, pending guard and the terminal blocks above
   // still apply to them. Everyone else is re-verified server-side.
   if (!isAdmin) {
-    if (!book.isCompleted) {
-      throw new HttpsError('failed-precondition', 'Book must be completed.')
-    }
+    // The "completed" gate was removed; the published requirement is already
+    // enforced by the isDraft check above (applies to everyone).
     if (effectiveChapters < 5) {
       throw new HttpsError('failed-precondition', 'Need at least 5 chapters.')
     }
