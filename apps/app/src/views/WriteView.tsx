@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Button, CoverImg } from '@/components/sharedComponents'
-import { MAX_WORD_COUNT, MIN_WORD_COUNT } from '@/config/constants'
+import { MAX_WORD_COUNT, MIN_WORD_COUNT, isChapterPublished } from '@/config/constants'
 import type { Book } from '@/types'
-import { isChapterPublished } from '@/types'
 import * as fbService from '@/services/firebaseService'
 import { useApp } from '@/state/AppContext'
 
@@ -838,7 +837,7 @@ export const WriteView = () => {
               <span className='material-icons-round'>arrow_back</span>
             </button>
             <div>
-              <h1 className='text-xl font-bold'>Studio</h1>
+              <h1 className='text-xl font-bold'>Write Studio</h1>
             </div>
           </div>
           <Button variant='secondary' className='h-10 px-4' onClick={onMonetize}>

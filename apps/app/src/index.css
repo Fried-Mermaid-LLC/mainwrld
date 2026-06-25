@@ -118,29 +118,6 @@ img {
   font-family: 'Telegraf', 'Inter', sans-serif;
 }
 
-/* Page Flipping Mode Styles */
-.page-flip-container {
-  display: flex;
-  overflow-x: scroll;
-  scroll-snap-type: x mandatory;
-  height: calc(100dvh - 200px);
-  width: 100%;
-}
-
-.page-flip-content {
-  column-width: calc(100vw - 64px);
-  column-gap: 64px;
-  height: 100%;
-  padding: 0 32px;
-  transition: all 0.3s ease;
-}
-
-.page-item {
-  scroll-snap-align: start;
-  flex-shrink: 0;
-  width: 100%;
-}
-
 /* Placeholder for the empty contentEditable rich editor */
 .rich-editor:empty:before {
   content: attr(data-placeholder);

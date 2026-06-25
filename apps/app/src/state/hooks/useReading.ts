@@ -3,10 +3,9 @@ import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
 import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
-import { MAX_DAILY_CHAPTERS, libraryLimitFor, LIBRARY_FULL_TOAST } from '@/config/constants'
+import { MAX_DAILY_CHAPTERS, libraryLimitFor, LIBRARY_FULL_TOAST, isChapterPublished } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import type { User, Book, BookProgress, View, Relationship, NotificationCategory } from '@/types'
-import { isChapterPublished } from '@/types'
 
 interface ReadingDeps {
   user: User
@@ -92,6 +91,8 @@ export function useReading({
         scrollLeftPx: progress.scrollLeftPx,
         scrollWidthPx: progress.scrollWidthPx,
         clientWidthPx: progress.clientWidthPx,
+        pageIndex: progress.pageIndex,
+        pageCount: progress.pageCount,
         savedAt: progress.savedAt
       }
     },

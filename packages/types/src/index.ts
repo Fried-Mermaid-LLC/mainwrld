@@ -382,5 +382,10 @@ export interface BookProgress {
   scrollLeftPx?: number;
   scrollWidthPx?: number;
   clientWidthPx?: number;
+  // Paged (page-flip) reading position. The deterministic page model persists
+  // the page index + total page count instead of raw scroll offsets, so a
+  // re-open restores to the same page even if the measured page width changed.
+  pageIndex?: number;
+  pageCount?: number;
   savedAt?: number;
 }

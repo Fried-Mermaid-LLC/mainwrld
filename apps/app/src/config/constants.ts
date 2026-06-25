@@ -88,6 +88,35 @@ export function canMonetize(book: {
   return !book.permanentlyDemonetized && !book.wasMonetizedBefore;
 }
 
+// Per-chapter publish helpers. Mirror of the canonical versions in
+// `@mainwrld/types` (kept local for the same reason allowedPriceTiers /
+// minLikesPerPublishedChapter are: the app reads only TYPES from that package,
+// so importing its runtime values would trip Vite's dist pre-bundling). A
+// chapter is published per its own `published` flag; legacy docs without flags
+// fall back to the old published-prefix rule (position < chaptersCount).
+export function isChapterPublished(
+  meta: { published?: boolean }[] | undefined,
+  order: number,
+  chaptersCount: number | undefined
+): boolean {
+  const entry = meta?.[order];
+  if (entry && typeof entry.published === 'boolean') return entry.published;
+  return order >= 0 && order < (chaptersCount || 0);
+}
+
+// Order (absolute position in chapterMeta) of the first published chapter, or
+// -1 if none. Picks the free preview chapter for monetized books.
+export function firstPublishedOrder(
+  meta: { published?: boolean }[] | undefined,
+  chaptersCount: number | undefined
+): number {
+  const len = meta?.length || 0;
+  for (let i = 0; i < len; i++) {
+    if (isChapterPublished(meta, i, chaptersCount)) return i;
+  }
+  return -1;
+}
+
 // Lowest-likes-per-published-chapter, derived from the real per-chapter
 // `likes` array on the book doc (NOT the never-set mock `minLikesPerChapter`
 // field). Published chapters are identified by their per-chapter `published`
