@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Release/distribution builds (TestFlight + App Store) MUST use the
+	     PRODUCTION APNs environment. With aps-environment=development the device
+	     registers a sandbox-only APNs token, so FCM sends to it silently fail on
+	     any non-Xcode build (TestFlight/App Store) — the single most common
+	     reason "push works in dev but not in prod". Debug builds keep
+	     aps-environment=development via App.entitlements (wired per-config in
+	     project.pbxproj: Debug -> App.entitlements, Release -> this file). -->
+	<key>aps-environment</key>
+	<string>production</string>
+	<!-- Universal Links (F09): lets a tapped https://mainwrld.com/book/<id>
+	     link open THIS app instead of Safari, matched against the hosted
+	     /.well-known/apple-app-site-association. Kept identical to
+	     App.entitlements so the link behavior is the same in both configs. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:mainwrld.com</string>
+	</array>
+</dict>
+</plist>
