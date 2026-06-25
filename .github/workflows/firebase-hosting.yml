@@ -88,6 +88,12 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
           projectId: mainwrld-f7acf
+          # Pin firebase-tools: 15.22.1/15.22.2 regressed service-account auth in
+          # CI — the OAuth token fetch dies with "Invalid response body ...
+          # /oauth2/v4/token: Premature close" -> "Failed to authenticate, have
+          # you run firebase login?". 15.22.0 is the last version that works; the
+          # action defaults firebaseToolsVersion to `latest` so it must be set.
+          firebaseToolsVersion: "15.22.0"
 
       # Catch the backend up to the front-end in the same run so rules and
       # functions can never silently drift behind it. Runs AFTER hosting, so even
@@ -104,6 +110,6 @@ jobs:
         run: |
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
-          npx firebase-tools@15 deploy \
+          npx firebase-tools@15.22.0 deploy \
             --only firestore:rules,database,storage,functions \
             --project mainwrld-f7acf --non-interactive --force
