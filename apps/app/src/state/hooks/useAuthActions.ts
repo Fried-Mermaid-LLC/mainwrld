@@ -9,6 +9,7 @@ import { MIN_SIGNUP_AGE } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
 import { ageFromBirthDate } from '@/utils/age'
 import { usersApi } from '@/services/api/usersApi'
+import { authErrorMessage } from '@/utils/authErrors'
 import { parsePath, isPublicInitialView } from '@/navigation/routes'
 import type { User, View, NotificationCategory } from '@/types'
 
@@ -216,7 +217,7 @@ export function useAuthActions({
         })
         .catch(console.error)
     } catch (err: any) {
-      setAuthError(err.message || 'Invalid username or password.')
+      setAuthError(authErrorMessage(err, 'Incorrect username or password.'))
     } finally {
       setAuthBusy(false)
     }
@@ -352,11 +353,7 @@ export function useAuthActions({
         'system'
       )
     } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        setAuthError('An account with this email already exists.')
-      } else {
-        setAuthError(err.message || 'Signup failed. Please try again.')
-      }
+      setAuthError(authErrorMessage(err, 'Signup failed. Please try again.'))
     }
     } finally {
       setAuthBusy(false)
