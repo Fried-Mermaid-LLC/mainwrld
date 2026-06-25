@@ -56,7 +56,22 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          # Pin EXACTLY 24.16.0 — do NOT float to `24`. Node 24.17.0 shipped
+          # "http: fix response queue poisoning in http.Agent" + TLS/SNI changes
+          # that altered keep-alive socket-reuse timing, exposing a latent
+          # node-fetch@2 bug: chunked/gzip responses on a reused keep-alive
+          # socket raise a FALSE ERR_STREAM_PREMATURE_CLOSE. firebase-tools
+          # fetches the OAuth token (googleapis.com/oauth2/v4/token) through that
+          # exact stack (firebase-tools -> gaxios@6 -> node-fetch@2), so on
+          # 24.17.0 the service-account auth dies INTERMITTENTLY with
+          # "Invalid response body ... oauth2/v4/token: Premature close" ->
+          # "Failed to authenticate, have you run firebase login?". Both the
+          # hosting action (it runs `npx firebase-tools` from this toolcache
+          # Node) and the backend `npx firebase-tools` step below resolve Node
+          # from here, so this one pin fixes both. 24.16.0 and earlier are clean;
+          # revisit once node-fetch@2 / gaxios ships the upstream fix
+          # (nodejs/node#63989, firebase-tools#10692).
+          node-version: 24.16.0
           cache: pnpm
 
       - name: Install dependencies
