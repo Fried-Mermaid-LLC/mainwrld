@@ -120,6 +120,8 @@ export const SettingsView = () => {
   const [currentPassword, setCurrentPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
 
@@ -161,6 +163,44 @@ export const SettingsView = () => {
     } finally {
       setCancelling(false)
       setShowCancelConfirm(false)
+    }
+  }
+
+  const closeDeleteConfirm = () => {
+    setShowDeleteConfirm(false)
+    setDeletePassword('')
+  }
+
+  // Require the current password before the irreversible delete. We
+  // re-authenticate first (in fbService.deleteCurrentAccount): a wrong password
+  // throws before any server scrub runs, so we keep the modal open and let the
+  // user retry. Only on a successful delete do we route back to login state.
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      showToast('Please enter your current password', 'error')
+      return
+    }
+    setDeleting(true)
+    try {
+      await fbService.deleteCurrentAccount(deletePassword)
+      showToast('Account deleted', 'check_circle')
+      closeDeleteConfirm()
+      handleLogout()
+    } catch (err: any) {
+      const code = err?.code as string | undefined
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        showToast('Current password is incorrect', 'error')
+      } else if (code === 'auth/too-many-requests') {
+        showToast('Too many attempts. Please try again later.', 'error')
+      } else {
+        console.error('[MainWRLD] deleteAccount failed:', err)
+        showToast(
+          err?.message || 'Account deletion failed. Please try again.',
+          'error'
+        )
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -372,35 +412,31 @@ export const SettingsView = () => {
               <h2 className='text-lg font-bold'>Delete Account?</h2>
               <p className='text-sm text-gray-400 leading-relaxed'>
                 This action cannot be undone. All your books, comments, and data
-                will be permanently deleted.
+                will be permanently deleted. Enter your password to confirm.
               </p>
             </div>
+            <input
+              type='password'
+              autoComplete='current-password'
+              value={deletePassword}
+              onChange={e => setDeletePassword(e.target.value)}
+              placeholder='Enter current password'
+              className='w-full p-4 rounded-2xl bg-gray-50 border border-gray-100 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-red-400'
+            />
             <div className='flex gap-3'>
               <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className='flex-1 py-4 rounded-2xl bg-gray-100 text-sm font-bold transition-all active:scale-95'
+                onClick={closeDeleteConfirm}
+                disabled={deleting}
+                className='flex-1 py-4 rounded-2xl bg-gray-100 text-sm font-bold transition-all active:scale-95 disabled:opacity-60'
               >
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  setShowDeleteConfirm(false)
-                  try {
-                    await fbService.deleteCurrentAccount()
-                    showToast('Account deleted', 'check_circle')
-                  } catch (err: any) {
-                    console.error('[MainWRLD] deleteAccount failed:', err)
-                    showToast(
-                      err?.message || 'Account deletion failed. Please try again.',
-                      'error'
-                    )
-                  }
-                  // Either way, route back to login state.
-                  handleLogout()
-                }}
-                className='flex-1 py-4 rounded-2xl bg-red-500 text-white text-sm font-bold transition-all active:scale-95'
+                onClick={handleDeleteAccount}
+                disabled={deleting || !deletePassword}
+                className='flex-1 py-4 rounded-2xl bg-red-500 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-60'
               >
-                Delete
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

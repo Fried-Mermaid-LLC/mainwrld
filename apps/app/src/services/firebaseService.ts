@@ -141,7 +141,12 @@ export const claimDailyPoints = () => usersApi.claimDaily();
 // client-managed; this only debits the server-owned balance).
 export const spinCouponWheel = () => usersApi.spin();
 
-export const deleteCurrentAccount = async () => {
+// Require the current password before the irreversible delete. We re-authenticate
+// FIRST: if the password is wrong it throws an auth/* error here, before any
+// server-side scrub runs, so the account stays intact and the user can retry.
+// Only logs out once the delete has been attempted.
+export const deleteCurrentAccount = async (currentPassword: string) => {
+  await authService.reauthenticateCurrentUser(currentPassword);
   try {
     await usersApi.deleteMe();
   } finally {

@@ -72,6 +72,22 @@ export const changeEmail = async (
   await verifyBeforeUpdateEmail(user, newEmail);
 };
 
+// Re-authenticate with the current password. Firebase requires a fresh
+// credential for security-sensitive mutations like account deletion, and
+// proving knowledge of the password closes the "walk up to an unlocked session
+// and silently nuke the account" hole — the same guard changePassword and
+// changeEmail use. Throws the usual auth/* errors (wrong-password, etc.) the
+// callers map to user-facing messages.
+export const reauthenticateCurrentUser = async (
+  currentPassword: string
+): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  if (!user.email) throw new Error('No email on account');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+};
+
 export const verifyResetCode = (oobCode: string): Promise<string> =>
   verifyPasswordResetCode(auth, oobCode);
 
