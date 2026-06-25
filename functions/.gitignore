@@ -1,0 +1,11 @@
+# Env (firebase-functions/params dotenv — never commit; CI writes it fresh).
+# Covers .env and per-project-alias files like .env.mainwrld-f7acf, but the
+# committed template must stay tracked.
+.env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+
+# Compiled output (also covered by root .gitignore functions/lib/)
+lib/

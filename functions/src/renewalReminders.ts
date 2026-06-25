@@ -21,7 +21,12 @@ import { logger } from 'firebase-functions/v2'
 // (e.g. https://mainwrld-api-xxxxxx.uc.run.app). Set it per project before
 // deploy — add a line to functions/.env (see functions/.env.example):
 //   RENEWAL_API_ORIGIN="https://<your-cloud-run-api-host>"
-const RENEWAL_API_ORIGIN = defineString('RENEWAL_API_ORIGIN')
+// A default of '' keeps `firebase deploy --non-interactive` from HARD-FAILING
+// when no value is supplied (a bare defineString with no default aborts the
+// deploy: "In non-interactive mode but have no value for ..."). In CI the real
+// value is injected via functions/.env (see firebase-hosting.yml). If it ever
+// goes unset the run below degrades to a logged skip, never a broken deploy.
+const RENEWAL_API_ORIGIN = defineString('RENEWAL_API_ORIGIN', { default: '' })
 
 // The SAME shared secret the API's CronGuard checks in the x-cron-secret header
 // (the API's INTERNAL_CRON_SECRET env var). Store it in Secret Manager so it is

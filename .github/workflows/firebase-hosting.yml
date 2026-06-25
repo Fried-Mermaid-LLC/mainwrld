@@ -107,9 +107,19 @@ jobs:
       - name: Deploy backend (rules + functions)
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Non-secret build-time param for the sendRenewalReminders scheduled
+          # function (firebase-functions/params defineString). Reuses the API
+          # base URL the web build already consumes — VITE_API_URL is exactly
+          # the API origin WITHOUT the /api/v1 prefix (apps/app/src/lib/
+          # apiClient.ts appends it), which is precisely what RENEWAL_API_ORIGIN
+          # wants. Without this written into functions/.env the firebase deploy
+          # aborts in --non-interactive mode ("no value for RENEWAL_API_ORIGIN").
+          RENEWAL_API_ORIGIN: ${{ secrets.VITE_API_URL }}
         run: |
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-sa.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          # firebase-functions/params reads functions/.env at deploy time.
+          printf 'RENEWAL_API_ORIGIN=%s\n' "$RENEWAL_API_ORIGIN" > functions/.env
           npx firebase-tools@15.22.0 deploy \
             --only firestore:rules,database,storage,functions \
             --project mainwrld-f7acf --non-interactive --force
