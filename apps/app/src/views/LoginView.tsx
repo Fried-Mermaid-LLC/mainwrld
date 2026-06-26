@@ -7,6 +7,7 @@ export const LoginView = () => {
   return (
     <AuthLayout
       center
+      logo
       title='Log In'
       onBack={() => {
         setAuthError(null)

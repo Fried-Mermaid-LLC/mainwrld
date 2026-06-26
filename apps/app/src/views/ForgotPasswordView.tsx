@@ -34,6 +34,7 @@ export const ForgotPasswordView = () => {
   return (
     <AuthLayout
       center
+      logo
       title={sent ? 'Check Your Email' : 'Reset Password'}
       onBack={onBack}
     >

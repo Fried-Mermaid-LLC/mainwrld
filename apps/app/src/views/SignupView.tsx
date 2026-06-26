@@ -7,6 +7,7 @@ export const SignupView = () => {
   return (
     <AuthLayout
       center
+      logo
       title='Sign Up'
       animation='animate-in slide-in-from-right duration-500'
       onBack={() => {

@@ -96,7 +96,7 @@ export const ResetPasswordView = () => {
   }
 
   return (
-    <AuthLayout center title={titles[status]} onBack={goToLogin}>
+    <AuthLayout center logo title={titles[status]} onBack={goToLogin}>
       {status === 'verifying' && (
         <p className='text-xs text-gray-400 font-bold uppercase tracking-widest'>
           Verifying reset link…

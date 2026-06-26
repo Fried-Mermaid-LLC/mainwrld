@@ -1,4 +1,6 @@
 import React from 'react'
+import { BASE } from '@/config/config'
+import { SafeImg } from '@/components/SafeImg'
 
 // Single, web-friendly shell for every auth screen (landing / login / signup /
 // forgot- & reset-password). The app is mobile-first (Capacitor), so without a
@@ -21,6 +23,8 @@ interface AuthLayoutProps {
   footer?: React.ReactNode
   /** Entrance animation utilities; defaults to a soft fade-in. */
   animation?: string
+  /** Show the MainWRLD logo above the header (login / signup / reset). */
+  logo?: boolean
 }
 
 export const AuthLayout = ({
@@ -29,11 +33,19 @@ export const AuthLayout = ({
   title,
   center = false,
   footer,
-  animation = 'animate-in fade-in duration-500'
+  animation = 'animate-in fade-in duration-500',
+  logo = false
 }: AuthLayoutProps) => (
   <div className={`fixed inset-0 bg-white overflow-y-auto no-scrollbar ${animation}`}>
     <div className='min-h-dvh w-full max-w-md mx-auto flex flex-col px-8 pt-safe-top pb-[max(2rem,env(safe-area-inset-bottom),env(keyboard-inset-height))]'>
       <div className={`flex-1 flex flex-col py-8 ${center ? 'justify-center' : ''}`}>
+        {logo && (
+          <SafeImg
+            src={`${BASE}logo-with-text.png`}
+            alt='MainWRLD'
+            className='w-64 h-auto mb-8 drop-shadow-lg shrink-0 self-center'
+          />
+        )}
         {(onBack || title) && (
           <header className='flex items-center gap-4 mb-8 shrink-0'>
             {onBack && (
