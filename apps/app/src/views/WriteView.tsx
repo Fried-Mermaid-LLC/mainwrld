@@ -398,6 +398,20 @@ export const WriteView = () => {
     (event: React.ClipboardEvent<HTMLDivElement>) => {
       if (!editorRef.current) return;
 
+      // Text-only editor: never let any media slip in via the clipboard.
+      // Images/files arrive either as `files` or as non-string `items`; both
+      // would otherwise fall through the empty-text early return below and get
+      // inserted natively by the contentEditable. We only ever keep text/plain.
+      const hasMedia =
+        Array.from(event.clipboardData.files).length > 0 ||
+        Array.from(event.clipboardData.items).some(
+          (item) => item.kind !== "string",
+        );
+      if (hasMedia) {
+        event.preventDefault();
+        return;
+      }
+
       const pastedText = event.clipboardData.getData("text/plain") || "";
       const pastedWords = getWords(pastedText);
       if (pastedWords.length === 0) return;
@@ -443,6 +457,21 @@ export const WriteView = () => {
       updateWordCount,
       ensureCaretVisible,
     ],
+  );
+
+  // Block dragging images/files into the editor. Native contentEditable would
+  // otherwise drop them in as <img>/file content, bypassing the text-only paste
+  // guard above.
+  const handleEditorDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (
+        event.dataTransfer &&
+        Array.from(event.dataTransfer.files).length > 0
+      ) {
+        event.preventDefault();
+      }
+    },
+    [],
   );
 
   const AUTOSAVE_DEBOUNCE_MS = 1500;
@@ -1142,6 +1171,7 @@ export const WriteView = () => {
                           onBeforeInput={handleBeforeInput}
                           onKeyDown={handleEditorKeyDown}
                           onPaste={handlePaste}
+                          onDrop={handleEditorDrop}
                           onInput={handleEditorInput}
                           onFocus={() => setIsWriting(true)}
                           onBlur={() => {
