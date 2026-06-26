@@ -994,7 +994,7 @@ export const WriteView = () => {
                       {/* Status pill over the cover: amber for an unpublished
                           draft, emerald once the book is live. */}
                       <span
-                        className={`absolute top-2 left-2 z-20 px-2 py-0.5 rounded-full text-white text-[8px] font-bold uppercase tracking-[0.5px] ${
+                        className={`absolute top-2 left-2 z-20 px-2.75 py-0.75 rounded-full text-white text-[11px] font-bold uppercase tracking-[0.67px] ${
                           b.isDraft ? "bg-amber-500/90" : "bg-emerald-500/90"
                         }`}
                       >

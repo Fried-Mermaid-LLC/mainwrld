@@ -24,8 +24,37 @@ export const SelfProfileView = () => {
     booksLoading,
     setSelectedBook,
     relationships,
-    avatarConfig
+    avatarConfig,
+    readingActivity
   } = useApp()
+
+  // Last Read — most recent reading activity for the current user. Entries are
+  // updated in place (not reordered) when a book is re-read, so sort by
+  // lastRead rather than trusting array order. Draft / deleted books are
+  // skipped so the card always points at something openable.
+  const lastRead = (() => {
+    const activities = readingActivity[user.username] || []
+    const sorted = [...activities].sort(
+      (a, b) => new Date(b.lastRead).getTime() - new Date(a.lastRead).getTime()
+    )
+    for (const activity of sorted) {
+      const book = books.find(b => b.id === activity.bookId && !b.isDraft)
+      if (book) return { book, activity }
+    }
+    return null
+  })()
+
+  const lastReadTimeSince = (() => {
+    if (!lastRead) return ''
+    const diff = Date.now() - new Date(lastRead.activity.lastRead).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'Just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
+  })()
+
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in fade-in duration-500'>
       {/* Centered title + subtitle, matching the Library / Write Studio headers.
@@ -137,6 +166,54 @@ export const SelfProfileView = () => {
         >
           <span className='material-icons-round'>palette</span> CUSTOMIZE
         </Button>
+        {lastRead && (
+          <section className='w-full space-y-6 mb-12'>
+            <h3 className='text-xs font-bold uppercase tracking-widest text-gray-400 ml-2'>
+              Last Read
+            </h3>
+            <button
+              onClick={() => {
+                setSelectedBook(lastRead.book)
+                setView('book-detail')
+              }}
+              className='w-full bg-gray-50 p-5 rounded-[2rem] border border-gray-100 flex gap-4 items-center transition-all active:scale-[0.98] hover:border-accent/30 group'
+            >
+              <div
+                className='w-14 h-20 overflow-hidden relative flex-shrink-0 shadow-md'
+                style={{ backgroundColor: lastRead.book.coverColor }}
+              >
+                <CoverImg book={lastRead.book} />
+              </div>
+              <div className='flex-1 text-left space-y-2'>
+                <p className='text-sm font-bold group-hover:text-accent transition-colors'>
+                  {lastRead.book.title}
+                </p>
+                <p className='text-[10px] text-gray-400 font-medium'>
+                  by {lastRead.book.author.displayName}
+                </p>
+                <div className='flex items-center gap-3'>
+                  <div className='flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden'>
+                    <div
+                      className='h-full bg-accent rounded-full transition-all'
+                      style={{ width: `${lastRead.activity.progress || 0}%` }}
+                    />
+                  </div>
+                  <span className='text-[9px] font-bold text-gray-400'>
+                    {lastRead.activity.progress || 0}%
+                  </span>
+                </div>
+              </div>
+              <div className='flex flex-col items-end gap-1 flex-shrink-0'>
+                <span className='text-[8px] font-bold text-accent uppercase tracking-widest'>
+                  {lastReadTimeSince}
+                </span>
+                <span className='material-icons-round text-gray-300 text-sm'>
+                  chevron_right
+                </span>
+              </div>
+            </button>
+          </section>
+        )}
         <section className='w-full space-y-6 mb-12'>
           <h3 className='text-xs font-bold uppercase tracking-widest text-gray-400 ml-2'>
             Works
