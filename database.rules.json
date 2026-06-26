@@ -27,6 +27,7 @@
         },
         "rotY": { ".validate": "newData.isNumber()" },
         "activity": { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "currentBookId": { ".validate": "newData.isString() && newData.val().length <= 64" },
         "emote": {
           ".validate": "newData.hasChildren(['type', 'id'])",
           "type": { ".validate": "newData.isString() && newData.val().length <= 16" },

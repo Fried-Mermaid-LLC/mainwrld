@@ -40,6 +40,11 @@ export const OtherProfileView = () => {
   const useLive = presence.rtdbAvailable && presence.ready
   const isOnline = useLive ? presence.isOnline : liveUser.isOnline
   const liveActivity = useLive ? presence.activity : liveUser.activity
+  // The book id rides on the same /world node as the activity (carried by
+  // useProfilePresence), so "Reading" and the book can't drift the way they did
+  // when the id was read from the heartbeat-trailing Firestore mirror. Fall back
+  // to the mirror only while the world layer is disabled / not yet ready.
+  const liveBookId = useLive ? presence.currentBookId : liveUser.currentBookId
   // The world maps the idle state to 'Exploring'; the Firestore mirror stores it
   // as 'Idle'. Normalise the fallback path so both sources read the same word.
   const activityLabel =
@@ -285,17 +290,13 @@ export const OtherProfileView = () => {
               // the RTDB /world activity; the book id still comes from the
               // Firestore mirror (currentBookId — /world doesn't carry it).
               const isReadingNow =
-                isOnline &&
-                liveActivity === 'Reading' &&
-                !!liveUser.currentBookId
+                isOnline && liveActivity === 'Reading' && !!liveBookId
               const activities = readingActivity[user.username] || []
               const activity = isReadingNow
-                ? activities.find(
-                    (a: any) => a.bookId === liveUser.currentBookId
-                  ) || null
+                ? activities.find((a: any) => a.bookId === liveBookId) || null
                 : null
               const readingBook = isReadingNow
-                ? books.find((b: Book) => b.id === liveUser.currentBookId)
+                ? books.find((b: Book) => b.id === liveBookId)
                 : null
               if (readingBook) {
                 const timeSince = (() => {

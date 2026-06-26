@@ -260,7 +260,8 @@ export function usePersist({
     // not 'Idle' — only Reading/Writing override it.
     worldService.setWorldActivity(
       firebaseUid,
-      newActivity === 'Idle' ? 'Exploring' : newActivity
+      newActivity === 'Idle' ? 'Exploring' : newActivity,
+      currentBookId
     )
 
     if (user.activity !== newActivity) {

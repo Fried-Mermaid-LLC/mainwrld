@@ -17,6 +17,10 @@ export interface ProfilePresence {
   // The live world activity ('Exploring' | 'Reading' | 'Writing') — already the
   // same vocabulary the 3D avatar renders, so no Idle→Exploring remap is needed.
   activity: string | null
+  // The book the user is reading right now, carried on the same /world node as
+  // activity so "Reading" and the book id can never disagree (the Firestore mirror
+  // trailed the heartbeat, which made the profile's "Currently Reading" flicker).
+  currentBookId: string | null
 }
 
 // Live presence for a single profile, read straight from the RTDB /world node —
@@ -33,6 +37,7 @@ export function useProfilePresence(username: string): ProfilePresence {
     ready: false,
     isOnline: false,
     activity: null,
+    currentBookId: null,
   })
 
   useEffect(() => {
@@ -44,6 +49,7 @@ export function useProfilePresence(username: string): ProfilePresence {
       ready: false,
       isOnline: false,
       activity: null,
+      currentBookId: null,
     })
     if (!rtdb || !username) return
     const unsub = worldService.subscribeWorld(entries => {
@@ -53,6 +59,7 @@ export function useProfilePresence(username: string): ProfilePresence {
         ready: true,
         isOnline: !!entry,
         activity: entry?.activity ?? null,
+        currentBookId: entry?.currentBookId ?? null,
       })
     })
     return unsub

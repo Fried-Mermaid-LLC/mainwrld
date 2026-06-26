@@ -30,6 +30,7 @@ interface Handle {
   ref: DatabaseReference;
   connectedUnsub: (() => void) | null;
   activity: string;
+  currentBookId: string | null;
   rotY: number;
   position: { x: number; y: number; z: number };
   emoteId: number;
@@ -45,6 +46,12 @@ const handles = new Map<string, Handle>();
 // setWorldActivity write below would otherwise no-op and the node would seed at
 // 'Exploring'. joinWorld seeds the handle from this so Reading/Writing isn't lost.
 const desiredActivity = new Map<string, string>();
+
+// Last book the view layer asked for, per uid — recorded even before a handle
+// exists, mirroring desiredActivity. The activity effect (usePersist) can fire
+// before joinWorld, so joinWorld seeds the handle from this and the book id isn't
+// lost. null means "not reading" and is written as a removed child (see doWrite).
+const desiredBookId = new Map<string, string | null>();
 
 // Last avatar position per uid, retained across a leave/rejoin so entering a world
 // view through a non-world one (book-detail → reading) keeps the avatar where it
@@ -66,6 +73,9 @@ const doWrite = (handle: Handle, now: number): void => {
     position: handle.position,
     rotY: handle.rotY,
     activity: handle.activity,
+    // null removes the child in an RTDB update, so peers see the book cleared the
+    // instant the user stops reading (rather than a stale id lingering).
+    currentBookId: handle.currentBookId,
     updatedAt: now,
   });
 };
@@ -99,6 +109,7 @@ export const joinWorld = (uid: string, username: string): void => {
     ref: r,
     connectedUnsub: null,
     activity: desiredActivity.get(uid) ?? 'Exploring',
+    currentBookId: desiredBookId.get(uid) ?? null,
     rotY: lastRotY.get(uid) ?? 0,
     position: lastPosition.get(uid) ?? { x: 0, y: 0, z: 0 },
     emoteId: 0,
@@ -123,6 +134,7 @@ export const joinWorld = (uid: string, username: string): void => {
       position: handle.position,
       rotY: handle.rotY,
       activity: handle.activity,
+      currentBookId: handle.currentBookId,
       updatedAt: Date.now(),
     });
   });
@@ -157,14 +169,29 @@ export const getLastTransform = (
   return { position: p, rotY: lastRotY.get(uid) ?? 0 };
 };
 
-export const setWorldActivity = (uid: string, activity: string): void => {
+export const setWorldActivity = (
+  uid: string,
+  activity: string,
+  currentBookId: string | null = null
+): void => {
   // Record intent first so a join that hasn't happened yet (effect-ordering race)
-  // still picks up the right label instead of defaulting to 'Exploring'.
+  // still picks up the right label/book instead of defaulting to Exploring/none.
   desiredActivity.set(uid, activity);
+  desiredBookId.set(uid, currentBookId);
   const handle = handles.get(uid);
-  if (!rtdb || !handle || handle.activity === activity) return;
+  if (!rtdb || !handle) return;
+  // Bail only when neither the label nor the book changed — a book switch with the
+  // same activity ('Reading' → another book) must still publish.
+  if (handle.activity === activity && handle.currentBookId === currentBookId)
+    return;
   handle.activity = activity;
-  void update(handle.ref, { activity, updatedAt: Date.now() });
+  handle.currentBookId = currentBookId;
+  // null clears the child so peers stop showing a book the moment reading ends.
+  void update(handle.ref, {
+    activity,
+    currentBookId,
+    updatedAt: Date.now(),
+  });
 };
 
 export const sendEmote = (uid: string, type: string): void => {
@@ -213,6 +240,8 @@ export const subscribeWorld = (
         position: [pos.x ?? 0, pos.y ?? 0, pos.z ?? 0],
         rotY: typeof v.rotY === 'number' ? v.rotY : 0,
         activity: typeof v.activity === 'string' ? v.activity : 'Idle',
+        currentBookId:
+          typeof v.currentBookId === 'string' ? v.currentBookId : null,
         emote:
           emote && typeof emote.type === 'string' && typeof emote.id === 'number'
             ? { type: emote.type, id: emote.id }

@@ -26,6 +26,7 @@ export interface WorldEntry {
   position: [number, number, number];
   rotY: number;
   activity: string;
+  currentBookId: string | null; // book actively being read; null when not reading (X06)
   emote?: WorldEmote;
 }
 
