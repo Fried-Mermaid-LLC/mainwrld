@@ -146,6 +146,7 @@ export class ChaptersService {
     dto: CommitChapterDto,
   ): Promise<void> {
     const book = await this.assertAuthor(bookId, user);
+    this.assertEditable(book, user);
     // Mature flag: the incoming book update if present, else the stored value
     // (legacy docs fall back to isExplicit). Relaxes the OpenAI layer to permit
     // sexual/violent themes in Mature works while still blocking CSAM/illegal/etc.
@@ -208,6 +209,7 @@ export class ChaptersService {
     bookUpdates?: Record<string, unknown>,
   ): Promise<void> {
     const book = await this.assertAuthor(bookId, user);
+    this.assertEditable(book, user);
     // The client sends the new chapterMeta/chaptersCount, but `likes` and
     // `chapterLikedBy` are server-managed reader aggregates the author can't
     // write. They're indexed by chapter position, so removing a chapter must
@@ -294,6 +296,22 @@ export class ChaptersService {
       throw new ForbiddenException('Not the book author');
     }
     return data;
+  }
+
+  // Completion lock for the chapter-write paths: a book marked completed is
+  // read-only, so its chapters can be neither written nor deleted (mirrors the
+  // book-level lock in BooksService.update and the client's WriteView editor
+  // lock). Admins keep edit access for moderation. Reading paths (list/getOne/
+  // getContent) intentionally do NOT call this — a completed book is still read.
+  private assertEditable(
+    book: Record<string, unknown>,
+    user: AuthUser,
+  ): void {
+    if ((book as { isCompleted?: boolean }).isCompleted === true && !user.admin) {
+      throw new ForbiddenException(
+        'This book is completed and can no longer be edited.',
+      );
+    }
   }
 
   private async assertClean(

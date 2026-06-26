@@ -1074,24 +1074,26 @@ export const WriteView = () => {
                           );
                         },
                       )}
-                      <button
-                        ref={
-                          selectedChapterIndex === "new"
-                            ? activeChapterPillRef
-                            : undefined
-                        }
-                        onClick={() => setSelectedChapterIndex("new")}
-                        className={`shrink-0 flex items-center gap-1 h-10 px-4 rounded-2xl text-xs font-bold border-2 border-dashed transition-all active:scale-95 ${
-                          selectedChapterIndex === "new"
-                            ? "border-accent text-accent bg-accent/5"
-                            : "border-gray-200 text-gray-400 hover:border-accent hover:text-accent"
-                        }`}
-                      >
-                        <span className="material-icons-round text-base">
-                          add
-                        </span>
-                        New
-                      </button>
+                      {!(selectedBook && selectedBook.isCompleted) && (
+                        <button
+                          ref={
+                            selectedChapterIndex === "new"
+                              ? activeChapterPillRef
+                              : undefined
+                          }
+                          onClick={() => setSelectedChapterIndex("new")}
+                          className={`shrink-0 flex items-center gap-1 h-10 px-4 rounded-2xl text-xs font-bold border-2 border-dashed transition-all active:scale-95 ${
+                            selectedChapterIndex === "new"
+                              ? "border-accent text-accent bg-accent/5"
+                              : "border-gray-200 text-gray-400 hover:border-accent hover:text-accent"
+                          }`}
+                        >
+                          <span className="material-icons-round text-base">
+                            add
+                          </span>
+                          New
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1256,7 +1258,9 @@ export const WriteView = () => {
                       ? "✓ Saved"
                       : "All Changes Saved"}
                 </div>
-                <div className="flex gap-4 pt-4 animate-in slide-in-from-bottom duration-300">
+                <div className={`flex gap-4 pt-4 animate-in slide-in-from-bottom duration-300 ${
+                  selectedBook && selectedBook.isCompleted ? "hidden" : ""
+                }`}>
                   {isExistingChapter && (
                     <button
                       onClick={handleDeleteClick}

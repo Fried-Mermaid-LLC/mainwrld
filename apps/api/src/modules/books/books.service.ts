@@ -128,6 +128,22 @@ export class BooksService {
     if (existing.authorUid !== user.uid && !user.admin) {
       throw new ForbiddenException('Not the book author');
     }
+    // Completion lock: a book the author marked completed is read-only. The one
+    // mutation still allowed is reopening it (isCompleted -> false), which the
+    // demonetize lock below turns into a permanent un-monetize. Admins keep edit
+    // access for moderation/takedown paths. This is the server-authoritative
+    // mirror of the editor lock in the client's WriteView.
+    const isReopen =
+      (dto as { isCompleted?: boolean }).isCompleted === false;
+    if (
+      (existing as { isCompleted?: boolean }).isCompleted === true &&
+      !isReopen &&
+      !user.admin
+    ) {
+      throw new ForbiddenException(
+        'This book is completed and can no longer be edited. Reopen it first.',
+      );
+    }
     // An author may not write their own book's per-chapter `likes` — that would
     // self-inflate the monetization/spotlight signal (readers' likes never reach
     // this author-only endpoint anyway). Admins may still adjust counts.

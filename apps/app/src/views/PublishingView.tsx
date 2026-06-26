@@ -12,6 +12,7 @@ export const PublishingView = () => {
     handlePublishBook,
     handleUnpublish,
     handleDeleteBook,
+    handleMarkCompleted,
     setEditorTarget,
     setView
   } = useApp()
@@ -31,6 +32,11 @@ export const PublishingView = () => {
   const bookIsDraft = liveBook
     ? liveBook.isDraft !== false
     : initialData?.isDraft !== false
+  // A completed book is locked: editing is disabled and it can be monetized.
+  // The footer swaps Publish/Unpublish for a Reopen action while completed.
+  const bookIsCompleted = liveBook
+    ? !!liveBook.isCompleted
+    : !!initialData?.isCompleted
   const [bookTitle, setBookTitle] = useState(initialData?.title || '')
   const [isCreating, setIsCreating] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
@@ -400,54 +406,91 @@ export const PublishingView = () => {
             </div>
 
             {editingBookId && (
-              <div className='flex gap-4'>
-                <button
-                  onClick={() => handleDeleteBook(editingBookId)}
-                  className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-red-500'
-                >
-                  <span className='material-icons-round text-sm'>
-                    delete_forever
-                  </span>
-                  Delete Book
-                </button>
-                {bookIsDraft ? (
-                  // Draft → publish the book; flips this button to Unpublish.
+              <div className='space-y-4'>
+                <div className='flex gap-4'>
                   <button
-                    disabled={isPublishing}
-                    onClick={async () => {
-                      setIsPublishing(true)
-                      // handlePublishBook patches the live book's isDraft → the
-                      // footer flips to Unpublish reactively, no local flag.
-                      await handlePublishBook(editingBookId)
-                      setIsPublishing(false)
-                    }}
-                    className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-accent disabled:opacity-50'
-                  >
-                    <span className='material-icons-round text-sm'>publish</span>
-                    {isPublishing ? 'Publishing…' : 'Publish Book'}
-                  </button>
-                ) : (
-                  // Published → two-click unpublish; flips back to Publish.
-                  <button
-                    onClick={() => {
-                      if (!unpublishConfirm) {
-                        setUnpublishConfirm(true)
-                        return
-                      }
-                      setUnpublishConfirm(false)
-                      void handleUnpublish(editingBookId)
-                    }}
-                    className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
-                      unpublishConfirm
-                        ? 'bg-amber-50 border-amber-200 text-amber-600'
-                        : 'bg-gray-50 border-gray-100 text-gray-400 hover:text-amber-500'
-                    }`}
+                    onClick={() => handleDeleteBook(editingBookId)}
+                    className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-red-500'
                   >
                     <span className='material-icons-round text-sm'>
-                      {unpublishConfirm ? 'priority_high' : 'unpublished'}
+                      delete_forever
                     </span>
-                    {unpublishConfirm ? 'Confirm Unpublish?' : 'Unpublish Book'}
+                    Delete Book
                   </button>
+                  {bookIsDraft ? (
+                    // Draft → publish the book; flips this button to Unpublish.
+                    <button
+                      disabled={isPublishing}
+                      onClick={async () => {
+                        setIsPublishing(true)
+                        // handlePublishBook patches the live book's isDraft → the
+                        // footer flips to Unpublish reactively, no local flag.
+                        await handlePublishBook(editingBookId)
+                        setIsPublishing(false)
+                      }}
+                      className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-accent disabled:opacity-50'
+                    >
+                      <span className='material-icons-round text-sm'>publish</span>
+                      {isPublishing ? 'Publishing…' : 'Publish Book'}
+                    </button>
+                  ) : bookIsCompleted ? (
+                    // Completed → the book is locked, so reopening (not
+                    // unpublishing) is the way back to an editable state.
+                    // handleMarkCompleted warns about permanent demonetization
+                    // when the book is monetized.
+                    <button
+                      onClick={() => handleMarkCompleted(editingBookId)}
+                      className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-accent'
+                    >
+                      <span className='material-icons-round text-sm'>undo</span>
+                      Reopen Book
+                    </button>
+                  ) : (
+                    // Published → two-click unpublish; flips back to Publish.
+                    // Mark-as-Completed sits to its right (same row).
+                    <>
+                      <button
+                        onClick={() => {
+                          if (!unpublishConfirm) {
+                            setUnpublishConfirm(true)
+                            return
+                          }
+                          setUnpublishConfirm(false)
+                          void handleUnpublish(editingBookId)
+                        }}
+                        className={`flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
+                          unpublishConfirm
+                            ? 'bg-amber-50 border-amber-200 text-amber-600'
+                            : 'bg-gray-50 border-gray-100 text-gray-400 hover:text-amber-500'
+                        }`}
+                      >
+                        <span className='material-icons-round text-sm'>
+                          {unpublishConfirm ? 'priority_high' : 'unpublished'}
+                        </span>
+                        {unpublishConfirm
+                          ? 'Confirm Unpublish?'
+                          : 'Unpublish Book'}
+                      </button>
+                      {/* Mark-as-completed: locks the book from edits and
+                          unlocks monetization (which is gated on completion). */}
+                      <button
+                        onClick={() => handleMarkCompleted(editingBookId)}
+                        className='flex-1 h-12 rounded-2xl font-bold text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400 hover:text-emerald-500'
+                      >
+                        <span className='material-icons-round text-sm'>
+                          check_circle
+                        </span>
+                        Mark as Completed
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {bookIsCompleted && (
+                  <p className='text-center text-[9px] font-bold uppercase tracking-widest text-gray-300 flex items-center justify-center gap-1.5'>
+                    <span className='material-icons-round text-sm'>lock</span>
+                    Completed — editing is locked
+                  </p>
                 )}
               </div>
             )}

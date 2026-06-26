@@ -281,6 +281,12 @@ export const submitMonetizationRequest = onCall<
   if (book.isDraft === true) {
     throw new HttpsError('failed-precondition', 'Publish the book before monetizing.')
   }
+  // Monetization is gated on COMPLETION, not mere publication: a published book
+  // is still editable, so only a book the author marked completed (and thereby
+  // locked from edits) may be sold. Mirrors the NestJS MonetizationService.
+  if (book.isCompleted !== true) {
+    throw new HttpsError('failed-precondition', 'Mark the book as completed before monetizing.')
+  }
 
   // Terminal blocks apply to EVERYONE: a book that was ever monetized then
   // demonetized, or was taken down by an admin, can NEVER be monetized again
@@ -302,8 +308,8 @@ export const submitMonetizationRequest = onCall<
   const effectiveChapters = Math.min(book.chaptersCount || 0, realChapters)
 
   // Eligibility prerequisites — enforced for everyone (no admin bypass). The
-  // "completed" gate was removed; the published requirement is already enforced
-  // by the isDraft check above.
+  // publish + completion gates are enforced by the isDraft / isCompleted checks
+  // above; monetization keys off completion.
   if (effectiveChapters < 5) {
     throw new HttpsError('failed-precondition', 'Need at least 5 chapters.')
   }
@@ -388,6 +394,10 @@ export const reviewMonetization = onCall<
     // A draft can't be sold; never monetize one (publish first).
     if (book.isDraft === true) {
       throw new HttpsError('failed-precondition', 'Book is a draft — publish it first.')
+    }
+    // Monetization is gated on completion (see submitMonetizationRequest).
+    if (book.isCompleted !== true) {
+      throw new HttpsError('failed-precondition', 'Book is not completed — it must be completed to monetize.')
     }
     // Terminal blocks still apply at approval time (the book may have been
     // demonetized or taken down after the request was filed).

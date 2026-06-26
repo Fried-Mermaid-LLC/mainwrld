@@ -16,6 +16,7 @@ describe('MonetizationService', () => {
       id: 'b1',
       authorUid: 'u1',
       isDraft: false,
+      isCompleted: true,
       chaptersCount: 5,
       likes: [100, 100, 100, 100, 100],
       publishedDate: new Date(Date.now() - 30 * 864e5).toISOString(),
@@ -61,6 +62,13 @@ describe('MonetizationService', () => {
     it('rejects a draft', async () => {
       seedBook({ isDraft: true });
       await expect(svc.submit(makeAuthUser(), 'b1', 9.99)).rejects.toThrow();
+    });
+
+    it('rejects a published book that is not completed', async () => {
+      seedBook({ isDraft: false, isCompleted: false });
+      await expect(svc.submit(makeAuthUser(), 'b1', 9.99)).rejects.toThrow(
+        'completed',
+      );
     });
 
     it('rejects a price tier above the chapter-count allowance', async () => {
@@ -150,6 +158,19 @@ describe('MonetizationService', () => {
         'b1',
         expect.objectContaining({ isMonetized: true, price: 9.99 }),
       );
+    });
+
+    it('rejects approval when the book is not completed', async () => {
+      seedBook({
+        isCompleted: false,
+        monetizationStatus: 'pending',
+        requestedPrice: 9.99,
+        sellerStripeAccountId: 'acct_1',
+      });
+      await expect(
+        svc.review('admin', 'reviewer-uid', 'b1', 'approve'),
+      ).rejects.toThrow('completed');
+      expect(effects.onApproved).not.toHaveBeenCalled();
     });
 
     it('rejects approval when the requested price is not a real tier', async () => {

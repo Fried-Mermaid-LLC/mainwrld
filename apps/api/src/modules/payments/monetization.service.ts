@@ -71,6 +71,14 @@ export class MonetizationService {
         'Publish the book before monetizing.',
       );
     }
+    // Monetization is gated on COMPLETION, not mere publication: a published
+    // book is still editable, so only a book the author has explicitly marked
+    // completed (and thereby locked from further edits) may be sold.
+    if (book.isCompleted !== true) {
+      throw new PreconditionFailedException(
+        'Mark the book as completed before monetizing.',
+      );
+    }
     if (!this.canMonetize(book)) {
       throw new PreconditionFailedException(
         'This book can’t be monetized again.',
@@ -96,8 +104,8 @@ export class MonetizationService {
     );
 
     // Eligibility prerequisites — enforced for everyone (no admin bypass). The
-    // "completed" gate was removed; the published requirement is already
-    // enforced by the isDraft check above.
+    // publish + completion gates are enforced by the isDraft / isCompleted
+    // checks above; monetization keys off completion (see those checks).
     if (effectiveChapters < 5) {
       throw new PreconditionFailedException('Need at least 5 chapters.');
     }
@@ -174,6 +182,11 @@ export class MonetizationService {
       if (book.isDraft === true) {
         throw new PreconditionFailedException(
           'Book is a draft — publish it first.',
+        );
+      }
+      if (book.isCompleted !== true) {
+        throw new PreconditionFailedException(
+          'Book is not completed — it must be completed to monetize.',
         );
       }
       if (!this.canMonetize(book) || book.takenDown === true) {

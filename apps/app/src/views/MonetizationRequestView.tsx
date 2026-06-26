@@ -72,7 +72,10 @@ export const MonetizationRequestView = () => {
   const eligibility = useMemo(() => {
     if (!selectedBook) return { met: false, reasons: ['No works selected'] }
     const r: string[] = []
-    if (selectedBook.isDraft) r.push('Published')
+    // Monetization is gated on COMPLETION, not mere publication. A book can only
+    // be marked completed once published, so requiring completion subsumes the
+    // old "Published" requirement (and the server re-checks both).
+    if (!selectedBook.isCompleted) r.push('Marked as completed')
     if (selectedBook.chaptersCount < 5) r.push('At least 5 published chapters')
     // Derived from the real per-chapter `likes` array (not the never-set
     // minLikesPerChapter mock field) — see minLikesPerPublishedChapter.

@@ -260,6 +260,26 @@ describe('ChaptersService', () => {
       ).rejects.toThrow('Not the book author');
     });
 
+    it('forbids writing a chapter on a completed (locked) book', async () => {
+      seedBook({ isCompleted: true });
+      await expect(
+        svc.commitWrite('b1', 'c1', makeAuthUser({ uid: 'u1' }), dto()),
+      ).rejects.toThrow('completed');
+      // The chapter body is untouched.
+      expect(fs.dump('books/b1/chapters/c1')!.content).toBe('paid body');
+    });
+
+    it('lets an admin write a chapter on a completed book', async () => {
+      seedBook({ isCompleted: true });
+      await svc.commitWrite(
+        'b1',
+        'c1',
+        makeAuthUser({ uid: 'admin1', admin: true }),
+        dto(),
+      );
+      expect(fs.dump('books/b1/chapters/c1')!.content).toBe('new body');
+    });
+
     it('rejects flagged content with a 422', async () => {
       moderation = createFakeModeration(true);
       svc = new ChaptersService(fs as any, moderation as any);
@@ -415,6 +435,19 @@ describe('ChaptersService', () => {
       await expect(
         svc.commitDelete('b1', 'c1', makeAuthUser({ uid: 'intruder' }), {}),
       ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('forbids deleting a chapter on a completed (locked) book', async () => {
+      seedBook({ isCompleted: true, likes: [10, 20, 30] });
+      await expect(
+        svc.commitDelete('b1', 'c1', makeAuthUser({ uid: 'u1' }), {
+          chapterMeta: [{ id: 'c0' }, { id: 'c2' }],
+          chaptersCount: 2,
+        }),
+      ).rejects.toThrow('completed');
+      // The chapter still exists and likes are untouched.
+      expect(fs.dump('books/b1/chapters/c1')).toBeTruthy();
+      expect(fs.dump('books/b1')!.likes).toEqual([10, 20, 30]);
     });
   });
 });

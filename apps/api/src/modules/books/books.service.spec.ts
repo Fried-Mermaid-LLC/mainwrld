@@ -320,7 +320,10 @@ describe('BooksService', () => {
       expect(stored.wasMonetizedBefore).toBe(true);
     });
 
-    it('does NOT demonetize a monetized book on an unrelated edit', async () => {
+    it('does NOT demonetize a monetized book on an unrelated (admin) edit', async () => {
+      // A monetized book is necessarily completed (hence locked for the author),
+      // so an unrelated metadata edit can only come from an admin. It must not
+      // trip the demonetize patch.
       fs.seed('books/b1', {
         id: 'b1',
         authorUid: 'u1',
@@ -331,7 +334,7 @@ describe('BooksService', () => {
         isDraft: false,
         isCompleted: true,
       });
-      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+      await svc.update('b1', makeAuthUser({ uid: 'admin1', admin: true }), {
         title: 'new',
       } as any);
       const stored = fs.dump('books/b1')!;
@@ -339,6 +342,51 @@ describe('BooksService', () => {
       expect(stored.price).toBe(9.99);
       expect(stored.permanentlyDemonetized).toBeUndefined();
       expect(stored.wasMonetizedBefore).toBeUndefined();
+    });
+
+    it('forbids the author from editing a completed book (locked)', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'done',
+        isDraft: false,
+        isCompleted: true,
+      });
+      await expect(
+        svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+          title: 'sneaky edit',
+        } as any),
+      ).rejects.toThrow('completed');
+      // The stored title is untouched.
+      expect(fs.dump('books/b1')!.title).toBe('done');
+    });
+
+    it('allows the author to reopen a completed book (isCompleted -> false)', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'done',
+        isDraft: false,
+        isCompleted: true,
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1' }), {
+        isCompleted: false,
+      } as any);
+      expect(fs.dump('books/b1')!.isCompleted).toBe(false);
+    });
+
+    it('lets an admin edit a completed book (moderation path)', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        title: 'done',
+        isDraft: false,
+        isCompleted: true,
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'admin1', admin: true }), {
+        title: 'moderated',
+      } as any);
+      expect(fs.dump('books/b1')!.title).toBe('moderated');
     });
 
     it('does not stamp permanence flags when a non-monetized book is unpublished', async () => {
