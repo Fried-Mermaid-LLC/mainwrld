@@ -66,6 +66,24 @@ describe('SocialService', () => {
         findEdge((d) => d.admirer === 'bob' && d.target === 'alice'),
       ).toBeDefined();
     });
+
+    it('writes the edge at a deterministic per-pair document id', async () => {
+      // Must match SocialService.edgeId — a stable id is what lets a racing
+      // duplicate write coalesce onto one document instead of an auto-id dupe.
+      await svc.add('alice', 'bob');
+      const found = findEdge(
+        (d) => d.admirer === 'alice' && d.target === 'bob',
+      );
+      expect(found![0]).toBe(`${COL}/e_alice:bob`);
+    });
+
+    it('coalesces concurrent duplicate adds onto a single edge (race-safe)', async () => {
+      // The TOCTOU window the old auto-id add() turned into two identical edges:
+      // both calls observe an empty collection, then both write. The shared
+      // deterministic id keeps that to one document.
+      await Promise.all([svc.add('alice', 'bob'), svc.add('alice', 'bob')]);
+      expect(edgeCount()).toBe(1);
+    });
   });
 
   describe('remove', () => {

@@ -94,11 +94,20 @@ export const HomeView = () => {
             const myAdmiring = relationships
               .filter(r => r.admirer === user.username)
               .map(r => r.target)
-            const actualMutualUsernames = myAdmiring.filter(t =>
-              relationships.some(
-                r => r.admirer === t && r.target === user.username
+            // Dedup by username: `relationships` is an edge list, so a duplicate
+            // (me → bob) edge would yield bob twice here and render the SAME
+            // character as two avatars (with a duplicate React key). One avatar
+            // per mutual, regardless of how many edges back it — mirrors the
+            // dedup MUTUALS already does in useSocial.
+            const actualMutualUsernames = [
+              ...new Set(
+                myAdmiring.filter(t =>
+                  relationships.some(
+                    r => r.admirer === t && r.target === user.username
+                  )
+                )
               )
-            )
+            ]
             // Render EVERY (non-blocked) mutual, always — online or not. Users
             // present in /world (worldUsernames) get live position/rotation/
             // activity from RTDB via getWorldEntry. Everyone else (offline, or
