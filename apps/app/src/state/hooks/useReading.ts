@@ -1267,8 +1267,27 @@ export function useReading({
     exact?: Partial<BookProgress>
   ) => {
     if (!userDataLoaded) return
-    // Save progress per-user (both scroll position and chapter index)
+    // Save progress per-user (both scroll position and chapter index). The raw
+    // per-chapter scrollProgress is what restore needs, so it stays untouched.
     setUserBookProgress(bookId, scrollProgress, chapterIndex, exact)
+    // readingActivity feeds the profile progress bars (own "Last Read" + a
+    // mutual's "Currently Reading"), which mean "how far through the BOOK".
+    // scrollProgress is per-chapter and resets to 0 on every chapter change, so
+    // storing it raw made those bars jump back to ~0 each time the reader
+    // advanced a chapter — wrong in both scroll and page mode. Fold the chapter
+    // index in so the stored value is true book progress (same formula as the
+    // Library continue-reading bar). chapterIndex is the visible-chapter index,
+    // matching chaptersCount's published-chapter space.
+    const book = books.find(b => b.id === bookId)
+    const totalChapters = Math.max(
+      book?.chaptersCount || book?.chapterMeta?.length || 1,
+      1
+    )
+    const clampedChapter = Math.min(Math.max(chapterIndex, 0), totalChapters - 1)
+    const bookProgress = Math.min(
+      Math.round(((clampedChapter + scrollProgress / 100) / totalChapters) * 100),
+      100
+    )
     // Update reading activity
     setReadingActivity(prev => {
       const userActivity = [...(prev[user.username] || [])]
@@ -1276,13 +1295,13 @@ export function useReading({
       if (existing >= 0)
         userActivity[existing] = {
           bookId,
-          progress: scrollProgress,
+          progress: bookProgress,
           lastRead: new Date().toISOString()
         }
       else
         userActivity.unshift({
           bookId,
-          progress: scrollProgress,
+          progress: bookProgress,
           lastRead: new Date().toISOString()
         })
       return { ...prev, [user.username]: userActivity.slice(0, 10) }
