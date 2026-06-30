@@ -25,8 +25,16 @@ export const SelfProfileView = () => {
     setSelectedBook,
     relationships,
     avatarConfig,
-    readingActivity
+    readingActivity,
+    setSocialListUsername
   } = useApp()
+
+  // The social lists (Mutuals / Admirers / Admiring) are shared with other
+  // profiles; clearing the target scopes them to the signed-in user.
+  const openSocialList = (v: 'mutuals' | 'admirers' | 'admiring') => {
+    setSocialListUsername(null)
+    setView(v)
+  }
 
   // Last Read — most recent reading activity for the current user. Entries are
   // updated in place (not reordered) when a book is re-read, so sort by
@@ -120,7 +128,10 @@ export const SelfProfileView = () => {
               Points
             </p>
           </div>
-          <div className='text-center'>
+          <button
+            onClick={() => openSocialList('mutuals')}
+            className='text-center transition-transform active:scale-95'
+          >
             <p className='text-lg font-bold'>
               {(() => {
                 const admiring = relationships
@@ -136,8 +147,11 @@ export const SelfProfileView = () => {
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Mutuals
             </p>
-          </div>
-          <div className='text-center'>
+          </button>
+          <button
+            onClick={() => openSocialList('admirers')}
+            className='text-center transition-transform active:scale-95'
+          >
             <p className='text-lg font-bold'>
               {
                 relationships.filter(r => r.target === user.username)
@@ -147,8 +161,11 @@ export const SelfProfileView = () => {
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admirers
             </p>
-          </div>
-          <div className='text-center'>
+          </button>
+          <button
+            onClick={() => openSocialList('admiring')}
+            className='text-center transition-transform active:scale-95'
+          >
             <p className='text-lg font-bold'>
               {
                 relationships.filter(r => r.admirer === user.username)
@@ -158,7 +175,7 @@ export const SelfProfileView = () => {
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admiring
             </p>
-          </div>
+          </button>
         </div>
         <Button
           className='w-full max-w-xs mb-10'

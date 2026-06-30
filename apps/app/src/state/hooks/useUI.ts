@@ -80,6 +80,12 @@ export function useUI() {
     null
   )
   const [selectedChatUser, setSelectedChatUser] = useState<string | null>(null)
+  // Whose social lists (Mutuals / Admirers / Admiring) the SocialListView shows.
+  // null = the signed-in user (opened from the Me profile, Back → self-profile);
+  // a username = another person (opened from their Profile, Back → profile).
+  const [socialListUsername, setSocialListUsername] = useState<string | null>(
+    null
+  )
   const [moveDir, setMoveDir] = useState(new THREE.Vector3())
   // Defaults applied until the persisted readerSettings (if any) hydrate from
   // the profile in useUserDataLoader. Kept here (not on `user`) so the reader
@@ -159,6 +165,8 @@ export function useUI() {
     setSelectedProfileUser,
     selectedChatUser,
     setSelectedChatUser,
+    socialListUsername,
+    setSocialListUsername,
     moveDir,
     setMoveDir,
     readerSettings,

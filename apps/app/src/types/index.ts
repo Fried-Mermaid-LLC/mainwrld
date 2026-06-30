@@ -8,7 +8,7 @@ export type View =
   | 'splash' | 'landing' | 'login' | 'signup' | 'forgot-password' | 'reset-password' | 'terms' | 'privacy' | 'guidelines'
   | 'home' | 'explore' | 'library' | 'write' | 'publishing'
   | 'monetization-request' | 'self-profile' | 'customization'
-  | 'profile' | 'book-detail' | 'reading' | 'notifications'
+  | 'profile' | 'mutuals' | 'admirers' | 'admiring' | 'book-detail' | 'reading' | 'notifications'
   | 'notification-settings' | 'settings' | 'comments' | 'blocked-users' | 'admin-dashboard' | 'daily-rewards' | 'cart'
   | 'chat' | 'chat-conversation' | 'public-book';
 

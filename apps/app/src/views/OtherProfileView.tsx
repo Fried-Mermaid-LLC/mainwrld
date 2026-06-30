@@ -16,6 +16,7 @@ export const OtherProfileView = () => {
     handleAdmire,
     handleBlockUser,
     setSelectedChatUser,
+    setSocialListUsername,
     relationships,
     user: currentUser,
     readingActivity,
@@ -61,6 +62,13 @@ export const OtherProfileView = () => {
   const onMessage = () => {
     setSelectedChatUser(user.username)
     setView('chat-conversation')
+  }
+  // Open this profile's social lists (Mutuals / Admirers / Admiring), scoped to
+  // the viewed user so SocialListView resolves their graph (and Back returns
+  // here rather than to the Me profile).
+  const openSocialList = (v: 'mutuals' | 'admirers' | 'admiring') => {
+    setSocialListUsername(user.username)
+    setView(v)
   }
   const currentUsername = currentUser.username
   const avatarConfig = allAvatarConfigs[user.username] || null
@@ -187,7 +195,7 @@ export const OtherProfileView = () => {
           </div>
         </div>
       )}
-      <div className='p-6 flex flex-col items-center'>
+      <div className='p-6 flex flex-col items-center max-w-3xl mx-auto w-full'>
         {avatarConfig ? (
           <div className='w-32 h-32 rounded-[3rem] overflow-hidden border-4 border-white shadow-2xl mb-6 relative bg-gray-50'>
             <AvatarLayers
@@ -238,24 +246,33 @@ export const OtherProfileView = () => {
         )}
 
         <div className='grid grid-cols-3 gap-8 w-full max-w-sm mb-10'>
-          <div className='text-center'>
+          <button
+            onClick={() => openSocialList('admirers')}
+            className='text-center transition-transform active:scale-95'
+          >
             <p className='text-lg font-bold'>{theirAdmirers}</p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admirers
             </p>
-          </div>
-          <div className='text-center'>
+          </button>
+          <button
+            onClick={() => openSocialList('admiring')}
+            className='text-center transition-transform active:scale-95'
+          >
             <p className='text-lg font-bold'>{theirAdmiring}</p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admiring
             </p>
-          </div>
-          <div className='text-center'>
+          </button>
+          <button
+            onClick={() => openSocialList('mutuals')}
+            className='text-center transition-transform active:scale-95'
+          >
             <p className='text-lg font-bold'>{theirMutuals}</p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Mutuals
             </p>
-          </div>
+          </button>
         </div>
 
         <div className='flex gap-3 w-full max-w-sm mb-12'>

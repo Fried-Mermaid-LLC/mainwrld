@@ -49,6 +49,9 @@ const CLIENT_APPLY_VIEWS: ReadonlySet<View> = new Set<View>([
   'publishing',
   'monetization-request',
   'self-profile',
+  'mutuals',
+  'admirers',
+  'admiring',
   'customization',
   'notifications',
   'notification-settings',
@@ -102,6 +105,12 @@ export function routeToPath(r: Route): string | null {
       return r.bookId ? `/monetize/${r.bookId}` : '/monetize'
     case 'self-profile':
       return '/me'
+    case 'mutuals':
+      return '/me/mutuals'
+    case 'admirers':
+      return '/me/admirers'
+    case 'admiring':
+      return '/me/admiring'
     case 'customization':
       return '/customize'
     case 'notifications':
@@ -190,6 +199,9 @@ export function parsePath(pathname: string, search: string): Route | null {
     case 'monetization':
       return { view: 'monetization-request', bookId: id(segs[1]) }
     case 'me':
+      if (segs[1] === 'mutuals') return { view: 'mutuals' }
+      if (segs[1] === 'admirers') return { view: 'admirers' }
+      if (segs[1] === 'admiring') return { view: 'admiring' }
       return { view: 'self-profile' }
     case 'customize':
       return { view: 'customization' }

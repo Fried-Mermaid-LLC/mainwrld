@@ -171,10 +171,37 @@ export const PublicBookDetailPage = () => {
         <h1 className='text-3xl font-bold mb-1.5'>{book.title}</h1>
         <button
           onClick={() => onAuthorClick(book.author)}
-          className='text-accent font-bold uppercase text-[10px] tracking-widest mb-5'
+          className='text-accent font-bold uppercase text-[10px] tracking-widest mb-4'
         >
           By {book.author.displayName}
         </button>
+
+        {/* Status (Ongoing / Completed) + publication date */}
+        <div className='flex items-center justify-center gap-2.5 mb-6 flex-wrap'>
+          <span
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${
+              book.isCompleted
+                ? 'bg-green-50 text-green-600'
+                : 'bg-amber-50 text-amber-600'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                book.isCompleted ? 'bg-green-500' : 'bg-amber-500'
+              }`}
+            />
+            {book.isCompleted ? 'Completed' : 'Ongoing'}
+          </span>
+          {book.publishedDate && (
+            <span className='text-[9px] font-bold text-gray-500 uppercase tracking-widest'>
+              {new Date(book.publishedDate).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              })}
+            </span>
+          )}
+        </div>
 
         {book.tagline && (
           <p className='text-sm text-gray-500 italic mb-6 max-w-sm'>

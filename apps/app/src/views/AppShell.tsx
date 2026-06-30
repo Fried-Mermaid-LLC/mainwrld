@@ -23,6 +23,7 @@ import { HomeView } from '@/views/HomeView'
 import { DailyRewardsView } from '@/views/DailyRewardsView'
 import { LibraryView } from '@/views/LibraryView'
 import { SelfProfileView } from '@/views/SelfProfileView'
+import { SocialListView } from '@/views/SocialListView'
 import { NotificationsView } from '@/views/NotificationsView'
 import { NotificationSettingsView } from '@/views/NotificationSettingsView'
 import { BlockedUsersView } from '@/views/BlockedUsersView'
@@ -126,6 +127,11 @@ export const AppShell: React.FC = () => {
       case 'self-profile':
         return <SelfProfileView />
 
+      case 'mutuals':
+      case 'admirers':
+      case 'admiring':
+        return <SocialListView />
+
       case 'customization':
         return <CustomizationView />
 
@@ -192,7 +198,7 @@ export const AppShell: React.FC = () => {
     // mode) so the editing surface is full-height; the Studio works grid
     // (writeMode === 'list') still shows it.
     !(view === 'write' && writeMode === 'editor') &&
-    ['home', 'explore', 'library', 'write', 'self-profile'].includes(view)
+    ['home', 'explore', 'library', 'write', 'self-profile', 'mutuals', 'admirers', 'admiring'].includes(view)
 
   return (
     <div
@@ -211,7 +217,14 @@ export const AppShell: React.FC = () => {
             { id: 'library', icon: 'bookmarks', label: 'Library' },
             { id: 'write', icon: 'edit_note', label: 'Write' },
             { id: 'self-profile', icon: 'person', label: 'Me' }
-          ].map(tab => (
+          ].map(tab => {
+            // The Me-tab sub-screens (Mutuals / Admirers / Admiring) keep the
+            // Me tab highlighted, since they live behind the Me profile.
+            const isActive =
+              view === tab.id ||
+              (tab.id === 'self-profile' &&
+                ['mutuals', 'admirers', 'admiring'].includes(view))
+            return (
             <button
               key={tab.id}
               onClick={() => {
@@ -223,7 +236,7 @@ export const AppShell: React.FC = () => {
                 setView(tab.id as View)
               }}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-full transition-all ${
-                view === tab.id
+                isActive
                   ? 'text-accent bg-accent/10 scale-105'
                   : 'text-gray-400 opacity-60'
               }`}
@@ -233,7 +246,7 @@ export const AppShell: React.FC = () => {
                 {tab.label}
               </span>
             </button>
-          ))}
+          )})}
         </nav>
       )}
       {/* Toast notification */}
