@@ -319,6 +319,21 @@ export const PublicBookDetailPage = () => {
             </>
           )}
 
+          {/* Library button depends strictly on isOwned (visibility in Library
+              tab). Sits just under Read, styled gray to match the secondary
+              actions below it. */}
+          {!isAuthor && (
+            <button
+              onClick={() => (isOwned ? onRemove(book.id) : onSave(book.id))}
+              className='w-full h-14 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border bg-gray-50 border-gray-100 text-gray-400'
+            >
+              <span className='material-icons-round text-sm'>
+                {isOwned ? 'remove_circle_outline' : 'bookmark_add'}
+              </span>
+              {isOwned ? 'Remove from Library' : 'Save to Library'}
+            </button>
+          )}
+
           {/* Report + share + add-to-favorite (moved here from the header),
               under Read, styled like the Write Studio secondary action row. */}
           <div className='flex gap-4'>
@@ -351,23 +366,6 @@ export const PublicBookDetailPage = () => {
             </button>
           </div>
 
-          {/* Library button depends strictly on isOwned (visibility in Library tab) */}
-          {!isAuthor && (
-            <Button
-              variant={isOwned ? 'destructive' : 'outline'}
-              className={`w-full ${
-                isOwned
-                  ? 'bg-transparent border-none shadow-none text-gray-400'
-                  : ''
-              }`}
-              onClick={() => (isOwned ? onRemove(book.id) : onSave(book.id))}
-            >
-              <span className='material-icons-round text-sm'>
-                {isOwned ? 'remove_circle_outline' : 'bookmark_add'}
-              </span>
-              {isOwned ? 'Remove from Library' : 'Save to Library'}
-            </Button>
-          )}
           {reportSheet}
         </div>
       </div>
