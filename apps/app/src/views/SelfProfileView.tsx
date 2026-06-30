@@ -1,6 +1,7 @@
 import { AvatarLayers, getHairPosition } from '@/components/avatar'
 import { Button, CoverImg } from '@/components/sharedComponents'
 import { useApp } from '@/state/AppContext'
+import { getSocialBuckets } from '@/utils/social'
 
 const BookSkeletons = ({ count = 3 }: { count?: number }) => (
   <>
@@ -35,6 +36,9 @@ export const SelfProfileView = () => {
     setSocialListUsername(null)
     setView(v)
   }
+  // Disjoint counts: a mutual is only counted under Mutuals, never under
+  // Admirers/Admiring (matches the lists those counts open).
+  const social = getSocialBuckets(relationships, user.username)
 
   // Last Read — most recent reading activity for the current user. Entries are
   // updated in place (not reordered) when a book is re-read, so sort by
@@ -130,19 +134,10 @@ export const SelfProfileView = () => {
           </div>
           <button
             onClick={() => openSocialList('mutuals')}
-            className='text-center transition-transform active:scale-95'
+            className='text-center transition-transform active:scale-95 cursor-pointer'
           >
-            <p className='text-lg font-bold'>
-              {(() => {
-                const admiring = relationships
-                  .filter(r => r.admirer === user.username)
-                  .map(r => r.target)
-                return admiring.filter(t =>
-                  relationships.some(
-                    r => r.admirer === t && r.target === user.username
-                  )
-                ).length
-              })()}
+            <p className='text-lg font-bold text-accent'>
+              {social.mutuals.length}
             </p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Mutuals
@@ -150,13 +145,10 @@ export const SelfProfileView = () => {
           </button>
           <button
             onClick={() => openSocialList('admirers')}
-            className='text-center transition-transform active:scale-95'
+            className='text-center transition-transform active:scale-95 cursor-pointer'
           >
-            <p className='text-lg font-bold'>
-              {
-                relationships.filter(r => r.target === user.username)
-                  .length
-              }
+            <p className='text-lg font-bold text-accent'>
+              {social.admirers.length}
             </p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admirers
@@ -164,13 +156,10 @@ export const SelfProfileView = () => {
           </button>
           <button
             onClick={() => openSocialList('admiring')}
-            className='text-center transition-transform active:scale-95'
+            className='text-center transition-transform active:scale-95 cursor-pointer'
           >
-            <p className='text-lg font-bold'>
-              {
-                relationships.filter(r => r.admirer === user.username)
-                  .length
-              }
+            <p className='text-lg font-bold text-accent'>
+              {social.admiring.length}
             </p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admiring

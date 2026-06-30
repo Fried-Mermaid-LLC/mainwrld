@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { Relationship, User, View } from '@/types'
+import type { User, View } from '@/types'
 import { useApp } from '@/state/AppContext'
+import { getSocialBuckets } from '@/utils/social'
 import * as worldService from '@/services/worldService'
 import { rtdb } from '@/lib/firebase'
 
@@ -80,36 +81,11 @@ export const SocialListView = () => {
     } as User)
 
   // Computed generically from the social graph for `target`, so the same screen
-  // serves both the signed-in user and any other profile. Usernames are
-  // deduped first — the relationships feed can carry more than one edge for the
-  // same pair, which otherwise renders the same person several times.
-  const users: User[] = (() => {
-    const usernames: string[] = (() => {
-      if (mode === 'admirers') {
-        return relationships
-          .filter((r: Relationship) => r.target === target)
-          .map((r: Relationship) => r.admirer)
-      }
-      if (mode === 'admiring') {
-        return relationships
-          .filter((r: Relationship) => r.admirer === target)
-          .map((r: Relationship) => r.target)
-      }
-      // mutuals: people `target` admires who also admire `target` back.
-      const targetAdmiring = new Set(
-        relationships
-          .filter((r: Relationship) => r.admirer === target)
-          .map((r: Relationship) => r.target)
-      )
-      return relationships
-        .filter(
-          (r: Relationship) =>
-            r.target === target && targetAdmiring.has(r.admirer)
-        )
-        .map((r: Relationship) => r.admirer)
-    })()
-    return Array.from(new Set(usernames)).map(resolve)
-  })()
+  // serves both the signed-in user and any other profile. Categories are
+  // disjoint (mutuals never appear under admirers/admiring) and already deduped.
+  const users: User[] = getSocialBuckets(relationships, target)[mode].map(
+    resolve
+  )
 
   const onSelect = (u: User) => {
     setSelectedProfileUser(u)

@@ -4,6 +4,7 @@ import { MatureCover } from '@/components/MatureCover'
 import { AvatarLayers } from '@/components/avatar'
 import type { Relationship, User, Book } from '@/types'
 import { useApp } from '@/state/AppContext'
+import { getSocialBuckets } from '@/utils/social'
 import { useProfilePresence } from '@/state/hooks/useProfilePresence'
 import { useReportFlow } from '@/components/reportFlow'
 
@@ -88,22 +89,12 @@ export const OtherProfileView = () => {
       r.admirer === user.username && r.target === currentUsername
   )
   const isMutual = isAdmiring && theyAdmireMe
-  const theirAdmirers = relationships.filter(
-    (r: Relationship) => r.target === user.username
-  ).length
-  const theirAdmiring = relationships.filter(
-    (r: Relationship) => r.admirer === user.username
-  ).length
-  const theirMutuals = (() => {
-    const admiring = relationships
-      .filter((r: Relationship) => r.admirer === user.username)
-      .map((r: Relationship) => r.target)
-    return admiring.filter((t: string) =>
-      relationships.some(
-        (r: Relationship) => r.admirer === t && r.target === user.username
-      )
-    ).length
-  })()
+  // Disjoint buckets: mutual pairs are counted only under Mutuals, so the three
+  // counts match the (also disjoint) lists they open.
+  const social = getSocialBuckets(relationships, user.username)
+  const theirAdmirers = social.admirers.length
+  const theirAdmiring = social.admiring.length
+  const theirMutuals = social.mutuals.length
 
   return (
     <div className='fixed inset-0 bg-white overflow-y-auto no-scrollbar pb-32 animate-in slide-in-from-right duration-500'>
@@ -248,27 +239,27 @@ export const OtherProfileView = () => {
         <div className='grid grid-cols-3 gap-8 w-full max-w-sm mb-10'>
           <button
             onClick={() => openSocialList('admirers')}
-            className='text-center transition-transform active:scale-95'
+            className='text-center transition-transform active:scale-95 cursor-pointer'
           >
-            <p className='text-lg font-bold'>{theirAdmirers}</p>
+            <p className='text-lg font-bold text-accent'>{theirAdmirers}</p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admirers
             </p>
           </button>
           <button
             onClick={() => openSocialList('admiring')}
-            className='text-center transition-transform active:scale-95'
+            className='text-center transition-transform active:scale-95 cursor-pointer'
           >
-            <p className='text-lg font-bold'>{theirAdmiring}</p>
+            <p className='text-lg font-bold text-accent'>{theirAdmiring}</p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Admiring
             </p>
           </button>
           <button
             onClick={() => openSocialList('mutuals')}
-            className='text-center transition-transform active:scale-95'
+            className='text-center transition-transform active:scale-95 cursor-pointer'
           >
-            <p className='text-lg font-bold'>{theirMutuals}</p>
+            <p className='text-lg font-bold text-accent'>{theirMutuals}</p>
             <p className='text-[8px] font-bold text-gray-300 uppercase tracking-widest'>
               Mutuals
             </p>
