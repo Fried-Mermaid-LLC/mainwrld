@@ -1117,7 +1117,9 @@ export const ReadingView = () => {
 
       <div className="max-w-2xl mx-auto border-t border-gray-100 py-6 flex flex-col items-center">
         <div className="flex items-start gap-8">
-          {(() => {
+          {/* Authors can't like their own book (blocked client + server), so the
+              Like button is hidden for them — only readers see it. */}
+          {!isAuthor && (() => {
             const chapterLikeKey = `${book?.id}:${currentOrder}`;
             const chapterIsLiked = likedChapters?.has(chapterLikeKey) || false;
             const chapterLikesArr = Array.isArray(book?.likes)
