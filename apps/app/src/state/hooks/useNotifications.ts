@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import * as fbService from '@/services/firebaseService'
+import * as webNotificationService from '@/services/webNotificationService'
 import type {
   NotificationItem,
   NotificationCategory,
@@ -66,30 +67,65 @@ export function useNotifications({
 }: NotificationsDeps) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
 
+  // routeNotification is defined below and changes often (books/relationships), so
+  // it's read through a ref to keep the SSE subscription effect from re-connecting.
+  const routeNotificationRef = useRef<(n: Partial<NotificationItem>) => void>(
+    () => {}
+  )
+  // Ids already delivered to the browser-notification path, so we fire a banner
+  // only for items that arrive live (not the initial list() load or the 60s
+  // fallback re-fetch, which replay ids we've already seen).
+  const seenNotifIdsRef = useRef<Set<string>>(new Set())
+  const notifPrimedRef = useRef(false)
+
   // Subscribe to notifications
   useEffect(() => {
     if (!firebaseUid || !user.username) return
+    // Reset the browser-notification dedup state for the new subscription so the
+    // first snapshot primes silently instead of banner-spamming existing items.
+    seenNotifIdsRef.current = new Set()
+    notifPrimedRef.current = false
     const unsub = fbService.subscribeToNotifications(user.username, (notifs: any[]) => {
+      const mapped: NotificationItem[] = notifs.map(n => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        icon: n.icon,
+        timestamp: n.timestamp ? new Date(n.timestamp) : new Date(),
+        recipient: n.recipient,
+        sender: n.sender,
+        read: n.read,
+        targetId: n.targetId,
+        targetChapterIndex: n.targetChapterIndex,
+        commentId: n.commentId,
+        category: n.category as NotificationCategory | undefined
+      }))
+
+      // Browser banners (web-only, no-op on native) for items seen for the first
+      // time after the initial snapshot. Gated by the same category/master-push
+      // prefs as native push, and never for the user's own actions.
+      const fresh = mapped.filter(n => n.id && !seenNotifIdsRef.current.has(n.id))
+      mapped.forEach(n => n.id && seenNotifIdsRef.current.add(n.id))
+      if (notifPrimedRef.current) {
+        if (user.notificationPrefs?.push !== false) {
+          fresh
+            .filter(n => n.sender !== user.username)
+            .filter(n => isCategoryEnabled(n.category, user.notificationPrefs))
+            .forEach(n =>
+              webNotificationService.showWebNotification(n, item =>
+                routeNotificationRef.current(item)
+              )
+            )
+        }
+      } else {
+        notifPrimedRef.current = true
+      }
+
       setNotifications(
-        notifs
-          .map(n => ({
-            id: n.id,
-            title: n.title,
-            message: n.message,
-            icon: n.icon,
-            timestamp: n.timestamp ? new Date(n.timestamp) : new Date(),
-            recipient: n.recipient,
-            sender: n.sender,
-            read: n.read,
-            targetId: n.targetId,
-            targetChapterIndex: n.targetChapterIndex,
-            commentId: n.commentId,
-            category: n.category as NotificationCategory | undefined
-          }))
-          // X01 owns the recipient-side in-app filter: hide categories the user
-          // disabled in their prefs (default-on for legacy/missing prefs;
-          // 'system'/'messages'/unknown are never hidden).
-          .filter(n => isCategoryEnabled(n.category, user.notificationPrefs))
+        // X01 owns the recipient-side in-app filter: hide categories the user
+        // disabled in their prefs (default-on for legacy/missing prefs;
+        // 'system'/'messages'/unknown are never hidden).
+        mapped.filter(n => isCategoryEnabled(n.category, user.notificationPrefs))
       )
     })
     return () => unsub()
@@ -222,6 +258,8 @@ export function useNotifications({
       setSelectedChatUser
     ]
   )
+  // Keep the ref the SSE effect reads for browser-notification taps in sync.
+  routeNotificationRef.current = routeNotification
 
   const handleNotificationClick = (n: NotificationItem) => {
     if (n.id) {

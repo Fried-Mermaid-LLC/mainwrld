@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { AppContext } from './AppContext'
 import type { NotificationCategory } from '@/types'
 import * as pushService from '@/services/pushService'
+import * as webNotificationService from '@/services/webNotificationService'
 import * as fbService from '@/services/firebaseService'
 import { convertFirestoreBook } from '@/utils/bookConverter'
 import { useUI } from './hooks/useUI'
@@ -255,6 +256,10 @@ export function useAppValue() {
   useEffect(() => {
     if (!firebaseUid || !userDataLoaded) return
     pushService.registerForPush(firebaseUid, routeFromPushData)
+    // Browser notifications (web-only; native-only registerForPush no-ops on web
+    // and this no-ops on native). Foreground banners for live SSE items are shown
+    // by useNotifications; this just secures the permission grant.
+    webNotificationService.registerForWebNotifications(firebaseUid)
   }, [firebaseUid, userDataLoaded, routeFromPushData])
 
 
@@ -272,9 +277,7 @@ export function useAppValue() {
     selectedBook,
     setSelectedBook,
     setView,
-    showToast,
-    relationships,
-    addNotification
+    showToast
   })
   const {
     readingActivity,
