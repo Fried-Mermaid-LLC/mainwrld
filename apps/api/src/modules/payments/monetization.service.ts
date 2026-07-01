@@ -43,10 +43,22 @@ export class MonetizationService {
     const arr: number[] = Array.isArray(book.likes)
       ? (book.likes as number[])
       : [typeof book.likes === 'number' ? (book.likes as number) : 0];
+    // Authors may like their own chapters, but a self-like is a vanity signal,
+    // not genuine reader demand — subtract it so an author can't nudge a
+    // 99-like chapter to 100 with their own tap and forge eligibility.
+    const authorUsername = book.authorUsername as string | undefined;
+    const likedBy =
+      (book.chapterLikedBy as Record<string, string[]> | undefined) ?? {};
+    const selfLiked = (i: number): boolean =>
+      !!authorUsername &&
+      Array.isArray(likedBy[String(i)]) &&
+      likedBy[String(i)].includes(authorUsername);
     const published: number[] = [];
     const len = Math.max(meta.length, chaptersCount);
     for (let i = 0; i < len; i++) {
-      if (isChapterPublished(meta, i, chaptersCount)) published.push(arr[i] || 0);
+      if (isChapterPublished(meta, i, chaptersCount)) {
+        published.push(Math.max(0, (arr[i] || 0) - (selfLiked(i) ? 1 : 0)));
+      }
     }
     return published.length ? Math.min(...published) : 0;
   }

@@ -83,6 +83,31 @@ describe('MonetizationService', () => {
       );
     });
 
+    it('excludes the author’s own self-like from the 100-likes gate', async () => {
+      // Every published chapter shows 100 likes, but one of chapter 2’s likes is
+      // the author’s own — genuine reader demand is only 99, so the gate rejects.
+      seedBook({
+        authorUsername: 'alice',
+        likes: [100, 100, 100, 100, 100],
+        chapterLikedBy: { '2': ['alice'] },
+      });
+      await expect(svc.submit(makeAuthUser(), 'b1', 9.99)).rejects.toThrow(
+        '100+ likes',
+      );
+    });
+
+    it('counts a self-like-padded chapter by its genuine reader likes', async () => {
+      // Chapter 2 shows 101 likes incl. the author’s self-like → 100 genuine
+      // reader likes, which clears the gate; the request is accepted.
+      seedBook({
+        authorUsername: 'alice',
+        likes: [100, 100, 101, 100, 100],
+        chapterLikedBy: { '2': ['alice'] },
+      });
+      const res = await svc.submit(makeAuthUser(), 'b1', 9.99);
+      expect(res.ok).toBe(true);
+    });
+
     it('counts min-likes over the PUBLISHED set, ignoring an unpublished low-like chapter', async () => {
       // 6 chapters; the order-2 chapter has only 5 likes but is unpublished, so
       // it must not drag the min below 100 — the 5 published chapters all have

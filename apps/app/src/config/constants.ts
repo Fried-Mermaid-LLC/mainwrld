@@ -126,6 +126,8 @@ export function minLikesPerPublishedChapter(book: {
   likes?: number[] | number;
   chaptersCount?: number;
   chapterMeta?: { published?: boolean }[];
+  chapterLikedBy?: Record<string, string[]>;
+  authorUsername?: string;
 }): number {
   const meta = book.chapterMeta || [];
   const count = book.chaptersCount || 0;
@@ -133,11 +135,18 @@ export function minLikesPerPublishedChapter(book: {
   const arr = Array.isArray(book.likes)
     ? book.likes
     : [typeof book.likes === 'number' ? book.likes : 0];
+  // Mirror of the server gate: the author's own self-like is excluded so this
+  // eligibility hint matches what the API will actually accept.
+  const likedBy = book.chapterLikedBy || {};
+  const selfLiked = (i: number): boolean =>
+    !!book.authorUsername &&
+    Array.isArray(likedBy[String(i)]) &&
+    likedBy[String(i)].includes(book.authorUsername);
   const published: number[] = [];
   const len = Math.max(meta.length, count);
   for (let i = 0; i < len; i++) {
     const isPub = hasFlags ? meta[i]?.published === true : i < count;
-    if (isPub) published.push(arr[i] || 0);
+    if (isPub) published.push(Math.max(0, (arr[i] || 0) - (selfLiked(i) ? 1 : 0)));
   }
   return published.length ? Math.min(...published) : 0;
 }

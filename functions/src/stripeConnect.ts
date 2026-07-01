@@ -61,10 +61,20 @@ function minLikesPerPublishedChapter(book: any): number {
   const arr: number[] = Array.isArray(book?.likes)
     ? book.likes
     : [typeof book?.likes === 'number' ? book.likes : 0]
+  // Keep in sync with the API/app copies: an author's own self-like is excluded
+  // from the monetization gate (a vanity signal, not genuine reader demand).
+  const authorUsername = book?.authorUsername as string | undefined
+  const likedBy: Record<string, string[]> = book?.chapterLikedBy || {}
+  const selfLiked = (i: number): boolean =>
+    !!authorUsername &&
+    Array.isArray(likedBy[String(i)]) &&
+    likedBy[String(i)].includes(authorUsername)
   const published: number[] = []
   const len = Math.max(meta.length, chaptersCount)
   for (let i = 0; i < len; i++) {
-    if (isChapterPublished(meta, i, chaptersCount)) published.push(arr[i] || 0)
+    if (isChapterPublished(meta, i, chaptersCount)) {
+      published.push(Math.max(0, (arr[i] || 0) - (selfLiked(i) ? 1 : 0)))
+    }
   }
   return published.length ? Math.min(...published) : 0
 }

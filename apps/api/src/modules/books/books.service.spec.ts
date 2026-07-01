@@ -529,4 +529,92 @@ describe('BooksService', () => {
       expect(ids).not.toContain('otherDraft');
     });
   });
+
+  describe('likeChapter', () => {
+    it('lets an author like their OWN chapter without awarding self points', async () => {
+      // 9 genuine reader likes → the author's own like tips it to 10 (a
+      // milestone boundary). Authors MAY self-like, but it must never feed the
+      // points/milestone economy, so RewardsService is not invoked.
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        authorUsername: 'alice',
+        likes: [9],
+        chapterLikedBy: {
+          '0': ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9'],
+        },
+      });
+      const res = await svc.likeChapter(
+        'b1',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        0,
+      );
+      expect(res).toEqual({ liked: true, likes: 10 });
+      expect(fs.dump('books/b1')!.likes).toEqual([10]);
+      expect(rewards.onChapterLikeChanged).not.toHaveBeenCalled();
+    });
+
+    it('awards the author when a NON-author reader likes a chapter', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        authorUsername: 'alice',
+        likes: [0],
+        chapterLikedBy: {},
+      });
+      const res = await svc.likeChapter(
+        'b1',
+        makeAuthUser({ uid: 'u2', username: 'bob' }),
+        0,
+      );
+      expect(res).toEqual({ liked: true, likes: 1 });
+      expect(rewards.onChapterLikeChanged).toHaveBeenCalledTimes(1);
+      expect(rewards.onChapterLikeChanged).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'b1',
+          authorUid: 'u1',
+          authorUsername: 'alice',
+        }),
+        0,
+        0,
+        1,
+      );
+    });
+
+    it('strips the author’s standing self-like from a later reader’s milestone counts', async () => {
+      // Chapter shows 1 like, but it is the author’s own self-like. When a
+      // reader likes, the milestone math must see genuine-reader demand 0 → 1
+      // (not 1 → 2), so a self-like can’t fire a milestone one reader early.
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        authorUsername: 'alice',
+        likes: [1],
+        chapterLikedBy: { '0': ['alice'] },
+      });
+      const res = await svc.likeChapter(
+        'b1',
+        makeAuthUser({ uid: 'u2', username: 'bob' }),
+        0,
+      );
+      expect(res).toEqual({ liked: true, likes: 2 });
+      expect(rewards.onChapterLikeChanged).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'b1' }),
+        0,
+        0,
+        1,
+      );
+    });
+
+    it('rejects a caller with no username', async () => {
+      fs.seed('books/b1', { id: 'b1', authorUid: 'u1', likes: [0] });
+      await expect(
+        svc.likeChapter(
+          'b1',
+          makeAuthUser({ uid: 'u2', username: undefined }),
+          0,
+        ),
+      ).rejects.toThrow('No username');
+    });
+  });
 });

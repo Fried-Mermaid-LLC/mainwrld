@@ -160,15 +160,16 @@ export function useBooks({
   // Per-chapter like toggle. Points + milestone notifications are now awarded
   // server-side (likeChapter endpoint), which is the only path that mutates a
   // book's reader `likes` — so this just toggles optimistically and reconciles
-  // with the server's authoritative count. Self-likes are rejected (the server
-  // does too); we short-circuit to avoid a bad optimistic flip.
+  // with the server's authoritative count. Authors may like their own book, but
+  // a self-like never notifies the author (guarded below) and the server keeps
+  // it out of the points/monetization economy.
   const handleLike = async (bookId: string, chapterIndex: number = 0) => {
     const targetBook = books.find(b => b.id === bookId)
     if (!targetBook) return
 
     const authorUsername =
       (targetBook as any).authorUsername || targetBook.author.username
-    if (authorUsername === user.username) return // can't like your own book
+    const isOwnBook = authorUsername === user.username
 
     likedBooksInteracted.current = true
     const likeKey = `${bookId}:${chapterIndex}`
@@ -206,8 +207,9 @@ export function useBooks({
         return next
       })
       // Notify the author of a fresh like (milestone/points notifications are
-      // server-side now). Guarded above against self-likes.
-      if (res.liked) {
+      // server-side now) — but never for a self-like: an author liking their
+      // own book shouldn't ping themselves.
+      if (res.liked && !isOwnBook) {
         const chapterTitle =
           targetBook.chapterMeta?.[chapterIndex]?.title ||
           `Chapter ${chapterIndex + 1}`

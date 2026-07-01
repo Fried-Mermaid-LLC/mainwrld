@@ -253,11 +253,14 @@ export class BooksService {
 
   // Server-authoritative per-chapter like toggle (the only path that mutates a
   // book's reader `likes`). The truth is `chapterLikedBy.{i}` — a set of
-  // usernames — so a user can like a chapter at most once and authors can't like
-  // their own book. `likes[i]` is kept in sync as that set's size. On a NEW like
-  // that crosses a multiple of 10, the author is awarded points + notified
-  // (RewardsService, best-effort outside the transaction). Returns the toggled
-  // state + the chapter's new count for optimistic client reconciliation.
+  // usernames — so a user can like a chapter at most once. Authors MAY like
+  // their own book, but a self-like never awards points or fires a milestone
+  // notification (that would let an author farm their own economy) and is
+  // excluded from the monetization gate. `likes[i]` is kept in sync as that
+  // set's size. On a NEW like by someone OTHER than the author that crosses a
+  // multiple of 10, the author is awarded points + notified (RewardsService,
+  // best-effort outside the transaction). Returns the toggled state + the
+  // chapter's new count for optimistic client reconciliation.
   async likeChapter(
     id: string,
     user: AuthUser,
@@ -271,9 +274,6 @@ export class BooksService {
       const snap = await t.get(ref);
       if (!snap.exists) throw new NotFoundException('Book not found');
       const book = snap.data() as BookDoc;
-      if (book.authorUid === user.uid) {
-        throw new ForbiddenException('Cannot like your own book');
-      }
       const key = String(chapterIndex);
       const likedByMap =
         (book.chapterLikedBy as Record<string, string[]> | undefined) ?? {};
@@ -296,10 +296,22 @@ export class BooksService {
         likes: likesArr,
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return { liked: !has, oldCount, newCount, book };
+      // Does the author sit in this chapter's like set? A standing self-like
+      // must be stripped from the reader-milestone math below (a reader's like
+      // never changes the author's membership, so this holds for old + new).
+      const authorName = book.authorUsername;
+      const authorSelfLiked =
+        typeof authorName === 'string' && nextArr.includes(authorName);
+      return { liked: !has, oldCount, newCount, authorSelfLiked, book };
     });
 
-    if (outcome.liked) {
+    // A self-like never feeds the author's own point/milestone economy: the
+    // self-like event itself awards nothing (author == caller, skipped here),
+    // and the author's standing self-like is stripped from the counts a later
+    // reader like reports, so milestones fire on genuine reader demand rather
+    // than one reader early (or a real milestone getting swallowed).
+    if (outcome.liked && outcome.book.authorUid !== user.uid) {
+      const selfLike = outcome.authorSelfLiked ? 1 : 0;
       await this.rewards.onChapterLikeChanged(
         {
           id,
@@ -310,8 +322,8 @@ export class BooksService {
             | undefined,
         },
         chapterIndex,
-        outcome.oldCount,
-        outcome.newCount,
+        Math.max(0, outcome.oldCount - selfLike),
+        Math.max(0, outcome.newCount - selfLike),
       );
     }
     return { liked: outcome.liked, likes: outcome.newCount };
