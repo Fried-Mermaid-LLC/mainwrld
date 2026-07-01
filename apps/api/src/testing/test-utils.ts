@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ConfigService } from '@nestjs/config';
 import type { AuthUser } from '../infra/auth/auth-user.interface';
+import { NotificationsService } from '../modules/notifications/notifications.service';
 import { FakeFirestore } from './fake-firestore';
 
 export { FakeFirestore };
@@ -53,15 +54,20 @@ export function fakeConfig(over: Record<string, any> = {}): ConfigService {
 // In-memory firebase-admin Auth double. customClaims persist; jest.fn() spies
 // expose call assertions.
 export function createFakeAuth(
-  users: Record<string, { customClaims?: Record<string, any>; email?: string }> = {},
+  users: Record<
+    string,
+    { customClaims?: Record<string, any>; email?: string }
+  > = {},
 ) {
   const store: Record<string, any> = { ...users };
   return {
     _store: store,
     getUser: jest.fn(async (uid: string) => store[uid] ?? { customClaims: {} }),
-    setCustomUserClaims: jest.fn(async (uid: string, claims: Record<string, any>) => {
-      store[uid] = { ...(store[uid] ?? {}), customClaims: claims };
-    }),
+    setCustomUserClaims: jest.fn(
+      async (uid: string, claims: Record<string, any>) => {
+        store[uid] = { ...(store[uid] ?? {}), customClaims: claims };
+      },
+    ),
     updateUser: jest.fn(async (uid: string, props: Record<string, any>) => {
       store[uid] = { ...(store[uid] ?? {}), ...props };
     }),
@@ -99,12 +105,10 @@ export function createFakeStorage() {
 
 export function createFakeEmail() {
   return {
-    send: jest.fn(
-      async (_to: string, _subject: string, _html: string) => ({
-        ok: true,
-        status: 200,
-      }),
-    ),
+    send: jest.fn(async (_to: string, _subject: string, _html: string) => ({
+      ok: true,
+      status: 200,
+    })),
     userContact: jest.fn(async (uid?: string | null) => ({
       email: uid ? `${uid}@test.com` : null,
       displayName: 'Tester',
@@ -140,11 +144,21 @@ export function createFakeRewards() {
   };
 }
 
-// Notifications service. All methods are no-op fakes — the fan-out/push logic
-// itself is covered by notifications.service.spec.
+// Notifications service. The effectful fan-out/push methods are no-op spies (the
+// fan-out itself is covered by notifications.service.spec), but the PURE publish-
+// announce planner is delegated to the real implementation so books/chapters
+// specs exercise the actual "which notification fires" decision. The planner only
+// reads its arguments, so a real instance with no db/messaging is safe.
 export function createFakeNotifications() {
+  const real = new NotificationsService(undefined as any, undefined as any);
   return {
     create: jest.fn(async () => ({ id: 'notif1' })),
     notifyFollowersOfPublication: jest.fn(async () => {}),
+    publishedChapterIds: jest.fn((meta: any, count: any) =>
+      real.publishedChapterIds(meta, count),
+    ),
+    planPublicationAnnounce: jest.fn((input: any) =>
+      real.planPublicationAnnounce(input),
+    ),
   };
 }

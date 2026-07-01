@@ -51,7 +51,11 @@ describe('ChaptersService', () => {
     fs = new FakeFirestore();
     moderation = createFakeModeration();
     notifications = createFakeNotifications();
-    svc = new ChaptersService(fs as any, moderation as any, notifications as any);
+    svc = new ChaptersService(
+      fs as any,
+      moderation as any,
+      notifications as any,
+    );
   });
 
   describe('getContent paywall', () => {
@@ -275,7 +279,9 @@ describe('ChaptersService', () => {
           },
         }),
       );
-      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(1);
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(
+        1,
+      );
       expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
         expect.objectContaining({
           authorUsername: 'alice',
@@ -328,6 +334,159 @@ describe('ChaptersService', () => {
       expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
     });
 
+    it('fans out "New Book" on the first publish of a draft book (chapter published in place)', async () => {
+      // A draft book whose single chapter is published IN PLACE: chapterMeta length
+      // stays 1, so the old length proxy fired nothing. The isDraft true→false
+      // transition must now announce the book once.
+      seedBook({
+        authorUsername: 'alice',
+        isDraft: true,
+        chaptersCount: 0,
+        chapterMeta: [{ id: 'c0', published: false }],
+      });
+      await svc.commitWrite(
+        'b1',
+        'c0',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          order: 0,
+          bookUpdates: {
+            isDraft: false,
+            chapterMeta: [{ id: 'c0', published: true }],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authorUsername: 'alice',
+          title: 'New Book',
+          bookId: 'b1',
+        }),
+      );
+      const book = fs.dump('books/b1')!;
+      expect(book.publishAnnounced).toBe(true);
+      expect(book.announcedChapterIds).toEqual(['c0']);
+    });
+
+    it('first publish rolls every published chapter into announcedChapterIds (one "New Book", no "New Chapter")', async () => {
+      seedBook({
+        authorUsername: 'alice',
+        isDraft: true,
+        chaptersCount: 0,
+        chapterMeta: [
+          { id: 'c0', published: false },
+          { id: 'c1', published: false },
+        ],
+      });
+      await svc.commitWrite(
+        'b1',
+        'c1',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          order: 1,
+          bookUpdates: {
+            isDraft: false,
+            chapterMeta: [
+              { id: 'c0', published: true },
+              { id: 'c1', published: true },
+            ],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'New Book' }),
+      );
+      expect(fs.dump('books/b1')!.announcedChapterIds).toEqual(['c0', 'c1']);
+    });
+
+    it('does NOT fan out when a new DRAFT chapter is appended to a published book', async () => {
+      // BUG 2: appending an unpublished chapter grows chapterMeta length but must
+      // not notify — the chapter is still a draft.
+      seedBook({
+        authorUsername: 'alice',
+        isDraft: false,
+        chaptersCount: 1,
+        chapterMeta: [{ id: 'c0', published: true }],
+        publishAnnounced: true,
+        announcedChapterIds: ['c0'],
+      });
+      await svc.commitWrite(
+        'b1',
+        'c1',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          order: 1,
+          bookUpdates: {
+            chapterMeta: [
+              { id: 'c0', published: true },
+              { id: 'c1', published: false },
+            ],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+      expect(fs.dump('books/b1')!.announcedChapterIds).toEqual(['c0']);
+    });
+
+    it('does NOT fan out "New Book" when editing a legacy already-published book (no publishAnnounced)', async () => {
+      // Legacy published book predating the announce fields: an ordinary edit must
+      // not mass-announce; it silently backfills the bookkeeping instead.
+      seedBook({ authorUsername: 'alice', isDraft: false });
+      await svc.commitWrite(
+        'b1',
+        'c1',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          bookUpdates: {
+            chapterMeta: [
+              { id: 'c0', published: true },
+              { id: 'c1', published: true },
+              { id: 'c2', published: true },
+            ],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+      const book = fs.dump('books/b1')!;
+      expect(book.publishAnnounced).toBe(true);
+      expect(book.announcedChapterIds).toEqual(['c0', 'c1', 'c2']);
+    });
+
+    it('fans out "New Chapter" (not "New Book") when a legacy published book adds a chapter', async () => {
+      seedBook({ authorUsername: 'alice', isDraft: false });
+      await svc.commitWrite(
+        'b1',
+        'c3',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          order: 3,
+          bookUpdates: {
+            chapterMeta: [
+              { id: 'c0', published: true },
+              { id: 'c1', published: true },
+              { id: 'c2', published: true },
+              { id: 'c3', published: true },
+            ],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'New Chapter',
+          includeLibraryOwners: true,
+        }),
+      );
+    });
+
     it('forbids a non-author', async () => {
       seedBook({ authorUid: 'someone-else' });
       await expect(
@@ -357,7 +516,11 @@ describe('ChaptersService', () => {
 
     it('rejects flagged content with a 422', async () => {
       moderation = createFakeModeration(true);
-      svc = new ChaptersService(fs as any, moderation as any, notifications as any);
+      svc = new ChaptersService(
+        fs as any,
+        moderation as any,
+        notifications as any,
+      );
       seedBook();
       await expect(
         svc.commitWrite('b1', 'c1', makeAuthUser({ uid: 'u1' }), dto()),

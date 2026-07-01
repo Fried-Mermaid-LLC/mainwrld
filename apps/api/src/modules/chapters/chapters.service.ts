@@ -15,6 +15,7 @@ import {
 } from '../../infra/firebase/firebase.constants';
 import { ModerationService } from '../moderation/moderation.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import type { PublishAnnounceInput } from '../notifications/notifications.service';
 import type { CommitChapterDto } from './dto/commit-chapter.dto';
 
 export type ChapterDoc = Record<string, unknown> & { id: string };
@@ -41,6 +42,11 @@ const BOOK_PROTECTED = new Set<string>([
   'sellerUid',
   'sellerStripeAccountId',
   'takenDown',
+  // Server-managed follower-notification bookkeeping (stamped by
+  // planPublicationAnnounce); a client must never forge the "already announced"
+  // state to suppress or spoof a fan-out.
+  'publishAnnounced',
+  'announcedChapterIds',
 ]);
 
 @Injectable()
@@ -63,7 +69,7 @@ export class ChaptersService {
   async list(bookId: string, user: AuthUser): Promise<ChapterDoc[]> {
     await this.assertAuthor(bookId, user);
     const snap = await this.chaptersCol(bookId).orderBy('order').get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ChapterDoc);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }
 
   async getOne(
@@ -74,7 +80,7 @@ export class ChaptersService {
     await this.assertAuthor(bookId, user);
     const snap = await this.chaptersCol(bookId).doc(chapterId).get();
     if (!snap.exists) throw new NotFoundException('Chapter not found');
-    return { id: snap.id, ...snap.data() } as ChapterDoc;
+    return { id: snap.id, ...snap.data() };
   }
 
   // Reader gateway with paywall (ported from functions/src/chapters.ts).
@@ -104,7 +110,11 @@ export class ChaptersService {
 
     // Per-chapter visibility: a chapter is readable by non-authors only if its
     // meta entry is published (legacy docs fall back to the published prefix).
-    if (!isAuthor && !isAdmin && !isChapterPublished(meta, order, chaptersCount)) {
+    if (
+      !isAuthor &&
+      !isAdmin &&
+      !isChapterPublished(meta, order, chaptersCount)
+    ) {
       throw new ForbiddenException('Chapter not available.');
     }
 
@@ -156,8 +166,7 @@ export class ChaptersService {
       | { isMature?: boolean; isExplicit?: boolean }
       | undefined;
     const bk = book as { isMature?: boolean; isExplicit?: boolean };
-    const mature =
-      (bu?.isMature ?? bk.isMature ?? bk.isExplicit) === true;
+    const mature = (bu?.isMature ?? bk.isMature ?? bk.isExplicit) === true;
     // Body prose: OpenAI only. Title: profanity + OpenAI.
     if (dto.content) await this.assertClean(dto.content, false, mature);
     if (dto.title) await this.assertClean(dto.title, true, mature);
@@ -180,6 +189,20 @@ export class ChaptersService {
     // can only grow the position-indexed array, so we pad it with zeros to cover
     // the new chapter set server-side, preserving the real reader counts.
     const likesPatch = this.padLikesForWrite(book, dto.bookUpdates);
+    // Decide the follower fan-out and persist the durable "already announced"
+    // state in the SAME batch as the publish, so a failed/retried notify can
+    // never re-announce. Replaces the old chapterMeta-length proxy, which both
+    // missed a first publish (length unchanged) and mis-fired when a new *draft*
+    // chapter was appended (length grew, chapter still unpublished).
+    const plan = this.notifications.planPublicationAnnounce({
+      book: book,
+      resultingIsDraft: bookUpdates.isDraft as boolean | undefined,
+      resultingChapterMeta: incomingMeta,
+      resultingChaptersCount:
+        (bookUpdates.chaptersCount as number | undefined) ??
+        (book as { chaptersCount?: number }).chaptersCount,
+    });
+    Object.assign(bookUpdates, plan.stamp);
     const batch = this.db.batch();
     batch.set(
       this.chaptersCol(bookId).doc(chapterId),
@@ -203,25 +226,14 @@ export class ChaptersService {
     });
     await batch.commit();
 
-    // A genuinely-new chapter (chapterMeta grew) on a published book pings the
-    // author's followers + the book's library owners. Comparing lengths (not the
-    // published count) keeps unpublish→republish from re-notifying. Best-effort.
-    const prevLen = Array.isArray(book.chapterMeta)
-      ? (book.chapterMeta as unknown[]).length
-      : 0;
-    const newLen = Array.isArray(incomingMeta) ? incomingMeta.length : prevLen;
-    const publishedNow =
-      ((bookUpdates.isDraft as boolean | undefined) ??
-        (book as { isDraft?: boolean }).isDraft) === false;
-    const authorUsername = (book as { authorUsername?: string }).authorUsername;
-    if (newLen > prevLen && publishedNow && authorUsername) {
+    // Best-effort follower fan-out AFTER the commit — the "already announced"
+    // state was durably stamped into the batch above, so this never double-fires.
+    // notifyFollowersOfPublication swallows its own errors, never the publish.
+    if (plan.announce) {
       await this.notifications.notifyFollowersOfPublication({
-        authorUsername,
-        title: 'New Chapter',
-        message: `"${(book as { title?: string }).title ?? ''}" has a new chapter!`,
-        icon: 'menu_book',
+        authorUsername: (book as { authorUsername?: string }).authorUsername!,
         bookId,
-        includeLibraryOwners: true,
+        ...plan.announce,
       });
     }
   }
@@ -327,11 +339,11 @@ export class ChaptersService {
   // book-level lock in BooksService.update and the client's WriteView editor
   // lock). Admins keep edit access for moderation. Reading paths (list/getOne/
   // getContent) intentionally do NOT call this — a completed book is still read.
-  private assertEditable(
-    book: Record<string, unknown>,
-    user: AuthUser,
-  ): void {
-    if ((book as { isCompleted?: boolean }).isCompleted === true && !user.admin) {
+  private assertEditable(book: Record<string, unknown>, user: AuthUser): void {
+    if (
+      (book as { isCompleted?: boolean }).isCompleted === true &&
+      !user.admin
+    ) {
       throw new ForbiddenException(
         'This book is completed and can no longer be edited.',
       );

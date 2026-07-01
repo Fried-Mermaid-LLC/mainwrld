@@ -61,10 +61,10 @@ describe('BooksService', () => {
         tagline: 'A tale',
         isDraft: false,
       } as any);
-      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(1);
-      expect(
-        notifications.notifyFollowersOfPublication,
-      ).toHaveBeenCalledWith(
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
         expect.objectContaining({
           authorUsername: 'bob',
           title: 'New Book',
@@ -82,6 +82,36 @@ describe('BooksService', () => {
         isDraft: true,
       } as any);
       expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+    });
+
+    it('stamps publishAnnounced + announcedChapterIds when created published', async () => {
+      // Records the create-time first publish so a later unpublish→republish never
+      // re-announces and the chapters it shipped with never fire "New Chapter".
+      await svc.create(makeAuthUser({ uid: 'author1', username: 'bob' }), {
+        id: 'b1',
+        title: 'My Book',
+        tagline: 'A tale',
+        isDraft: false,
+        chapterMeta: [
+          { id: 'c0', title: 'Chapter 1', published: true },
+          { id: 'c1', title: 'Chapter 2', published: false },
+        ],
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.publishAnnounced).toBe(true);
+      expect(stored.announcedChapterIds).toEqual(['c0']);
+    });
+
+    it('does not stamp announce bookkeeping on a draft create', async () => {
+      await svc.create(makeAuthUser({ uid: 'u1', username: 'alice' }), {
+        id: 'b1',
+        title: 'T',
+        isDraft: true,
+        chapterMeta: [{ id: 'c0', title: 'Chapter 1', published: false }],
+      } as any);
+      const stored = fs.dump('books/b1')!;
+      expect(stored.publishAnnounced).toBeUndefined();
+      expect(stored.announcedChapterIds).toBeUndefined();
     });
 
     it('defaults a new book to unpublished (isDraft:true) when omitted', async () => {
@@ -219,6 +249,110 @@ describe('BooksService', () => {
       expect(moderation.screen).toHaveBeenCalledWith('fresh', true, false);
     });
 
+    it('fans out "New Book" on the first whole-book publish (isDraft true→false)', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        authorUsername: 'alice',
+        title: 'My Book',
+        isDraft: true,
+        chaptersCount: 1,
+        chapterMeta: [{ id: 'c0', published: true }],
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1', username: 'alice' }), {
+        isDraft: false,
+        chapterMeta: [{ id: 'c0', published: true }],
+      } as any);
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authorUsername: 'alice',
+          title: 'New Book',
+          bookId: 'b1',
+        }),
+      );
+      const stored = fs.dump('books/b1')!;
+      expect(stored.publishAnnounced).toBe(true);
+      expect(stored.announcedChapterIds).toEqual(['c0']);
+    });
+
+    it('does NOT re-fire "New Book" when republishing an already-announced book', async () => {
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        authorUsername: 'alice',
+        title: 'My Book',
+        isDraft: true,
+        publishAnnounced: true,
+        announcedChapterIds: ['c0'],
+        chaptersCount: 1,
+        chapterMeta: [{ id: 'c0', published: true }],
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1', username: 'alice' }), {
+        isDraft: false,
+        chapterMeta: [{ id: 'c0', published: true }],
+      } as any);
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+    });
+
+    it('fans out "New Chapter" when a draft chapter is published via updateBook{chapterMeta}', async () => {
+      // Per-chapter publish (setChapterPublished → updateBook) routes through
+      // update(), so a chapter first becoming published here must notify too.
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        authorUsername: 'alice',
+        title: 'My Book',
+        isDraft: false,
+        publishAnnounced: true,
+        announcedChapterIds: ['c0'],
+        chaptersCount: 1,
+        chapterMeta: [
+          { id: 'c0', published: true },
+          { id: 'c1', published: false },
+        ],
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1', username: 'alice' }), {
+        chapterMeta: [
+          { id: 'c0', published: true },
+          { id: 'c1', published: true },
+        ],
+        chaptersCount: 2,
+      } as any);
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(
+        1,
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'New Chapter',
+          bookId: 'b1',
+          includeLibraryOwners: true,
+        }),
+      );
+      expect(fs.dump('books/b1')!.announcedChapterIds).toEqual(['c0', 'c1']);
+    });
+
+    it('does NOT fire "New Book" when editing a legacy already-published book (no publishAnnounced)', async () => {
+      // Regression guard: a book already published before the announce fields
+      // existed must not mass-announce on its next edit — it backfills silently.
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'u1',
+        authorUsername: 'alice',
+        title: 'old',
+        isDraft: false,
+        chaptersCount: 1,
+        chapterMeta: [{ id: 'c0', published: true }],
+      });
+      await svc.update('b1', makeAuthUser({ uid: 'u1', username: 'alice' }), {
+        title: 'new',
+      } as any);
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+      expect(fs.dump('books/b1')!.publishAnnounced).toBe(true);
+    });
+
     it('lets an admin update a book they do not own', async () => {
       fs.seed('books/b1', { id: 'b1', authorUid: 'owner', title: 'old' });
       const out = await svc.update(
@@ -243,7 +377,12 @@ describe('BooksService', () => {
     });
 
     it('lets an admin adjust likes', async () => {
-      fs.seed('books/b1', { id: 'b1', authorUid: 'owner', title: 'old', likes: [1] });
+      fs.seed('books/b1', {
+        id: 'b1',
+        authorUid: 'owner',
+        title: 'old',
+        likes: [1],
+      });
       await svc.update('b1', makeAuthUser({ uid: 'admin1', admin: true }), {
         likes: [5],
       } as any);
@@ -532,9 +671,9 @@ describe('BooksService', () => {
     });
 
     it('rejects an invalid data URL (422)', async () => {
-      await expect(
-        svc.uploadCover('a', 'b', 'not-a-data-url'),
-      ).rejects.toThrow('Invalid cover data URL');
+      await expect(svc.uploadCover('a', 'b', 'not-a-data-url')).rejects.toThrow(
+        'Invalid cover data URL',
+      );
     });
   });
 

@@ -18,6 +18,7 @@ import {
 } from '../../infra/firebase/firebase.constants';
 import { ModerationService } from '../moderation/moderation.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import type { PublishAnnounceInput } from '../notifications/notifications.service';
 import { RewardsService } from '../rewards/rewards.service';
 import type { CreateBookDto } from './dto/create-book.dto';
 import type { UpdateBookDto } from './dto/update-book.dto';
@@ -56,10 +57,8 @@ export class BooksService {
       this.col.where('authorUid', '==', uid).get(),
     ]);
     const byId = new Map<string, BookDoc>();
-    for (const d of published.docs)
-      byId.set(d.id, { id: d.id, ...d.data() } as BookDoc);
-    for (const d of mine.docs)
-      byId.set(d.id, { id: d.id, ...d.data() } as BookDoc);
+    for (const d of published.docs) byId.set(d.id, { id: d.id, ...d.data() });
+    for (const d of mine.docs) byId.set(d.id, { id: d.id, ...d.data() });
     return Array.from(byId.values());
   }
 
@@ -99,12 +98,20 @@ export class BooksService {
     // Accept a caller-supplied id (so a cover can be uploaded before the doc
     // exists); otherwise allocate one.
     const id =
-      dto.id && /^[A-Za-z0-9_-]{1,128}$/.test(dto.id) ? dto.id : this.col.doc().id;
+      dto.id && /^[A-Za-z0-9_-]{1,128}$/.test(dto.id)
+        ? dto.id
+        : this.col.doc().id;
     const { id: _ignored, ...rest } = dto;
     // The ValidationPipe (transform: true) hydrates nested @Type() fields like
     // `chapterMeta` into class instances (ChapterMetaDto). Firestore rejects
     // objects with a custom prototype, so strip prototypes back to plain
     // objects before writing.
+    // A book created already published is its own first publish: stamp the
+    // follower-notification bookkeeping now so a later unpublish→republish never
+    // re-announces "New Book" and the chapters it shipped with never later fire
+    // "New Chapter". (The explicit create-time fan-out below still sends the one
+    // "New Book".) Draft creates stamp nothing.
+    const publishedOnCreate = (dto.isDraft ?? true) === false;
     const data = {
       ...instanceToPlain(rest),
       id,
@@ -113,6 +120,15 @@ export class BooksService {
       // A book is unpublished (a draft) by default — a caller must opt in to
       // publishing by sending `isDraft: false` explicitly.
       isDraft: dto.isDraft ?? true,
+      ...(publishedOnCreate
+        ? {
+            publishAnnounced: true,
+            announcedChapterIds: this.notifications.publishedChapterIds(
+              dto.chapterMeta,
+              dto.chaptersCount,
+            ),
+          }
+        : {}),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
@@ -152,8 +168,7 @@ export class BooksService {
     // demonetize lock below turns into a permanent un-monetize. Admins keep edit
     // access for moderation/takedown paths. This is the server-authoritative
     // mirror of the editor lock in the client's WriteView.
-    const isReopen =
-      (dto as { isCompleted?: boolean }).isCompleted === false;
+    const isReopen = (dto as { isCompleted?: boolean }).isCompleted === false;
     if (
       (existing as { isCompleted?: boolean }).isCompleted === true &&
       !isReopen &&
@@ -188,16 +203,40 @@ export class BooksService {
     // the whitelist. Re-derive the demonetization here from author-writable
     // signals and stamp it authoritatively.
     const demonetize = this.demonetizePatch(existing, dto);
+    // Follower fan-out on a draft→published transition (whole-book publish) or on
+    // a chapter that becomes published for the first time (per-chapter publish via
+    // updateBook{chapterMeta}). Same server-authoritative planner as the chapter
+    // path; the durable "already announced" state is stamped into this update, and
+    // the notification (if any) fires best-effort after the write.
+    const plan = this.notifications.planPublicationAnnounce({
+      book: existing,
+      resultingIsDraft: (dto as { isDraft?: boolean }).isDraft,
+      resultingChapterMeta: (
+        dto as { chapterMeta?: PublishAnnounceInput['chapterMeta'] }
+      ).chapterMeta,
+      resultingChaptersCount:
+        deriveCount.chaptersCount ??
+        (existing as { chaptersCount?: number }).chaptersCount,
+    });
     // See create(): nested @Type() fields arrive as class instances; Firestore
     // only serializes plain objects.
     await ref.update({
       ...instanceToPlain(dto),
       ...deriveCount,
       ...demonetize,
+      ...plan.stamp,
       updatedAt: FieldValue.serverTimestamp(),
     });
     const after = await ref.get();
-    return { id, ...after.data() } as BookDoc;
+    if (plan.announce) {
+      await this.notifications.notifyFollowersOfPublication({
+        authorUsername: (existing as { authorUsername?: string })
+          .authorUsername!,
+        bookId: id,
+        ...plan.announce,
+      });
+    }
+    return { id, ...after.data() };
   }
 
   async remove(id: string, user: AuthUser): Promise<void> {
@@ -261,9 +300,9 @@ export class BooksService {
   // chapter visibility leave the stored count alone. This replaces the legacy
   // published-prefix accounting (and its like-pruning): visibility is now a flag,
   // not a count, and unpublishing never moves a chapter's position.
-  private deriveChaptersCount(dto: {
-    chapterMeta?: ChapterMeta[];
-  }): { chaptersCount?: number } {
+  private deriveChaptersCount(dto: { chapterMeta?: ChapterMeta[] }): {
+    chaptersCount?: number;
+  } {
     const meta = dto.chapterMeta;
     if (!Array.isArray(meta)) return {};
     if (!meta.some((m) => typeof m.published === 'boolean')) return {};
@@ -367,7 +406,8 @@ export class BooksService {
     dataUrl: string,
   ): Promise<{ url: string; path: string }> {
     const match = /^data:(.+?);base64,(.*)$/s.exec(dataUrl);
-    if (!match) throw new UnprocessableEntityException('Invalid cover data URL');
+    if (!match)
+      throw new UnprocessableEntityException('Invalid cover data URL');
     const [, contentType, b64] = match;
     const buffer = Buffer.from(b64, 'base64');
     const token = randomUUID();
