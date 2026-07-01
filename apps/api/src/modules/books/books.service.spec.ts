@@ -3,6 +3,7 @@ import { ChapterMetaDto } from './dto/create-book.dto';
 import {
   FakeFirestore,
   createFakeModeration,
+  createFakeNotifications,
   createFakeRewards,
   createFakeStorage,
   makeAuthUser,
@@ -13,6 +14,7 @@ describe('BooksService', () => {
   let storage: ReturnType<typeof createFakeStorage>;
   let moderation: ReturnType<typeof createFakeModeration>;
   let rewards: ReturnType<typeof createFakeRewards>;
+  let notifications: ReturnType<typeof createFakeNotifications>;
   let svc: BooksService;
 
   const build = (flagged = false) => {
@@ -20,11 +22,13 @@ describe('BooksService', () => {
     storage = createFakeStorage();
     moderation = createFakeModeration(flagged);
     rewards = createFakeRewards();
+    notifications = createFakeNotifications();
     svc = new BooksService(
       fs as any,
       storage as any,
       moderation as any,
       rewards as any,
+      notifications as any,
     );
   };
 
@@ -47,6 +51,37 @@ describe('BooksService', () => {
       expect(stored.title).toBe('My Book');
       // never trusts a client id field other than the document id
       expect(book.id).toBe('b1');
+    });
+
+    it('fans out to followers when the new book is published (isDraft:false)', async () => {
+      const user = makeAuthUser({ uid: 'author1', username: 'bob' });
+      await svc.create(user, {
+        id: 'b1',
+        title: 'My Book',
+        tagline: 'A tale',
+        isDraft: false,
+      } as any);
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(1);
+      expect(
+        notifications.notifyFollowersOfPublication,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authorUsername: 'bob',
+          title: 'New Book',
+          bookId: 'b1',
+        }),
+      );
+    });
+
+    it('does NOT fan out when the new book is a draft', async () => {
+      const user = makeAuthUser({ uid: 'author1', username: 'bob' });
+      await svc.create(user, {
+        id: 'b1',
+        title: 'My Book',
+        tagline: 'A tale',
+        isDraft: true,
+      } as any);
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
     });
 
     it('screens title and tagline (flagged -> 422)', async () => {

@@ -376,6 +376,77 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('notifyFollowersOfPublication', () => {
+    const allNotifs = () =>
+      Array.from(fs.all().entries())
+        .filter(([p]) => p.startsWith('notifications/'))
+        .map(([, d]) => d);
+
+    it('fans out to the author’s followers (admirers), excluding the author', async () => {
+      // Followers of alice: bob, carol. dave admires someone else.
+      fs.seed('relationships/e_bob:alice', { admirer: 'bob', target: 'alice' });
+      fs.seed('relationships/e_carol:alice', {
+        admirer: 'carol',
+        target: 'alice',
+      });
+      fs.seed('relationships/e_dave:zed', { admirer: 'dave', target: 'zed' });
+      // an edge FROM alice must not turn alice into her own recipient.
+      fs.seed('relationships/e_alice:bob', { admirer: 'alice', target: 'bob' });
+
+      await svc.notifyFollowersOfPublication({
+        authorUsername: 'alice',
+        title: 'New Book',
+        message: 'alice published a new book: "X"',
+        icon: 'auto_stories',
+        bookId: 'b1',
+      });
+
+      const notifs = allNotifs();
+      expect(notifs.map((n) => n.recipient).sort()).toEqual(['bob', 'carol']);
+      expect(notifs.every((n) => n.category === 'appUpdates')).toBe(true);
+      expect(notifs.every((n) => n.sender === 'alice')).toBe(true);
+      expect(notifs.every((n) => n.targetId === 'b1')).toBe(true);
+    });
+
+    it('adds library owners when includeLibraryOwners is set (deduped, author excluded)', async () => {
+      fs.seed('relationships/e_bob:alice', { admirer: 'bob', target: 'alice' });
+      // carol owns b1 but does not follow alice.
+      fs.seed('users/uc', { username: 'carol', ownedBookIds: ['b1', 'b2'] });
+      // bob both follows AND owns — must not be notified twice.
+      fs.seed('users/ub', { username: 'bob', ownedBookIds: ['b1'] });
+      // the author owns their own book — must be excluded.
+      fs.seed('users/ua', { username: 'alice', ownedBookIds: ['b1'] });
+
+      await svc.notifyFollowersOfPublication({
+        authorUsername: 'alice',
+        title: 'New Chapter',
+        message: '"X" has a new chapter!',
+        icon: 'menu_book',
+        bookId: 'b1',
+        includeLibraryOwners: true,
+      });
+
+      expect(allNotifs().map((n) => n.recipient).sort()).toEqual([
+        'bob',
+        'carol',
+      ]);
+    });
+
+    it('does not query owners (or notify anyone) without followers or includeLibraryOwners', async () => {
+      // b1 is in carol’s library, but this is the new-book path (no library
+      // fan-out) and alice has no followers → nothing is written.
+      fs.seed('users/uc', { username: 'carol', ownedBookIds: ['b1'] });
+      await svc.notifyFollowersOfPublication({
+        authorUsername: 'alice',
+        title: 'New Book',
+        message: 'm',
+        icon: 'auto_stories',
+        bookId: 'b1',
+      });
+      expect(allNotifs()).toHaveLength(0);
+    });
+  });
+
   it('unused import guard', () => {
     expect(onlyNotif).toBeDefined();
   });

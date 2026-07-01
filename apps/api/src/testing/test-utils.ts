@@ -139,3 +139,12 @@ export function createFakeRewards() {
     applyMembershipReward: jest.fn(async () => {}),
   };
 }
+
+// Notifications service. All methods are no-op fakes — the fan-out/push logic
+// itself is covered by notifications.service.spec.
+export function createFakeNotifications() {
+  return {
+    create: jest.fn(async () => ({ id: 'notif1' })),
+    notifyFollowersOfPublication: jest.fn(async () => {}),
+  };
+}

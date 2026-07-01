@@ -17,6 +17,7 @@ import {
   FIRESTORE,
 } from '../../infra/firebase/firebase.constants';
 import { ModerationService } from '../moderation/moderation.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RewardsService } from '../rewards/rewards.service';
 import type { CreateBookDto } from './dto/create-book.dto';
 import type { UpdateBookDto } from './dto/update-book.dto';
@@ -39,6 +40,7 @@ export class BooksService {
     @Inject(FIREBASE_STORAGE) private readonly storage: Storage,
     private readonly moderation: ModerationService,
     private readonly rewards: RewardsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private get col() {
@@ -113,7 +115,21 @@ export class BooksService {
     };
     await this.col.doc(id).set(data);
     const snap = await this.col.doc(id).get();
-    return { id, ...snap.data() } as BookDoc;
+    const created = { id, ...snap.data() } as BookDoc & {
+      authorDisplayName?: string;
+    };
+    // A brand-new published book pings the author's followers. Best-effort —
+    // notifyFollowersOfPublication swallows its own errors, never the publish.
+    if (created.isDraft === false && created.authorUsername) {
+      await this.notifications.notifyFollowersOfPublication({
+        authorUsername: created.authorUsername,
+        title: 'New Book',
+        message: `${created.authorDisplayName ?? created.authorUsername} published a new book: "${created.title ?? ''}"`,
+        icon: 'auto_stories',
+        bookId: id,
+      });
+    }
+    return created;
   }
 
   async update(

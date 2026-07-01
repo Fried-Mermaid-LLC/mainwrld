@@ -14,6 +14,7 @@ import {
   FIRESTORE,
 } from '../../infra/firebase/firebase.constants';
 import { ModerationService } from '../moderation/moderation.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { CommitChapterDto } from './dto/commit-chapter.dto';
 
 export type ChapterDoc = Record<string, unknown> & { id: string };
@@ -47,6 +48,7 @@ export class ChaptersService {
   constructor(
     @Inject(FIRESTORE) private readonly db: Firestore,
     private readonly moderation: ModerationService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private booksCol() {
@@ -200,6 +202,28 @@ export class ChaptersService {
       updatedAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+
+    // A genuinely-new chapter (chapterMeta grew) on a published book pings the
+    // author's followers + the book's library owners. Comparing lengths (not the
+    // published count) keeps unpublish→republish from re-notifying. Best-effort.
+    const prevLen = Array.isArray(book.chapterMeta)
+      ? (book.chapterMeta as unknown[]).length
+      : 0;
+    const newLen = Array.isArray(incomingMeta) ? incomingMeta.length : prevLen;
+    const publishedNow =
+      ((bookUpdates.isDraft as boolean | undefined) ??
+        (book as { isDraft?: boolean }).isDraft) === false;
+    const authorUsername = (book as { authorUsername?: string }).authorUsername;
+    if (newLen > prevLen && publishedNow && authorUsername) {
+      await this.notifications.notifyFollowersOfPublication({
+        authorUsername,
+        title: 'New Chapter',
+        message: `"${(book as { title?: string }).title ?? ''}" has a new chapter!`,
+        icon: 'menu_book',
+        bookId,
+        includeLibraryOwners: true,
+      });
+    }
   }
 
   async commitDelete(

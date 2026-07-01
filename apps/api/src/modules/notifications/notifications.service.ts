@@ -122,6 +122,65 @@ export class NotificationsService {
     }
   }
 
+  // Fan out a "new book" / "new chapter" notification to everyone who admires
+  // (follows) the author, plus — for a new chapter — the book's library owners.
+  // Server-authoritative replacement for the old client-side fan-out in
+  // useReading, which only reached mutuals and only fired from the publishing
+  // device. Best-effort: never throws into the publish path.
+  async notifyFollowersOfPublication(params: {
+    authorUsername: string;
+    title: string;
+    message: string;
+    icon: string;
+    bookId: string;
+    includeLibraryOwners?: boolean;
+  }): Promise<void> {
+    const { authorUsername, title, message, icon, bookId } = params;
+    if (!authorUsername) return;
+    try {
+      const recipients = new Set<string>();
+      // Followers = every admirer edge pointing at the author.
+      const admirerSnap = await this.db
+        .collection(COLLECTIONS.relationships)
+        .where('target', '==', authorUsername)
+        .get();
+      for (const d of admirerSnap.docs) {
+        const admirer = d.data()?.admirer as string | undefined;
+        if (admirer) recipients.add(admirer);
+      }
+      // Library owners (new-chapter case): users who saved this book so they
+      // keep getting new-chapter pings even if they don't follow the author.
+      if (params.includeLibraryOwners) {
+        const ownerSnap = await this.db
+          .collection(COLLECTIONS.users)
+          .where('ownedBookIds', 'array-contains', bookId)
+          .get();
+        for (const d of ownerSnap.docs) {
+          const uname = d.data()?.username as string | undefined;
+          if (uname) recipients.add(uname);
+        }
+      }
+      recipients.delete(authorUsername);
+      if (recipients.size === 0) return;
+      await Promise.all(
+        Array.from(recipients).map((recipient) =>
+          this.create(authorUsername, {
+            recipient,
+            title,
+            message,
+            icon,
+            targetId: bookId,
+            category: 'appUpdates',
+          }).catch((err) =>
+            this.logger.error('publication notify failed', err as Error),
+          ),
+        ),
+      );
+    } catch (err) {
+      this.logger.error('notifyFollowersOfPublication failed', err as Error);
+    }
+  }
+
   async markAllRead(username: string): Promise<void> {
     const snap = await this.col.where('recipient', '==', username).get();
     const batch = this.db.batch();

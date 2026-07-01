@@ -7,12 +7,14 @@ import { ChaptersService } from './chapters.service';
 import {
   FakeFirestore,
   createFakeModeration,
+  createFakeNotifications,
   makeAuthUser,
 } from '../../testing/test-utils';
 
 describe('ChaptersService', () => {
   let fs: FakeFirestore;
   let moderation: ReturnType<typeof createFakeModeration>;
+  let notifications: ReturnType<typeof createFakeNotifications>;
   let svc: ChaptersService;
 
   // Seed a 3-chapter book. By default it is monetized & paid (isFree=false),
@@ -48,7 +50,8 @@ describe('ChaptersService', () => {
   beforeEach(() => {
     fs = new FakeFirestore();
     moderation = createFakeModeration();
-    svc = new ChaptersService(fs as any, moderation as any);
+    notifications = createFakeNotifications();
+    svc = new ChaptersService(fs as any, moderation as any, notifications as any);
   });
 
   describe('getContent paywall', () => {
@@ -253,6 +256,78 @@ describe('ChaptersService', () => {
       expect(book.schemaVersion).toBe(2);
     });
 
+    it('fans out a new-chapter notification when chapterMeta grows on a published book', async () => {
+      seedBook({ authorUsername: 'alice', isDraft: false });
+      await svc.commitWrite(
+        'b1',
+        'c3',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          order: 3,
+          bookUpdates: {
+            isDraft: false,
+            chapterMeta: [
+              { id: 'c0', published: true },
+              { id: 'c1', published: true },
+              { id: 'c2', published: true },
+              { id: 'c3', published: true },
+            ],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledTimes(1);
+      expect(notifications.notifyFollowersOfPublication).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authorUsername: 'alice',
+          title: 'New Chapter',
+          bookId: 'b1',
+          includeLibraryOwners: true,
+        }),
+      );
+    });
+
+    it('does NOT fan out when no new chapter is added (chapterMeta length unchanged)', async () => {
+      seedBook({ authorUsername: 'alice', isDraft: false });
+      await svc.commitWrite(
+        'b1',
+        'c1',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          bookUpdates: {
+            isDraft: false,
+            chapterMeta: [
+              { id: 'c0', published: true },
+              { id: 'c1', published: true },
+              { id: 'c2', published: true },
+            ],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fan out when the book is still a draft', async () => {
+      seedBook({ authorUsername: 'alice' });
+      await svc.commitWrite(
+        'b1',
+        'c3',
+        makeAuthUser({ uid: 'u1', username: 'alice' }),
+        dto({
+          order: 3,
+          bookUpdates: {
+            isDraft: true,
+            chapterMeta: [
+              { id: 'c0' },
+              { id: 'c1' },
+              { id: 'c2' },
+              { id: 'c3' },
+            ],
+          },
+        }),
+      );
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+    });
+
     it('forbids a non-author', async () => {
       seedBook({ authorUid: 'someone-else' });
       await expect(
@@ -282,7 +357,7 @@ describe('ChaptersService', () => {
 
     it('rejects flagged content with a 422', async () => {
       moderation = createFakeModeration(true);
-      svc = new ChaptersService(fs as any, moderation as any);
+      svc = new ChaptersService(fs as any, moderation as any, notifications as any);
       seedBook();
       await expect(
         svc.commitWrite('b1', 'c1', makeAuthUser({ uid: 'u1' }), dto()),

@@ -5,7 +5,7 @@ import * as presenceService from '@/services/presenceService'
 import * as stripeConnect from '@/services/stripeConnect'
 import { MAX_DAILY_CHAPTERS, libraryLimitFor, LIBRARY_FULL_TOAST, isChapterPublished, MIN_WORD_COUNT } from '@/config/constants'
 import { containsProfanity } from '@/config/profanity'
-import type { User, Book, BookProgress, View, Relationship, NotificationCategory } from '@/types'
+import type { User, Book, BookProgress, View } from '@/types'
 
 interface ReadingDeps {
   user: User
@@ -18,11 +18,6 @@ interface ReadingDeps {
   setSelectedBook: Dispatch<SetStateAction<Book | null>>
   setView: Dispatch<SetStateAction<View>>
   showToast: (message: string, icon?: string) => void
-  relationships: Relationship[]
-  addNotification: (
-    title: string, message: string, icon: string, recipient?: string,
-    sender?: string, targetId?: string, targetChapterIndex?: number, commentId?: string, category?: NotificationCategory
-  ) => void
 }
 
 // Reading domain (Phase B). Owns reading activity, per-user book ownership +
@@ -43,9 +38,7 @@ export function useReading({
   selectedBook,
   setSelectedBook,
   setView,
-  showToast,
-  relationships,
-  addNotification
+  showToast
 }: ReadingDeps) {
   // Reading activity (loaded from Firestore user doc)
   const [readingActivity, setReadingActivity] = useState<
@@ -459,21 +452,10 @@ export function useReading({
         return false
       }
 
-      // Mutuals = bidirectional admiration (we admire each other). These
-      // "friends" are notified when a new book or new chapter is published below.
-      const myAdmirers = relationships
-        .filter(r => r.target === user?.username)
-        .map(r => r.admirer)
-      const myAdmiring = new Set(
-        relationships
-          .filter(r => r.admirer === user?.username)
-          .map(r => r.target)
-      )
-      const mutualUsernames = [
-        ...new Set(
-          myAdmirers.filter(u => u !== user?.username && myAdmiring.has(u))
-        )
-      ]
+      // New-book / new-chapter notifications are now fanned out server-side
+      // (BooksService.create / ChaptersService.commitWrite) to every follower of
+      // the author — not just this device's mutuals — so they fire reliably
+      // regardless of which client published. See notifyFollowersOfPublication.
 
       if (pubId) {
         // Update existing book - preserve existing metadata when just adding/updating chapters
@@ -610,38 +592,9 @@ export function useReading({
             setSelectedBook(prev => (prev ? { ...prev, ...publishPatch } : prev))
           }
 
-          // Notify the book's library owners AND the author's mutuals about the
-          // genuinely-new chapter (deduped so nobody is notified twice).
-          const prevChapterCount = existingBook.chapterMeta?.length ?? 0
-          if (
-            pubChapterIndex === null ||
-            pubChapterIndex >= prevChapterCount
-          ) {
-            const libraryOwners = Object.entries(userBookData)
-              .filter(([, udata]: [string, any]) =>
-                udata.ownedBookIds?.includes(pubId)
-              )
-              .map(([username]) => username)
-            const chapterRecipients = new Set([
-              ...libraryOwners,
-              ...mutualUsernames
-            ])
-            chapterRecipients.forEach(username => {
-              if (username !== user?.username) {
-                addNotification(
-                  'New Chapter',
-                  `"${existingBook.title}" has a new chapter!`,
-                  'menu_book',
-                  username,
-                  user?.username,
-                  pubId || existingBook.id, // targetId = book id
-                  undefined,
-                  undefined,
-                  'appUpdates'
-                )
-              }
-            })
-          }
+          // New-chapter notifications to followers + library owners are fanned
+          // out server-side in ChaptersService.commitWrite (fires when the
+          // chapterMeta length grows on a published book).
         }
       } else {
         // New book (schema 2) — light doc + first chapter in the subcollection.
@@ -713,20 +666,8 @@ export function useReading({
           prev.some(b => b.id === bookId) ? prev : [optimisticBook, ...prev]
         )
 
-        // Notify mutuals (bidirectional connections) about the new book.
-        mutualUsernames.forEach(username => {
-          addNotification(
-            'New Book',
-            `${user?.displayName} published a new book: "${pubTitle}"`,
-            'auto_stories',
-            username,
-            user?.username,
-            bookId, // targetId = the newly-created book id
-            undefined,
-            undefined,
-            'appUpdates'
-          )
-        })
+        // New-book notifications to followers are fanned out server-side in
+        // BooksService.create (fires when a book is created with isDraft:false).
       }
       // Direct chapter publish (ctx provided) keeps the author in the editor so
       // they can keep writing; only the metadata-screen flow returns to profile.
