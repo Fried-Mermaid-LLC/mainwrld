@@ -110,6 +110,9 @@ export class BooksService {
       id,
       authorUid: user.uid,
       authorUsername: user.username ?? dto.authorUsername ?? null,
+      // A book is unpublished (a draft) by default — a caller must opt in to
+      // publishing by sending `isDraft: false` explicitly.
+      isDraft: dto.isDraft ?? true,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };

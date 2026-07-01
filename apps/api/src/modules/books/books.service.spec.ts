@@ -84,6 +84,19 @@ describe('BooksService', () => {
       expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
     });
 
+    it('defaults a new book to unpublished (isDraft:true) when omitted', async () => {
+      const user = makeAuthUser({ uid: 'author1', username: 'bob' });
+      const book = await svc.create(user, {
+        id: 'b1',
+        title: 'My Book',
+        tagline: 'A tale',
+      } as any);
+      expect(book.isDraft).toBe(true);
+      expect(fs.dump('books/b1')!.isDraft).toBe(true);
+      // A default draft never fans out to followers.
+      expect(notifications.notifyFollowersOfPublication).not.toHaveBeenCalled();
+    });
+
     it('screens title and tagline (flagged -> 422)', async () => {
       build(true);
       await expect(
